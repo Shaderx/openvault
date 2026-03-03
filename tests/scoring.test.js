@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 describe('scoring after smart retrieval removal', () => {
     it('does not export selectRelevantMemoriesSmart', async () => {

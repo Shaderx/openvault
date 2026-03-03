@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
     getExtractionJsonSchema,
+    parseCommunitySummaryResponse,
     parseEvent,
     parseExtractionResponse,
-    parseSalientQuestionsResponse,
     parseInsightExtractionResponse,
-    parseCommunitySummaryResponse,
+    parseSalientQuestionsResponse,
 } from '../../src/extraction/structured.js';
 
 describe('smart retrieval removal', () => {
@@ -189,12 +189,8 @@ describe('Extended ExtractionResponseSchema', () => {
         const json = JSON.stringify({
             reasoning: null,
             events: [],
-            entities: [
-                { name: 'Castle', type: 'PLACE', description: 'An ancient fortress' }
-            ],
-            relationships: [
-                { source: 'King Aldric', target: 'Castle', description: 'Rules from the castle' }
-            ],
+            entities: [{ name: 'Castle', type: 'PLACE', description: 'An ancient fortress' }],
+            relationships: [{ source: 'King Aldric', target: 'Castle', description: 'Rules from the castle' }],
         });
         const result = parseExtractionResponse(json);
         expect(result.entities).toHaveLength(1);
@@ -218,9 +214,7 @@ describe('Extended ExtractionResponseSchema', () => {
         const json = JSON.stringify({
             reasoning: null,
             events: [],
-            entities: [
-                { name: 'Blob', type: 'INVALID_TYPE', description: 'Something' }
-            ],
+            entities: [{ name: 'Blob', type: 'INVALID_TYPE', description: 'Something' }],
             relationships: [],
         });
         expect(() => parseExtractionResponse(json)).toThrow();
@@ -252,9 +246,7 @@ describe('Reflection Schemas', () => {
 
     it('parses insight extraction response', () => {
         const json = JSON.stringify({
-            insights: [
-                { insight: 'The king fears betrayal', evidence_ids: ['ev_001', 'ev_002'] },
-            ],
+            insights: [{ insight: 'The king fears betrayal', evidence_ids: ['ev_001', 'ev_002'] }],
         });
         const result = parseInsightExtractionResponse(json);
         expect(result.insights).toHaveLength(1);
@@ -304,7 +296,8 @@ describe('CommunitySummarySchema', () => {
     });
 
     it('strips markdown and reasoning tags', () => {
-        const content = '<reasoning>Analyzing...</reasoning>\n```json\n{"title": "Test", "summary": "A test community", "findings": ["fact1"]}\n```';
+        const content =
+            '<reasoning>Analyzing...</reasoning>\n```json\n{"title": "Test", "summary": "A test community", "findings": ["fact1"]}\n```';
         const result = parseCommunitySummaryResponse(content);
         expect(result.title).toBe('Test');
         expect(result.findings).toHaveLength(1);

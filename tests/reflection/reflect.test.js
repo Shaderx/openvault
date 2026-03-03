@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { accumulateImportance, shouldReflect, generateReflections } from '../../src/reflection/reflect.js';
-import { resetDeps, setDeps } from '../../src/deps.js';
 import { defaultSettings, extensionName } from '../../src/constants.js';
+import { resetDeps, setDeps } from '../../src/deps.js';
+import { accumulateImportance, generateReflections, shouldReflect } from '../../src/reflection/reflect.js';
 
 // Mock embeddings
 vi.mock('../../src/embeddings.js', () => ({
     getQueryEmbedding: vi.fn(async () => [0.5, 0.5]),
     enrichEventsWithEmbeddings: vi.fn(async (events) => {
-        events.forEach(e => { e.embedding = [0.5, 0.5]; });
+        events.forEach((e) => {
+            e.embedding = [0.5, 0.5];
+        });
     }),
     isEmbeddingsEnabled: () => true,
 }));
@@ -35,41 +37,37 @@ describe('accumulateImportance', () => {
             { importance: 2, characters_involved: ['Alice'], witnesses: [] },
         ];
         accumulateImportance(reflectionState, events);
-        expect(reflectionState['Alice'].importance_sum).toBe(6);
-        expect(reflectionState['Bob'].importance_sum).toBe(4);
+        expect(reflectionState.Alice.importance_sum).toBe(6);
+        expect(reflectionState.Bob.importance_sum).toBe(4);
     });
 
     it('accumulates importance from witnesses too', () => {
-        const events = [
-            { importance: 3, characters_involved: ['Alice'], witnesses: ['Charlie'] },
-        ];
+        const events = [{ importance: 3, characters_involved: ['Alice'], witnesses: ['Charlie'] }];
         accumulateImportance(reflectionState, events);
-        expect(reflectionState['Charlie'].importance_sum).toBe(3);
+        expect(reflectionState.Charlie.importance_sum).toBe(3);
     });
 
     it('adds to existing importance_sum', () => {
-        reflectionState['Alice'] = { importance_sum: 10 };
-        const events = [
-            { importance: 5, characters_involved: ['Alice'], witnesses: [] },
-        ];
+        reflectionState.Alice = { importance_sum: 10 };
+        const events = [{ importance: 5, characters_involved: ['Alice'], witnesses: [] }];
         accumulateImportance(reflectionState, events);
-        expect(reflectionState['Alice'].importance_sum).toBe(15);
+        expect(reflectionState.Alice.importance_sum).toBe(15);
     });
 });
 
 describe('shouldReflect', () => {
     it('returns true when importance_sum >= 30', () => {
-        const state = { 'Alice': { importance_sum: 30 } };
+        const state = { Alice: { importance_sum: 30 } };
         expect(shouldReflect(state, 'Alice')).toBe(true);
     });
 
     it('returns true when importance_sum > 30', () => {
-        const state = { 'Alice': { importance_sum: 45 } };
+        const state = { Alice: { importance_sum: 45 } };
         expect(shouldReflect(state, 'Alice')).toBe(true);
     });
 
     it('returns false when importance_sum < 30', () => {
-        const state = { 'Alice': { importance_sum: 29 } };
+        const state = { Alice: { importance_sum: 29 } };
         expect(shouldReflect(state, 'Alice')).toBe(false);
     });
 
@@ -81,9 +79,33 @@ describe('shouldReflect', () => {
 describe('generateReflections', () => {
     const characterName = 'Alice';
     const allMemories = [
-        { id: 'ev_001', summary: 'Alice met Bob at the tavern', importance: 3, characters_involved: ['Alice', 'Bob'], witnesses: ['Alice'], embedding: [0.1, 0.9], type: 'event' },
-        { id: 'ev_002', summary: 'Alice fought the dragon', importance: 5, characters_involved: ['Alice'], witnesses: ['Alice'], embedding: [0.9, 0.1], type: 'event' },
-        { id: 'ev_003', summary: 'Alice learned a spell', importance: 4, characters_involved: ['Alice'], witnesses: ['Alice'], embedding: [0.5, 0.5], type: 'event' },
+        {
+            id: 'ev_001',
+            summary: 'Alice met Bob at the tavern',
+            importance: 3,
+            characters_involved: ['Alice', 'Bob'],
+            witnesses: ['Alice'],
+            embedding: [0.1, 0.9],
+            type: 'event',
+        },
+        {
+            id: 'ev_002',
+            summary: 'Alice fought the dragon',
+            importance: 5,
+            characters_involved: ['Alice'],
+            witnesses: ['Alice'],
+            embedding: [0.9, 0.1],
+            type: 'event',
+        },
+        {
+            id: 'ev_003',
+            summary: 'Alice learned a spell',
+            importance: 4,
+            characters_involved: ['Alice'],
+            witnesses: ['Alice'],
+            embedding: [0.5, 0.5],
+            type: 'event',
+        },
     ];
     const characterStates = {
         Alice: { name: 'Alice', known_events: ['ev_001', 'ev_002', 'ev_003'] },
@@ -102,22 +124,30 @@ describe('generateReflections', () => {
         // Steps 2a, 2b, 2c: Return insights for each question
         mockCallLLM.mockReset();
         mockCallLLM
-            .mockResolvedValueOnce(JSON.stringify({
-                questions: [
-                    'How has Alice grown as a fighter?',
-                    'What is Alice\'s relationship with Bob?',
-                    'What drives Alice?',
-                ],
-            }))
-            .mockResolvedValueOnce(JSON.stringify({
-                insights: [{ insight: 'Alice is becoming a seasoned warrior', evidence_ids: ['ev_002'] }],
-            }))
-            .mockResolvedValueOnce(JSON.stringify({
-                insights: [{ insight: 'Alice values her friendship with Bob', evidence_ids: ['ev_001'] }],
-            }))
-            .mockResolvedValueOnce(JSON.stringify({
-                insights: [{ insight: 'Alice is driven by curiosity', evidence_ids: ['ev_003'] }],
-            }));
+            .mockResolvedValueOnce(
+                JSON.stringify({
+                    questions: [
+                        'How has Alice grown as a fighter?',
+                        "What is Alice's relationship with Bob?",
+                        'What drives Alice?',
+                    ],
+                })
+            )
+            .mockResolvedValueOnce(
+                JSON.stringify({
+                    insights: [{ insight: 'Alice is becoming a seasoned warrior', evidence_ids: ['ev_002'] }],
+                })
+            )
+            .mockResolvedValueOnce(
+                JSON.stringify({
+                    insights: [{ insight: 'Alice values her friendship with Bob', evidence_ids: ['ev_001'] }],
+                })
+            )
+            .mockResolvedValueOnce(
+                JSON.stringify({
+                    insights: [{ insight: 'Alice is driven by curiosity', evidence_ids: ['ev_003'] }],
+                })
+            );
     });
 
     afterEach(() => {

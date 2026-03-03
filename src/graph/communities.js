@@ -9,9 +9,9 @@ import louvain from 'https://esm.sh/graphology-communities-louvain@0.12.0';
 import { toUndirected } from 'https://esm.sh/graphology-operators@1.6.0';
 import { getDeps } from '../deps.js';
 import { getQueryEmbedding } from '../embeddings.js';
+import { parseCommunitySummaryResponse } from '../extraction/structured.js';
 import { callLLM, LLM_CONFIGS } from '../llm.js';
 import { buildCommunitySummaryPrompt } from '../prompts.js';
-import { parseCommunitySummaryResponse } from '../extraction/structured.js';
 import { log } from '../utils.js';
 
 /**
@@ -78,14 +78,12 @@ export function buildCommunityGroups(graphData, communityPartition) {
 
         const node = graphData.nodes[nodeKey];
         if (node) {
-            groups[communityId].nodeLines.push(
-                `- ${node.name} (${node.type || 'UNKNOWN'}): ${node.description}`
-            );
+            groups[communityId].nodeLines.push(`- ${node.name} (${node.type || 'UNKNOWN'}): ${node.description}`);
         }
     }
 
     // Assign edges to communities
-    for (const [edgeKey, edge] of Object.entries(graphData.edges || {})) {
+    for (const [_edgeKey, edge] of Object.entries(graphData.edges || {})) {
         const srcCommunity = communityPartition[edge.source];
         const tgtCommunity = communityPartition[edge.target];
 
@@ -111,7 +109,7 @@ export function buildCommunityGroups(graphData, communityPartition) {
 function sameMembers(a, b) {
     if (a.length !== b.length) return false;
     const setA = new Set(a);
-    return b.every(item => setA.has(item));
+    return b.every((item) => setA.has(item));
 }
 
 /**
@@ -123,7 +121,7 @@ function sameMembers(a, b) {
  * @param {Object} existingCommunities - Current community summaries from state
  * @returns {Promise<Object>} Updated communities object
  */
-export async function updateCommunitySummaries(graphData, communityGroups, existingCommunities) {
+export async function updateCommunitySummaries(_graphData, communityGroups, existingCommunities) {
     const deps = getDeps();
     const updatedCommunities = {};
 

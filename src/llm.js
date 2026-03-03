@@ -8,10 +8,10 @@
 import { extensionName } from './constants.js';
 import { getDeps } from './deps.js';
 import {
-    getExtractionJsonSchema,
-    getSalientQuestionsJsonSchema,
-    getInsightExtractionJsonSchema,
     getCommunitySummaryJsonSchema,
+    getExtractionJsonSchema,
+    getInsightExtractionJsonSchema,
+    getSalientQuestionsJsonSchema,
 } from './extraction/structured.js';
 import { log, showToast, withTimeout } from './utils.js';
 
@@ -101,11 +101,7 @@ export async function callLLM(messages, config, options = {}) {
         );
 
         // Wrap the network request in our timeout utility
-        const result = await withTimeout(
-            requestPromise,
-            timeoutMs || 120000,
-            `${errorContext} API`
-        );
+        const result = await withTimeout(requestPromise, timeoutMs || 120000, `${errorContext} API`);
 
         const content = result?.content || result || '';
 

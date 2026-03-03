@@ -20,9 +20,9 @@
 
 import { CHARACTERS_KEY, extensionName, MEMORIES_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
+import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import { filterMemoriesByPOV, getActiveCharacters, getPOVContext } from '../pov.js';
 import { getOpenVaultData, isAutomaticMode, isExtensionEnabled, log, safeSetExtensionPrompt } from '../utils.js';
-import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import { formatContextForInjection } from './formatting.js';
 import { selectRelevantMemories } from './scoring.js';
 import { retrieveWorldContext } from './world-context.js';

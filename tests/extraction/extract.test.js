@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetDeps, setDeps } from '../../src/deps.js';
 import { defaultSettings, extensionName } from '../../src/constants.js';
+import { resetDeps, setDeps } from '../../src/deps.js';
 
 // Mock embeddings
 vi.mock('../../src/embeddings.js', () => ({
     enrichEventsWithEmbeddings: vi.fn(async (events) => {
-        events.forEach(e => { e.embedding = [0.1, 0.2]; });
+        events.forEach((e) => {
+            e.embedding = [0.1, 0.2];
+        });
     }),
     isEmbeddingsEnabled: () => true,
     getQueryEmbedding: vi.fn(async () => [0.1, 0.2]),
@@ -13,17 +15,19 @@ vi.mock('../../src/embeddings.js', () => ({
 
 // Mock LLM to return entities/relationships
 vi.mock('../../src/llm.js', () => ({
-    callLLMForExtraction: vi.fn(async () => JSON.stringify({
-        reasoning: null,
-        events: [{ summary: 'King Aldric entered the Castle', importance: 3, characters_involved: ['King Aldric'] }],
-        entities: [
-            { name: 'King Aldric', type: 'PERSON', description: 'The aging ruler' },
-            { name: 'Castle', type: 'PLACE', description: 'An ancient fortress' },
-        ],
-        relationships: [
-            { source: 'King Aldric', target: 'Castle', description: 'Rules from' },
-        ],
-    })),
+    callLLMForExtraction: vi.fn(async () =>
+        JSON.stringify({
+            reasoning: null,
+            events: [
+                { summary: 'King Aldric entered the Castle', importance: 3, characters_involved: ['King Aldric'] },
+            ],
+            entities: [
+                { name: 'King Aldric', type: 'PERSON', description: 'The aging ruler' },
+                { name: 'Castle', type: 'PLACE', description: 'An ancient fortress' },
+            ],
+            relationships: [{ source: 'King Aldric', target: 'Castle', description: 'Rules from' }],
+        })
+    ),
     LLM_CONFIGS: { extraction: { profileSettingKey: 'extractionProfile', maxTokens: 4000, timeoutMs: 120000 } },
 }));
 
@@ -38,7 +42,7 @@ vi.mock('../../src/reflection/reflect.js', () => ({
     generateReflections: vi.fn(async () => []),
 }));
 
-import { accumulateImportance, shouldReflect, generateReflections } from '../../src/reflection/reflect.js';
+import { accumulateImportance, generateReflections, shouldReflect } from '../../src/reflection/reflect.js';
 
 // Mock communities module
 vi.mock('../../src/graph/communities.js', () => ({
@@ -47,9 +51,8 @@ vi.mock('../../src/graph/communities.js', () => ({
     updateCommunitySummaries: vi.fn(async () => ({})),
 }));
 
-import { detectCommunities, buildCommunityGroups, updateCommunitySummaries } from '../../src/graph/communities.js';
-
 import { extractMemories } from '../../src/extraction/extract.js';
+import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../../src/graph/communities.js';
 
 describe('extractMemories graph integration', () => {
     let mockContext;
@@ -99,7 +102,7 @@ describe('extractMemories graph integration', () => {
         expect(mockData.graph).toBeDefined();
         expect(mockData.graph.nodes['king aldric']).toBeDefined();
         expect(mockData.graph.nodes['king aldric'].type).toBe('PERSON');
-        expect(mockData.graph.nodes['castle']).toBeDefined();
+        expect(mockData.graph.nodes.castle).toBeDefined();
     });
 
     it('populates graph.edges from extracted relationships', async () => {
@@ -276,7 +279,9 @@ describe('extractMemories community detection', () => {
 
     it('handles community detection errors gracefully', async () => {
         mockData.graph_message_count = 49;
-        detectCommunities.mockImplementation(() => { throw new Error('Detection failed'); });
+        detectCommunities.mockImplementation(() => {
+            throw new Error('Detection failed');
+        });
 
         const result = await extractMemories([0, 1]);
 

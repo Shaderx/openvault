@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { upsertEntity, upsertRelationship, createEmptyGraph, initGraphState } from '../../src/graph/graph.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { createEmptyGraph, initGraphState, upsertEntity, upsertRelationship } from '../../src/graph/graph.js';
 
 describe('upsertEntity', () => {
     let graphData;
@@ -20,15 +20,15 @@ describe('upsertEntity', () => {
 
     it('normalizes key to lowercase trimmed', () => {
         upsertEntity(graphData, '  Castle  ', 'PLACE', 'A fortress');
-        expect(graphData.nodes['castle']).toBeDefined();
-        expect(graphData.nodes['castle'].name).toBe('Castle');
+        expect(graphData.nodes.castle).toBeDefined();
+        expect(graphData.nodes.castle.name).toBe('Castle');
     });
 
     it('merges descriptions on duplicate by appending with pipe', () => {
         upsertEntity(graphData, 'Castle', 'PLACE', 'An ancient fortress');
         upsertEntity(graphData, 'castle', 'PLACE', 'Seat of power');
-        expect(graphData.nodes['castle'].description).toBe('An ancient fortress | Seat of power');
-        expect(graphData.nodes['castle'].mentions).toBe(2);
+        expect(graphData.nodes.castle.description).toBe('An ancient fortress | Seat of power');
+        expect(graphData.nodes.castle.mentions).toBe(2);
     });
 
     it('preserves original name casing from first insertion', () => {

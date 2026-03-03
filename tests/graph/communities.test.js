@@ -1,17 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetDeps, setDeps } from '../../src/deps.js';
 import { defaultSettings, extensionName } from '../../src/constants.js';
-import { toGraphology, detectCommunities, buildCommunityGroups, updateCommunitySummaries } from '../../src/graph/communities.js';
+import { resetDeps, setDeps } from '../../src/deps.js';
+import {
+    buildCommunityGroups,
+    detectCommunities,
+    toGraphology,
+    updateCommunitySummaries,
+} from '../../src/graph/communities.js';
 
 describe('toGraphology', () => {
     it('converts flat graph to graphology instance', () => {
         const graphData = {
             nodes: {
-                'castle': { name: 'Castle', type: 'PLACE', description: 'A fortress', mentions: 1 },
-                'king': { name: 'King', type: 'PERSON', description: 'The ruler', mentions: 2 },
+                castle: { name: 'Castle', type: 'PLACE', description: 'A fortress', mentions: 1 },
+                king: { name: 'King', type: 'PERSON', description: 'The ruler', mentions: 2 },
             },
             edges: {
-                'king__castle': { source: 'king', target: 'castle', description: 'Rules from', weight: 3 },
+                king__castle: { source: 'king', target: 'castle', description: 'Rules from', weight: 3 },
             },
         };
         const graph = toGraphology(graphData);
@@ -44,13 +49,13 @@ describe('detectCommunities', () => {
                 f: { name: 'F', type: 'PERSON', description: 'F', mentions: 5 },
             },
             edges: {
-                'a__b': { source: 'a', target: 'b', description: 'friends', weight: 10 },
-                'b__c': { source: 'b', target: 'c', description: 'allies', weight: 10 },
-                'a__c': { source: 'a', target: 'c', description: 'team', weight: 10 },
-                'd__e': { source: 'd', target: 'e', description: 'friends', weight: 10 },
-                'e__f': { source: 'e', target: 'f', description: 'allies', weight: 10 },
-                'd__f': { source: 'd', target: 'f', description: 'team', weight: 10 },
-                'c__d': { source: 'c', target: 'd', description: 'knows', weight: 1 },
+                a__b: { source: 'a', target: 'b', description: 'friends', weight: 10 },
+                b__c: { source: 'b', target: 'c', description: 'allies', weight: 10 },
+                a__c: { source: 'a', target: 'c', description: 'team', weight: 10 },
+                d__e: { source: 'd', target: 'e', description: 'friends', weight: 10 },
+                e__f: { source: 'e', target: 'f', description: 'allies', weight: 10 },
+                d__f: { source: 'd', target: 'f', description: 'team', weight: 10 },
+                c__d: { source: 'c', target: 'd', description: 'knows', weight: 1 },
             },
         };
         const result = detectCommunities(graphData);
@@ -69,7 +74,7 @@ describe('buildCommunityGroups', () => {
                 tavern: { name: 'Tavern', type: 'PLACE', description: 'A pub', mentions: 1 },
             },
             edges: {
-                'king__castle': { source: 'king', target: 'castle', description: 'Rules from', weight: 4 },
+                king__castle: { source: 'king', target: 'castle', description: 'Rules from', weight: 4 },
             },
         };
         const partition = { king: 0, castle: 0, tavern: 1 };
@@ -92,7 +97,7 @@ vi.mock('../../src/llm.js', () => ({
 
 // Mock embeddings
 vi.mock('../../src/embeddings.js', () => ({
-    getQueryEmbedding: vi.fn(async (text) => [0.1, 0.2, 0.3]),
+    getQueryEmbedding: vi.fn(async (_text) => [0.1, 0.2, 0.3]),
 }));
 
 // Mock prompts
@@ -121,11 +126,13 @@ describe('updateCommunitySummaries', () => {
             Date: { now: () => 1000000 },
         });
 
-        mockCallLLM.mockResolvedValue(JSON.stringify({
-            title: 'The Royal Court',
-            summary: 'King Aldric rules from the Castle...',
-            findings: ['The King is powerful'],
-        }));
+        mockCallLLM.mockResolvedValue(
+            JSON.stringify({
+                title: 'The Royal Court',
+                summary: 'King Aldric rules from the Castle...',
+                findings: ['The King is powerful'],
+            })
+        );
     });
 
     afterEach(() => {
@@ -140,7 +147,7 @@ describe('updateCommunitySummaries', () => {
                 castle: { name: 'Castle', type: 'PLACE', description: 'Fortress', mentions: 2 },
             },
             edges: {
-                'king__castle': { source: 'king', target: 'castle', description: 'Rules from', weight: 4 },
+                king__castle: { source: 'king', target: 'castle', description: 'Rules from', weight: 4 },
             },
         };
         const communityGroups = {
@@ -152,10 +159,10 @@ describe('updateCommunitySummaries', () => {
         };
 
         const result = await updateCommunitySummaries(graphData, communityGroups, {});
-        expect(result['C0']).toBeDefined();
-        expect(result['C0'].title).toBe('The Royal Court');
-        expect(result['C0'].embedding).toEqual([0.1, 0.2, 0.3]);
-        expect(result['C0'].nodeKeys).toEqual(['king', 'castle']);
+        expect(result.C0).toBeDefined();
+        expect(result.C0.title).toBe('The Royal Court');
+        expect(result.C0.embedding).toEqual([0.1, 0.2, 0.3]);
+        expect(result.C0.nodeKeys).toEqual(['king', 'castle']);
     });
 
     it('skips communities whose membership has not changed', async () => {
@@ -178,7 +185,7 @@ describe('updateCommunitySummaries', () => {
         };
 
         const result = await updateCommunitySummaries({}, communityGroups, existingCommunities);
-        expect(result['C0'].title).toBe('Old Title'); // Unchanged
+        expect(result.C0.title).toBe('Old Title'); // Unchanged
         expect(mockCallLLM).not.toHaveBeenCalled(); // No LLM call needed
     });
 
@@ -192,7 +199,7 @@ describe('updateCommunitySummaries', () => {
         };
 
         const result = await updateCommunitySummaries({}, communityGroups, {});
-        expect(result['C0']).toBeUndefined();
+        expect(result.C0).toBeUndefined();
         expect(mockCallLLM).not.toHaveBeenCalled();
     });
 
@@ -218,6 +225,6 @@ describe('updateCommunitySummaries', () => {
         mockCallLLM.mockRejectedValue(new Error('LLM failed'));
 
         const result = await updateCommunitySummaries({}, communityGroups, existingCommunities);
-        expect(result['C0'].title).toBe('Existing Title'); // Kept existing
+        expect(result.C0.title).toBe('Existing Title'); // Kept existing
     });
 });

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetDeps, setDeps } from '../../src/deps.js';
 import { defaultSettings, extensionName } from '../../src/constants.js';
+import { resetDeps, setDeps } from '../../src/deps.js';
 
 // Mock embeddings
 vi.mock('../../src/embeddings.js', () => ({
@@ -97,7 +97,7 @@ describe('updateInjection world context', () => {
 
     it('injects world context via openvault_world named slot', async () => {
         await updateInjection();
-        const worldCall = mockSetPrompt.mock.calls.find(c => c[0] === 'openvault_world');
+        const worldCall = mockSetPrompt.mock.calls.find((c) => c[0] === 'openvault_world');
         expect(worldCall).toBeDefined();
         expect(worldCall[1]).toContain('world_context');
     });

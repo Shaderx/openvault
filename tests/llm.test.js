@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { LLM_CONFIGS } from '../src/llm.js';
 
 describe('LLM_CONFIGS after smart retrieval removal', () => {

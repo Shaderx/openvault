@@ -7,12 +7,12 @@
 
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings, getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
+import { parseInsightExtractionResponse, parseSalientQuestionsResponse } from '../extraction/structured.js';
 import { callLLM, LLM_CONFIGS } from '../llm.js';
 import { filterMemoriesByPOV } from '../pov.js';
-import { buildSalientQuestionsPrompt, buildInsightExtractionPrompt } from '../prompts.js';
-import { parseSalientQuestionsResponse, parseInsightExtractionResponse } from '../extraction/structured.js';
+import { buildInsightExtractionPrompt, buildSalientQuestionsPrompt } from '../prompts.js';
 import { cosineSimilarity } from '../retrieval/math.js';
-import { log, sortMemoriesBySequence, generateId } from '../utils.js';
+import { generateId, log, sortMemoriesBySequence } from '../utils.js';
 
 const REFLECTION_THRESHOLD = 30;
 
@@ -37,10 +37,7 @@ export function shouldReflect(reflectionState, characterName) {
 export function accumulateImportance(reflectionState, newEvents) {
     for (const event of newEvents) {
         const importance = event.importance || 3;
-        const allCharacters = new Set([
-            ...(event.characters_involved || []),
-            ...(event.witnesses || []),
-        ]);
+        const allCharacters = new Set([...(event.characters_involved || []), ...(event.witnesses || [])]);
 
         for (const charName of allCharacters) {
             if (!reflectionState[charName]) {
@@ -91,11 +88,11 @@ export async function generateReflections(characterName, allMemories, characterS
             const queryEmb = await getQueryEmbedding(question);
             if (queryEmb) {
                 const scored = accessibleMemories
-                    .filter(m => m.embedding)
-                    .map(m => ({ memory: m, score: cosineSimilarity(queryEmb, m.embedding) }))
+                    .filter((m) => m.embedding)
+                    .map((m) => ({ memory: m, score: cosineSimilarity(queryEmb, m.embedding) }))
                     .sort((a, b) => b.score - a.score)
                     .slice(0, 20);
-                relevantMemories = scored.map(s => s.memory);
+                relevantMemories = scored.map((s) => s.memory);
             }
         } else {
             relevantMemories = recentMemories.slice(0, 20);

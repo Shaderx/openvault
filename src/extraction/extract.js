@@ -17,10 +17,14 @@ import {
  * Maximum number of retry attempts for a failed extraction batch
  */
 const MAX_BATCH_RETRIES = 3;
+
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
+import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
+import { initGraphState, upsertEntity, upsertRelationship } from '../graph/graph.js';
 import { callLLMForExtraction } from '../llm.js';
 import { buildExtractionPrompt } from '../prompts.js';
+import { accumulateImportance, generateReflections, shouldReflect } from '../reflection/reflect.js';
 import { cosineSimilarity } from '../retrieval/math.js';
 import { clearAllLocks } from '../state.js';
 import { refreshAllUI } from '../ui/render.js';
@@ -39,9 +43,6 @@ import {
 } from '../utils.js';
 import { getBackfillMessageIds, getExtractedMessageIds } from './scheduler.js';
 import { parseExtractionResponse } from './structured.js';
-import { initGraphState, upsertEntity, upsertRelationship } from '../graph/graph.js';
-import { accumulateImportance, shouldReflect, generateReflections } from '../reflection/reflect.js';
-import { detectCommunities, buildCommunityGroups, updateCommunitySummaries } from '../graph/communities.js';
 
 /**
  * Update character states based on extracted events
@@ -349,11 +350,7 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
                 const communityResult = detectCommunities(data.graph);
                 if (communityResult) {
                     const groups = buildCommunityGroups(data.graph, communityResult.communities);
-                    data.communities = await updateCommunitySummaries(
-                        data.graph,
-                        groups,
-                        data.communities || {}
-                    );
+                    data.communities = await updateCommunitySummaries(data.graph, groups, data.communities || {});
                     log(`Community detection: ${communityResult.count} communities found`);
                 }
             } catch (error) {
@@ -537,7 +534,9 @@ export async function extractAllMessages(updateEventListenersFn) {
             const errorType = isTimeout ? 'timeout' : 'error';
 
             if (retryCount < MAX_BATCH_RETRIES) {
-                log(`Batch ${batchesProcessed + 1} failed with ${errorType}, retrying (${retryCount}/${MAX_BATCH_RETRIES})...`);
+                log(
+                    `Batch ${batchesProcessed + 1} failed with ${errorType}, retrying (${retryCount}/${MAX_BATCH_RETRIES})...`
+                );
             } else {
                 log(`Batch ${batchesProcessed + 1} failed after ${MAX_BATCH_RETRIES} retries, skipping...`);
                 console.error('[OpenVault] Batch extraction error:', error);

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-    buildExtractionPrompt,
-    buildSalientQuestionsPrompt,
-    buildInsightExtractionPrompt,
     buildCommunitySummaryPrompt,
+    buildExtractionPrompt,
+    buildInsightExtractionPrompt,
+    buildSalientQuestionsPrompt,
 } from '../src/prompts.js';
 
 describe('smart retrieval prompt removal', () => {

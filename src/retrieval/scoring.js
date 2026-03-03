@@ -8,7 +8,7 @@
 import { extensionName } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
-import { estimateTokens, log, sliceToTokenBudget } from '../utils.js';
+import { log, sliceToTokenBudget } from '../utils.js';
 import { scoreMemories } from './math.js';
 import { buildBM25Tokens, buildEmbeddingQuery, extractQueryContext, parseRecentMessages } from './query-context.js';
 
@@ -104,6 +104,8 @@ export async function selectRelevantMemories(memories, ctx) {
     const { finalTokens } = ctx;
     const scored = await selectRelevantMemoriesSimple(memories, ctx, 1000);
     const finalResults = sliceToTokenBudget(scored, finalTokens);
-    log(`Retrieval: ${memories.length} memories -> ${scored.length} scored -> ${finalResults.length} after token filter (${finalTokens} budget)`);
+    log(
+        `Retrieval: ${memories.length} memories -> ${scored.length} scored -> ${finalResults.length} after token filter (${finalTokens} budget)`
+    );
     return finalResults;
 }

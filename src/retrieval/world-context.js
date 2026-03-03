@@ -4,8 +4,8 @@
  * Retrieves relevant community summaries for injection into the prompt.
  */
 
-import { cosineSimilarity } from './math.js';
 import { estimateTokens } from '../utils.js';
+import { cosineSimilarity } from './math.js';
 
 /**
  * Retrieve the most relevant community summaries for the current context.
@@ -50,13 +50,11 @@ export function retrieveWorldContext(communities, queryEmbedding, tokenBudget = 
         return { text: '', communityIds: [] };
     }
 
-    const text = '<world_context>\n' +
-        selected.map(s => s.entry).join('\n\n') +
-        '\n</world_context>';
+    const text = '<world_context>\n' + selected.map((s) => s.entry).join('\n\n') + '\n</world_context>';
 
     return {
         text,
-        communityIds: selected.map(s => s.id),
+        communityIds: selected.map((s) => s.id),
     };
 }
 
@@ -66,8 +64,6 @@ export function retrieveWorldContext(communities, queryEmbedding, tokenBudget = 
  * @returns {string}
  */
 function formatCommunityEntry(community) {
-    const findings = community.findings
-        ? community.findings.map(f => `  - ${f}`).join('\n')
-        : '';
+    const findings = community.findings ? community.findings.map((f) => `  - ${f}`).join('\n') : '';
     return `## ${community.title}\n${community.summary}${findings ? '\nKey findings:\n' + findings : ''}`;
 }

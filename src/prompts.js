@@ -198,9 +198,7 @@ Write your analysis in the \`reasoning\` field first, then produce the events ar
  * @returns {Array<{role: string, content: string}>}
  */
 export function buildSalientQuestionsPrompt(characterName, recentMemories) {
-    const memoryList = recentMemories
-        .map((m, i) => `${i + 1}. [${m.importance || 3} Star] ${m.summary}`)
-        .join('\n');
+    const memoryList = recentMemories.map((m, i) => `${i + 1}. [${m.importance || 3} Star] ${m.summary}`).join('\n');
 
     const systemPrompt = `You are analyzing the memory stream of a character in an ongoing narrative.
 Your task: given the character's recent memories, generate exactly 3 high-level questions that capture the most salient themes about their current psychological state, evolving relationships, or shifting goals.

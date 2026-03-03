@@ -4,9 +4,9 @@
  * Consolidated utility functions for the extension.
  */
 
+import { jsonrepair } from 'https://esm.sh/jsonrepair';
 import { CHARACTERS_KEY, extensionName, LAST_PROCESSED_KEY, MEMORIES_KEY, METADATA_KEY } from './constants.js';
 import { getDeps } from './deps.js';
-import { jsonrepair } from 'https://esm.sh/jsonrepair';
 
 // --- Async ---
 
@@ -270,20 +270,29 @@ export function safeParseJSON(input) {
  * @returns {string|null} Extracted JSON substring or null
  */
 function extractBalancedJSON(str) {
-    const startIdx = str.search(/[\[{]/);
+    const startIdx = str.search(/[[{]/);
     if (startIdx === -1) return null;
 
     const open = str[startIdx];
     const close = open === '{' ? '}' : ']';
     let depth = 0;
     let inString = false;
-    let escape = false;
+    let isEscaped = false;
 
     for (let i = startIdx; i < str.length; i++) {
         const ch = str[i];
-        if (escape) { escape = false; continue; }
-        if (ch === '\\' && inString) { escape = true; continue; }
-        if (ch === '"') { inString = !inString; continue; }
+        if (isEscaped) {
+            isEscaped = false;
+            continue;
+        }
+        if (ch === '\\' && inString) {
+            isEscaped = true;
+            continue;
+        }
+        if (ch === '"') {
+            inString = !inString;
+            continue;
+        }
         if (inString) continue;
         if (ch === open) depth++;
         else if (ch === close) {
