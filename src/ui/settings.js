@@ -431,6 +431,26 @@ function bindUIElements() {
         saveSetting('extractionProfile', $(this).val());
     });
 
+    // Feature settings
+    $('#openvault_reflection_threshold').on('input', function () {
+        const value = parseInt($(this).val(), 10);
+        saveSetting('reflectionThreshold', value);
+        $('#openvault_reflection_threshold_value').text(value);
+    });
+
+    $('#openvault_world_context_budget').on('input', function () {
+        const value = parseInt($(this).val(), 10);
+        saveSetting('worldContextBudget', value);
+        $('#openvault_world_context_budget_value').text(value);
+        updateWordsDisplay(value, 'openvault_world_context_budget_words');
+    });
+
+    $('#openvault_community_interval').on('input', function () {
+        const value = parseInt($(this).val(), 10);
+        saveSetting('communityDetectionInterval', value);
+        $('#openvault_community_interval_value').text(value);
+    });
+
     // Action buttons
     $('#openvault_backfill_embeddings_btn').on('click', backfillEmbeddings);
     $('#openvault_extract_all_btn').on('click', handleExtractAll);
@@ -532,6 +552,17 @@ export function updateUI() {
 
     // Populate profile selector
     populateProfileSelector();
+
+    // Feature settings
+    $('#openvault_reflection_threshold').val(settings.reflectionThreshold ?? 30);
+    $('#openvault_reflection_threshold_value').text(settings.reflectionThreshold ?? 30);
+
+    $('#openvault_world_context_budget').val(settings.worldContextBudget ?? 2000);
+    $('#openvault_world_context_budget_value').text(settings.worldContextBudget ?? 2000);
+    updateWordsDisplay(settings.worldContextBudget ?? 2000, 'openvault_world_context_budget_words');
+
+    $('#openvault_community_interval').val(settings.communityDetectionInterval ?? 50);
+    $('#openvault_community_interval_value').text(settings.communityDetectionInterval ?? 50);
 
     // Refresh all UI components
     refreshAllUI();
