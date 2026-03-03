@@ -4,9 +4,9 @@
  * Uses graphology for graph computation and Louvain for community detection.
  */
 
-import Graph from 'https://esm.sh/graphology@0.25.4';
-import louvain from 'https://esm.sh/graphology-communities-louvain@0.12.0';
-import { toUndirected } from 'https://esm.sh/graphology-operators@1.6.0';
+import Graph from 'https://esm.sh/graphology';
+import louvain from 'https://esm.sh/graphology-communities-louvain';
+import { toUndirected } from 'https://esm.sh/graphology-operators';
 import { getDeps } from '../deps.js';
 import { getQueryEmbedding } from '../embeddings.js';
 import { parseCommunitySummaryResponse } from '../extraction/structured.js';

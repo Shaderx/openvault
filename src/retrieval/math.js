@@ -5,7 +5,7 @@
  * Extracted for testability and reuse in both main thread and worker.
  */
 
-import snowball from 'https://esm.sh/snowball-stemmers@0.6.0';
+import snowball from 'https://esm.sh/snowball-stemmers';
 
 // Stemmers — initialized once at module level
 const ruStemmer = snowball.newStemmer('russian');

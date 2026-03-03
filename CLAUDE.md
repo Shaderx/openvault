@@ -12,7 +12,7 @@ OpenVault is an agentic memory extension for SillyTavern. It provides POV-aware 
 ## DEPENDENCIES & IMPORTS (ESM)
 **CRITICAL RULE:** This extension runs directly in the browser *without a bundler* (no Webpack/Vite for production). 
 - **No bare specifiers**: You CANNOT use `import { z } from 'zod'` in `src/`. The browser will crash.
-- **CDN Imports**: External libraries MUST be imported via CDN URLs (e.g., `import { z } from 'https://esm.sh/zod@4';`).
+- **CDN Imports**: External libraries MUST be imported via CDN URLs (e.g., `import { z } from 'https://esm.sh/zod';`). **Never pin versions** (no `@version` suffix).
 - **No new dependencies**: Do NOT add new `https://esm.sh/...` imports to the app unless explicitly instructed by the user. Keep dependencies to an absolute minimum.
 - **Test Aliasing**: If instructed to add a new CDN dependency, you MUST also `npm install` the package and add an alias in `vitest.config.js` mapping the `https://...` URL to the local `node_modules/` path, or the test suite will break.
 

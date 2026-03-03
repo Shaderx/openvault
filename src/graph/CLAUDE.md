@@ -10,7 +10,7 @@ Flat-JSON entity/relationship storage with Louvain community detection. Data liv
 - **Normalization**: ALWAYS normalize before lookup. LLM outputs original casing.
 
 ## HOW: Communities (`communities.js`)
-- **Library**: `graphology` via esm.sh (pinned versions). Test alias required in vitest.config.js.
+- **Library**: `graphology` via esm.sh. Test alias required in vitest.config.js.
 - **Detection**: Louvain algorithm on undirected graph. Skip if < 3 nodes.
 - **Summarization**: LLM generates title/summary/findings per community. Only re-summarize if node membership changed.
 - **Island Guard**: Skip communities with < 2 nodes.
@@ -18,5 +18,5 @@ Flat-JSON entity/relationship storage with Louvain community detection. Data liv
 
 ## GOTCHAS & RULES
 - **Orphaned Edges**: If `source`/`target` not in nodes, `upsertRelationship` silently skips.
-- **CDN Imports**: `https://esm.sh/graphology@0.25.4`, `graphology-communities-louvain@0.12.0`, `graphology-operators@1.6.0`.
+- **CDN Imports**: `https://esm.sh/graphology`, `graphology-communities-louvain`, `graphology-operators`.
 - **State Init**: Use `initGraphState(data)` to ensure all fields exist (non-destructive).
