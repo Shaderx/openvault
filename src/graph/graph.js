@@ -40,3 +40,36 @@ export function upsertEntity(graphData, name, type, description) {
         };
     }
 }
+
+/**
+ * Upsert a relationship edge. Increments weight on duplicates.
+ * On duplicate edges: increments weight AND appends description if different.
+ * Silently skips if source or target node doesn't exist.
+ * @param {Object} graphData - The graph object { nodes, edges } (mutated in place)
+ * @param {string} source - Source entity name (will be normalized)
+ * @param {string} target - Target entity name (will be normalized)
+ * @param {string} description - Relationship description
+ */
+export function upsertRelationship(graphData, source, target, description) {
+    const srcKey = normalizeKey(source);
+    const tgtKey = normalizeKey(target);
+
+    if (!graphData.nodes[srcKey] || !graphData.nodes[tgtKey]) return;
+
+    const edgeKey = `${srcKey}__${tgtKey}`;
+    const existing = graphData.edges[edgeKey];
+
+    if (existing) {
+        existing.weight += 1;
+        if (!existing.description.includes(description)) {
+            existing.description = existing.description + ' | ' + description;
+        }
+    } else {
+        graphData.edges[edgeKey] = {
+            source: srcKey,
+            target: tgtKey,
+            description,
+            weight: 1,
+        };
+    }
+}
