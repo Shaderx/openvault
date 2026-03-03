@@ -39,6 +39,16 @@ function buildBadges(memory) {
             `<span class="openvault-memory-card-badge pending-embed" title="Embedding pending"><i class="fa-solid fa-rotate-right"></i></span>`
         );
     }
+    if (memory.type === 'reflection') {
+        badges.push(
+            `<span class="openvault-memory-card-badge reflection"><i class="fa-solid fa-lightbulb"></i> Reflection</span>`
+        );
+        if (memory.source_ids?.length > 0) {
+            badges.push(
+                `<span class="openvault-memory-card-badge evidence"><i class="fa-solid fa-link"></i> ${memory.source_ids.length} evidence</span>`
+            );
+        }
+    }
     if (witnessText) {
         badges.push(
             `<span class="openvault-memory-card-badge witness"><i class="fa-solid fa-eye"></i> ${escapeHtml(witnessText)}</span>`

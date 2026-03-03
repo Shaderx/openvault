@@ -264,6 +264,14 @@
     color: var(--SmartThemeQuoteColor, #c90);
 }
 
+.openvault-memory-card-badge.reflection {
+    color: #d4a017;
+}
+
+.openvault-memory-card-badge.evidence {
+    color: #7b8ab8;
+}
+
 .openvault-edit-form {
     display: flex;
     flex-direction: column;
