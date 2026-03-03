@@ -15,9 +15,7 @@
  * @property {string} primaryCharacter - POV character name
  * @property {string[]} activeCharacters - All active characters in scene
  * @property {string} headerName - Header for injection ("Scene" or character name)
- * @property {number} preFilterTokens - Smart mode pre-filter token budget
  * @property {number} finalTokens - Final context token budget
- * @property {boolean} smartRetrievalEnabled - Whether to use LLM for selection
  */
 
 import { CHARACTERS_KEY, extensionName, MEMORIES_KEY } from '../constants.js';
@@ -89,9 +87,7 @@ export function buildRetrievalContext(opts = {}) {
         primaryCharacter,
         activeCharacters: getActiveCharacters(),
         headerName: isGroupChat ? povCharacters[0] : 'Scene',
-        preFilterTokens: settings.retrievalPreFilterTokens || 24000,
         finalTokens: settings.retrievalFinalTokens || 12000,
-        smartRetrievalEnabled: settings.smartRetrievalEnabled,
     };
 }
 

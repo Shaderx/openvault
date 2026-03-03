@@ -25,16 +25,13 @@ export const PROCESSED_MESSAGES_KEY = 'processed_message_ids';
 export const defaultSettings = {
     enabled: true,
     extractionProfile: '',
-    retrievalProfile: '',
     debugMode: false,
     // Extraction settings
     messagesPerExtraction: 30,
     extractionBuffer: 5, // Recent messages to exclude from auto-extraction
     extractionRearviewTokens: 12000, // Token budget for extraction memory context
     // Retrieval pipeline settings (token-based)
-    retrievalPreFilterTokens: 20000, // Smart mode: pre-filter budget for LLM pool
-    retrievalFinalTokens: 10000, // Final context budget (both modes)
-    smartRetrievalEnabled: false,
+    retrievalFinalTokens: 10000, // Final context budget
     // Auto-hide settings
     autoHideEnabled: true,
     autoHideThreshold: 40,
@@ -110,6 +107,5 @@ export const UI_DEFAULT_HINTS = {
 
     // Summarization
     contextWindowSize: defaultSettings.extractionRearviewTokens,
-    retrievalPreFilterTokens: defaultSettings.retrievalPreFilterTokens,
     backfillRateLimit: defaultSettings.backfillMaxRPM,
 };

@@ -306,19 +306,6 @@ function bindUIElements() {
     });
 
     // Retrieval pipeline settings
-    $('#openvault_prefilter_budget').on('input', function () {
-        const value = parseInt($(this).val(), 10);
-        saveSetting('retrievalPreFilterTokens', value);
-        $('#openvault_prefilter_budget_value').text(value);
-        updateWordsDisplay(value, 'openvault_prefilter_budget_words');
-    });
-
-    $('#openvault_smart_retrieval').on('change', function () {
-        saveSetting('smartRetrievalEnabled', $(this).is(':checked'));
-        const settings = getSettings();
-        $('#openvault_retrieval_profile_group').toggle(settings.smartRetrievalEnabled);
-    });
-
     $('#openvault_final_budget').on('input', function () {
         const value = parseInt($(this).val(), 10);
         saveSetting('retrievalFinalTokens', value);
@@ -444,10 +431,6 @@ function bindUIElements() {
         saveSetting('extractionProfile', $(this).val());
     });
 
-    $('#openvault_retrieval_profile').on('change', function () {
-        saveSetting('retrievalProfile', $(this).val());
-    });
-
     // Action buttons
     $('#openvault_backfill_embeddings_btn').on('click', backfillEmbeddings);
     $('#openvault_extract_all_btn').on('click', handleExtractAll);
@@ -500,13 +483,6 @@ export function updateUI() {
     updateWordsDisplay(settings.extractionRearviewTokens, 'openvault_extraction_rearview_words');
 
     // Retrieval pipeline settings
-    $('#openvault_prefilter_budget').val(settings.retrievalPreFilterTokens);
-    $('#openvault_prefilter_budget_value').text(settings.retrievalPreFilterTokens);
-    updateWordsDisplay(settings.retrievalPreFilterTokens, 'openvault_prefilter_budget_words');
-
-    $('#openvault_smart_retrieval').prop('checked', settings.smartRetrievalEnabled);
-    $('#openvault_retrieval_profile_group').toggle(settings.smartRetrievalEnabled);
-
     $('#openvault_final_budget').val(settings.retrievalFinalTokens);
     $('#openvault_final_budget_value').text(settings.retrievalFinalTokens);
     updateWordsDisplay(settings.retrievalFinalTokens, 'openvault_final_budget_words');
@@ -580,5 +556,4 @@ export function populateProfileSelector() {
     const profiles = extension_settings.connectionManager?.profiles || [];
 
     populateProfileDropdown($('#openvault_extraction_profile'), profiles, settings.extractionProfile);
-    populateProfileDropdown($('#openvault_retrieval_profile'), profiles, settings.retrievalProfile);
 }

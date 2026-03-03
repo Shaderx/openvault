@@ -169,20 +169,6 @@
                         <option value="">Use current connection</option>
                     </select>
                     <small class="openvault-hint">LLM profile for memory extraction</small>
-
-                    <label class="checkbox_label" style="margin-top: 10px;">
-                        <input type="checkbox" id="openvault_smart_retrieval" checked />
-                        <span>Smart Retrieval (LLM-assisted)</span>
-                    </label>
-                    <small class="openvault-hint">Use LLM to select most relevant memories</small>
-
-                    <div id="openvault_retrieval_profile_group" style="margin-top: 8px;">
-                        <label for="openvault_retrieval_profile">Retrieval Profile</label>
-                        <select id="openvault_retrieval_profile" class="text_pole">
-                            <option value="">Use current connection</option>
-                        </select>
-                        <small class="openvault-hint">Can use a faster/cheaper model</small>
-                    </div>
                 </div>
 
                 <!-- Embedding Settings Group -->
@@ -388,16 +374,6 @@
                             </label>
                             <input type="range" id="openvault_extraction_rearview" min="1000" max="32000" step="1000" value="12000" />
                             <small class="openvault-hint">How much past memories the LLM sees when writing new memories</small>
-
-                            <div style="height: 8px;"></div>
-
-                            <label for="openvault_prefilter_budget" style="margin-top: 10px;">
-                                Pre-filter Budget: <span id="openvault_prefilter_budget_value">24000</span> tokens
-                                <small class="openvault-default-hint" data-default-key="retrievalPreFilterTokens"></small>
-                                <small class="openvault-words-hint">~<span id="openvault_prefilter_budget_words">18000</span> words</small>
-                            </label>
-                            <input type="range" id="openvault_prefilter_budget" min="1000" max="32000" step="1000" value="24000" />
-                            <small class="openvault-hint">Algorithmic filter (recency + vector similarity)</small>
 
                             <div style="height: 8px;"></div>
 
