@@ -5,6 +5,7 @@ import {
     parseExtractionResponse,
     parseSalientQuestionsResponse,
     parseInsightExtractionResponse,
+    parseCommunitySummaryResponse,
 } from '../../src/extraction/structured.js';
 
 describe('smart retrieval removal', () => {
@@ -259,5 +260,53 @@ describe('Reflection Schemas', () => {
         expect(result.insights).toHaveLength(1);
         expect(result.insights[0].insight).toBe('The king fears betrayal');
         expect(result.insights[0].evidence_ids).toContain('ev_001');
+    });
+});
+
+describe('CommunitySummarySchema', () => {
+    it('parses a valid community summary', () => {
+        const json = JSON.stringify({
+            title: 'The Royal Court',
+            summary: 'King Aldric rules from the Castle...',
+            findings: ['The King fears betrayal', 'The Guard is loyal'],
+        });
+        const result = parseCommunitySummaryResponse(json);
+        expect(result.title).toBe('The Royal Court');
+        expect(result.summary).toBe('King Aldric rules from the Castle...');
+        expect(result.findings).toHaveLength(2);
+    });
+
+    it('requires at least 1 finding', () => {
+        const json = JSON.stringify({
+            title: 'Empty',
+            summary: 'Nothing',
+            findings: [],
+        });
+        expect(() => parseCommunitySummaryResponse(json)).toThrow();
+    });
+
+    it('requires at most 5 findings', () => {
+        const json = JSON.stringify({
+            title: 'Too Many',
+            summary: 'Too many findings',
+            findings: ['a', 'b', 'c', 'd', 'e', 'f'],
+        });
+        expect(() => parseCommunitySummaryResponse(json)).toThrow();
+    });
+
+    it('requires non-empty title', () => {
+        const json = JSON.stringify({
+            title: '',
+            summary: 'Something',
+            findings: ['a'],
+        });
+        expect(() => parseCommunitySummaryResponse(json)).toThrow();
+    });
+
+    it('strips markdown and reasoning tags', () => {
+        const content = '<reasoning>Analyzing...</reasoning>\n```json\n{"title": "Test", "summary": "A test community", "findings": ["fact1"]}\n```';
+        const result = parseCommunitySummaryResponse(content);
+        expect(result.title).toBe('Test');
+        expect(result.findings).toHaveLength(1);
     });
 });

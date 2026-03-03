@@ -11,6 +11,7 @@ import {
     getExtractionJsonSchema,
     getSalientQuestionsJsonSchema,
     getInsightExtractionJsonSchema,
+    getCommunitySummaryJsonSchema,
 } from './extraction/structured.js';
 import { log, showToast, withTimeout } from './utils.js';
 
@@ -38,6 +39,13 @@ export const LLM_CONFIGS = {
         errorContext: 'Reflection (insights)',
         timeoutMs: 90000,
         getJsonSchema: getInsightExtractionJsonSchema,
+    },
+    community: {
+        profileSettingKey: 'extractionProfile',
+        maxTokens: 2000,
+        errorContext: 'Community summarization',
+        timeoutMs: 90000,
+        getJsonSchema: getCommunitySummaryJsonSchema,
     },
 };
 

@@ -225,3 +225,32 @@ export function parseSalientQuestionsResponse(content) {
 export function parseInsightExtractionResponse(content) {
     return parseStructuredResponse(content, InsightExtractionSchema);
 }
+
+// --- Community Summary Schema ---
+
+/**
+ * Schema for community summarization output
+ * Title, summary, and 1-5 key findings about a community
+ */
+export const CommunitySummarySchema = z.object({
+    title: z.string().min(1, 'Title is required'),
+    summary: z.string().min(1, 'Summary is required'),
+    findings: z.array(z.string()).min(1, 'At least one finding required').max(5, 'Maximum 5 findings'),
+});
+
+/**
+ * Get jsonSchema for community summarization
+ * @returns {Object} ConnectionManager jsonSchema object
+ */
+export function getCommunitySummaryJsonSchema() {
+    return toJsonSchema(CommunitySummarySchema, 'CommunitySummary');
+}
+
+/**
+ * Parse community summary response
+ * @param {string} content - Raw LLM response
+ * @returns {Object} Validated community summary
+ */
+export function parseCommunitySummaryResponse(content) {
+    return parseStructuredResponse(content, CommunitySummarySchema);
+}

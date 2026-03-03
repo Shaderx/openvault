@@ -25,3 +25,14 @@ describe('LLM_CONFIGS reflection configs', () => {
         expect(LLM_CONFIGS.reflection_insights.maxTokens).toBe(2000);
     });
 });
+
+describe('LLM_CONFIGS community config', () => {
+    it('has community config', () => {
+        expect(LLM_CONFIGS.community).toBeDefined();
+        expect(LLM_CONFIGS.community.profileSettingKey).toBe('extractionProfile');
+        expect(LLM_CONFIGS.community.maxTokens).toBe(2000);
+        expect(LLM_CONFIGS.community.errorContext).toBe('Community summarization');
+        expect(LLM_CONFIGS.community.timeoutMs).toBe(90000);
+        expect(LLM_CONFIGS.community.getJsonSchema).toBeInstanceOf(Function);
+    });
+});
