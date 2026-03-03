@@ -47,6 +47,48 @@ describe('ui/helpers', () => {
         it('handles empty memories array', () => {
             expect(filterMemories([], '', '')).toHaveLength(0);
         });
+
+        it('filters events only (excludes reflections)', () => {
+            const mems = [
+                { id: '1', characters_involved: ['Alice'] },
+                { id: '2', characters_involved: ['Alice'], type: 'reflection' },
+                { id: '3', characters_involved: ['Bob'] },
+            ];
+            const result = filterMemories(mems, 'event', '');
+            expect(result).toHaveLength(2);
+            expect(result.every(m => m.type !== 'reflection')).toBe(true);
+        });
+
+        it('filters reflections only', () => {
+            const mems = [
+                { id: '1', characters_involved: ['Alice'] },
+                { id: '2', characters_involved: ['Alice'], type: 'reflection' },
+                { id: '3', characters_involved: ['Bob'], type: 'reflection' },
+            ];
+            const result = filterMemories(mems, 'reflection', '');
+            expect(result).toHaveLength(2);
+            expect(result.every(m => m.type === 'reflection')).toBe(true);
+        });
+
+        it('combines type and character filter', () => {
+            const mems = [
+                { id: '1', characters_involved: ['Alice'] },
+                { id: '2', characters_involved: ['Alice'], type: 'reflection' },
+                { id: '3', characters_involved: ['Bob'], type: 'reflection' },
+            ];
+            const result = filterMemories(mems, 'reflection', 'Alice');
+            expect(result).toHaveLength(1);
+            expect(result[0].id).toBe('2');
+        });
+
+        it('treats unknown type filter as show all', () => {
+            const mems = [
+                { id: '1', characters_involved: ['Alice'] },
+                { id: '2', characters_involved: ['Alice'], type: 'reflection' },
+            ];
+            const result = filterMemories(mems, 'action', '');
+            expect(result).toHaveLength(2);
+        });
     });
 
     describe('sortMemoriesByDate', () => {

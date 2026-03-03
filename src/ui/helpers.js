@@ -12,13 +12,19 @@
 /**
  * Filter memories by type and character
  * @param {Array} memories - Array of memory objects
- * @param {string} typeFilter - Event type filter (empty = all) - DEPRECATED, ignored
+ * @param {string} typeFilter - Event type filter ('event' = exclude reflections, 'reflection' = only reflections, empty = all)
  * @param {string} characterFilter - Character filter (empty = all)
  * @returns {Array} Filtered memories
  */
-export function filterMemories(memories, _typeFilter, characterFilter) {
+export function filterMemories(memories, typeFilter, characterFilter) {
     return memories.filter((m) => {
+        // Type filter
+        if (typeFilter === 'event' && m.type === 'reflection') return false;
+        if (typeFilter === 'reflection' && m.type !== 'reflection') return false;
+
+        // Character filter
         if (characterFilter && !m.characters_involved?.includes(characterFilter)) return false;
+
         return true;
     });
 }
