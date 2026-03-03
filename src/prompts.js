@@ -240,7 +240,7 @@ Rules:
 - Each insight must be a concise, high-level statement (not a restatement of a single memory).
 - Each insight must cite the specific memory IDs that serve as evidence.
 - Insights should reveal patterns, emotional arcs, or relationship dynamics.
-- Output as a JSON object with an "insights" array.`;
+- Output as a JSON object with an "insights" array where each insight is an object with "insight" (string) and "evidence_ids" (array of strings).`;
 
     const userPrompt = `<character>${characterName}</character>
 
@@ -251,7 +251,7 @@ ${memoryList}
 </memories>
 
 Based on these memories about ${characterName}, what insights answer the question above?
-Respond strictly in the required JSON format.`;
+Respond strictly in the required JSON format: { "insights": [{"insight": "statement", "evidence_ids": ["1", "2"]}] }`;
 
     return [
         { role: 'system', content: systemPrompt },
