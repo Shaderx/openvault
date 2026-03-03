@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderMemoryItem } from '../src/ui/templates.js';
+import { renderMemoryItem, renderReflectionProgress } from '../src/ui/templates.js';
 
 describe('ui/templates', () => {
     describe('renderMemoryItem', () => {
@@ -43,6 +43,45 @@ describe('ui/templates', () => {
             const html = renderMemoryItem(memory);
             expect(html).not.toContain('fa-lightbulb');
             expect(html).not.toContain('Reflection');
+        });
+    });
+
+    describe('renderReflectionProgress', () => {
+        it('renders counters for each character', () => {
+            const state = {
+                'King Aldric': { importance_sum: 22 },
+                'Royal Guard': { importance_sum: 8 },
+            };
+            const html = renderReflectionProgress(state, 30);
+            expect(html).toContain('King Aldric: 22/30');
+            expect(html).toContain('Royal Guard: 8/30');
+        });
+
+        it('sorts characters alphabetically', () => {
+            const state = {
+                'Zelda': { importance_sum: 10 },
+                'Alice': { importance_sum: 5 },
+            };
+            const html = renderReflectionProgress(state, 30);
+            const aliceIdx = html.indexOf('Alice');
+            const zeldaIdx = html.indexOf('Zelda');
+            expect(aliceIdx).toBeLessThan(zeldaIdx);
+        });
+
+        it('returns placeholder for empty state', () => {
+            const html = renderReflectionProgress({}, 30);
+            expect(html).toContain('No reflection data yet');
+        });
+
+        it('returns placeholder for null state', () => {
+            const html = renderReflectionProgress(null, 30);
+            expect(html).toContain('No reflection data yet');
+        });
+
+        it('defaults importance_sum to 0', () => {
+            const state = { 'Alice': {} };
+            const html = renderReflectionProgress(state, 30);
+            expect(html).toContain('Alice: 0/30');
         });
     });
 });

@@ -939,6 +939,19 @@
     padding: 20px;
 }
 
+.openvault-reflection-counters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding: 8px 0;
+}
+
+.openvault-reflection-counter {
+    font-size: 0.85em;
+    color: var(--SmartThemeEmColor, #888);
+    white-space: nowrap;
+}
+
 .openvault-danger .inline-drawer-header span {
     color: var(--error-color, #c44);
 }

@@ -207,3 +207,25 @@ export function renderCharacterState(charData) {
         </div>
     `;
 }
+
+/**
+ * Render reflection progress counters for all characters.
+ * @param {Object|null} reflectionState - charName → { importance_sum }
+ * @param {number} threshold - Reflection threshold
+ * @returns {string} HTML
+ */
+export function renderReflectionProgress(reflectionState, threshold) {
+    if (!reflectionState || Object.keys(reflectionState).length === 0) {
+        return '<p class="openvault-placeholder">No reflection data yet</p>';
+    }
+
+    const items = Object.entries(reflectionState)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, state]) => {
+            const sum = state.importance_sum || 0;
+            return `<span class="openvault-reflection-counter">${escapeHtml(name)}: ${sum}/${threshold}</span>`;
+        })
+        .join(' \u00b7 ');
+
+    return `<div class="openvault-reflection-counters">${items}</div>`;
+}
