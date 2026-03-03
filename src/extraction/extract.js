@@ -321,8 +321,9 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
             }
 
             // Check each character for reflection trigger
+            const reflectionThreshold = settings.reflectionThreshold ?? 30;
             for (const characterName of characters) {
-                if (shouldReflect(data.reflection_state, characterName)) {
+                if (shouldReflect(data.reflection_state, characterName, reflectionThreshold)) {
                     try {
                         const reflections = await generateReflections(
                             characterName,
@@ -341,11 +342,12 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
             }
         }
 
-        // Stage 4.7: Community detection (every 50 messages)
+        // Stage 4.7: Community detection
+        const communityInterval = settings.communityDetectionInterval ?? 50;
         const prevCount = (data.graph_message_count || 0) - messages.length;
         const currCount = data.graph_message_count || 0;
-        // Check if we crossed a 50-message boundary
-        if (Math.floor(currCount / 50) > Math.floor(prevCount / 50)) {
+        // Check if we crossed a message boundary for community detection
+        if (Math.floor(currCount / communityInterval) > Math.floor(prevCount / communityInterval)) {
             try {
                 const communityResult = detectCommunities(data.graph);
                 if (communityResult) {

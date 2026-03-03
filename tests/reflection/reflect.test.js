@@ -56,7 +56,7 @@ describe('accumulateImportance', () => {
 });
 
 describe('shouldReflect', () => {
-    it('returns true when importance_sum >= 30', () => {
+    it('returns true when importance_sum >= 30 (default threshold)', () => {
         const state = { Alice: { importance_sum: 30 } };
         expect(shouldReflect(state, 'Alice')).toBe(true);
     });
@@ -73,6 +73,12 @@ describe('shouldReflect', () => {
 
     it('returns false when character not in state', () => {
         expect(shouldReflect({}, 'Unknown')).toBe(false);
+    });
+
+    it('uses custom threshold from parameter', () => {
+        const state = { Alice: { importance_sum: 20 } };
+        expect(shouldReflect(state, 'Alice', 20)).toBe(true);
+        expect(shouldReflect(state, 'Alice', 30)).toBe(false);
     });
 });
 

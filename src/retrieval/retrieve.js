@@ -90,6 +90,7 @@ export function buildRetrievalContext(opts = {}) {
         activeCharacters: getActiveCharacters(),
         headerName: isGroupChat ? povCharacters[0] : 'Scene',
         finalTokens: settings.retrievalFinalTokens || 12000,
+        worldContextBudget: settings.worldContextBudget || 2000,
     };
 }
 
@@ -162,7 +163,7 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
             worldQueryEmbedding = await getQueryEmbedding(userMessages || ctx.recentContext?.slice(-500));
         }
         if (worldQueryEmbedding) {
-            const worldResult = retrieveWorldContext(worldCommunities, worldQueryEmbedding, 2000);
+            const worldResult = retrieveWorldContext(worldCommunities, worldQueryEmbedding, ctx.worldContextBudget);
             safeSetExtensionPrompt(worldResult.text, 'openvault_world');
         } else {
             safeSetExtensionPrompt('', 'openvault_world');

@@ -20,12 +20,13 @@ const REFLECTION_THRESHOLD = 30;
  * Check if a character has accumulated enough importance to trigger reflection.
  * @param {Object} reflectionState - Per-character accumulators
  * @param {string} characterName
+ * @param {number} threshold - Importance threshold (default: 30)
  * @returns {boolean}
  */
-export function shouldReflect(reflectionState, characterName) {
+export function shouldReflect(reflectionState, characterName, threshold = REFLECTION_THRESHOLD) {
     const charState = reflectionState[characterName];
     if (!charState) return false;
-    return charState.importance_sum >= REFLECTION_THRESHOLD;
+    return charState.importance_sum >= threshold;
 }
 
 /**
