@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import {
     getExtractionJsonSchema,
-    getRetrievalJsonSchema,
     parseEvent,
     parseExtractionResponse,
-    parseRetrievalResponse,
 } from '../../src/extraction/structured.js';
+
+describe('smart retrieval removal', () => {
+    it('does not export RetrievalResponseSchema', async () => {
+        const module = await import('../../src/extraction/structured.js');
+        expect(module.RetrievalResponseSchema).toBeUndefined();
+    });
+
+    it('does not export getRetrievalJsonSchema', async () => {
+        const module = await import('../../src/extraction/structured.js');
+        expect(module.getRetrievalJsonSchema).toBeUndefined();
+    });
+
+    it('does not export parseRetrievalResponse', async () => {
+        const module = await import('../../src/extraction/structured.js');
+        expect(module.parseRetrievalResponse).toBeUndefined();
+    });
+});
 
 describe('getExtractionJsonSchema', () => {
     it('returns ConnectionManager-compatible jsonSchema', () => {
@@ -163,68 +178,5 @@ describe('parseEvent', () => {
         const result = parseEvent(content);
         expect(result.summary).toBe('Event');
         expect(result.importance).toBe(4);
-    });
-});
-
-describe('getRetrievalJsonSchema', () => {
-    it('returns ConnectionManager-compatible jsonSchema', () => {
-        const schema = getRetrievalJsonSchema();
-        expect(schema).toMatchObject({
-            name: 'MemoryRetrieval',
-            strict: true,
-            value: expect.any(Object),
-        });
-        expect(schema.value).toHaveProperty('type', 'object');
-        expect(schema.value.properties).toHaveProperty('reasoning');
-        expect(schema.value.properties).toHaveProperty('selected');
-    });
-
-    it('has reasoning as first property', () => {
-        const schema = getRetrievalJsonSchema();
-        const propKeys = Object.keys(schema.value.properties);
-        expect(propKeys[0]).toBe('reasoning');
-    });
-
-    it('selected is array of positive integers', () => {
-        const schema = getRetrievalJsonSchema();
-        const selectedProp = schema.value.properties.selected;
-        expect(selectedProp.type).toBe('array');
-    });
-});
-
-describe('parseRetrievalResponse', () => {
-    it('parses valid retrieval response', () => {
-        const json = JSON.stringify({ reasoning: 'Chose based on scene', selected: [1, 3, 5] });
-        const result = parseRetrievalResponse(json);
-        expect(result.selected).toEqual([1, 3, 5]);
-        expect(result.reasoning).toBe('Chose based on scene');
-    });
-
-    it('handles null reasoning', () => {
-        const json = JSON.stringify({ reasoning: null, selected: [2] });
-        const result = parseRetrievalResponse(json);
-        expect(result.reasoning).toBeNull();
-        expect(result.selected).toEqual([2]);
-    });
-
-    it('handles empty selected array', () => {
-        const json = JSON.stringify({ reasoning: 'Nothing relevant', selected: [] });
-        const result = parseRetrievalResponse(json);
-        expect(result.selected).toEqual([]);
-    });
-
-    it('strips markdown before parsing', () => {
-        const content = '```json\n{"reasoning": null, "selected": [1]}\n```';
-        const result = parseRetrievalResponse(content);
-        expect(result.selected).toEqual([1]);
-    });
-
-    it('throws on invalid JSON', () => {
-        expect(() => parseRetrievalResponse('not json')).toThrow('JSON parse failed');
-    });
-
-    it('throws on missing selected field', () => {
-        const json = JSON.stringify({ reasoning: 'test' });
-        expect(() => parseRetrievalResponse(json)).toThrow('Schema validation failed');
     });
 });

@@ -31,14 +31,6 @@ export const ExtractionResponseSchema = z.object({
 });
 
 /**
- * Schema for smart retrieval LLM response
- */
-export const RetrievalResponseSchema = z.object({
-    reasoning: z.string().nullable().default(null),
-    selected: z.array(z.number().int().min(1)),
-});
-
-/**
  * Convert Zod schema to ConnectionManager jsonSchema format
  * Uses Zod v4's native toJSONSchema with jsonSchema4 target
  *
@@ -152,24 +144,4 @@ export function parseEvent(content) {
  */
 export function _testStripMarkdown(content) {
     return stripMarkdown(content);
-}
-
-/**
- * Get jsonSchema for retrieval responses from ConnectionManager sendRequest
- * For use in structured output mode
- *
- * @returns {Object} ConnectionManager jsonSchema object
- */
-export function getRetrievalJsonSchema() {
-    return toJsonSchema(RetrievalResponseSchema, 'MemoryRetrieval');
-}
-
-/**
- * Parse retrieval response with full validation
- *
- * @param {string} content - Raw LLM response
- * @returns {Object} Validated retrieval response with {selected, reasoning} format
- */
-export function parseRetrievalResponse(content) {
-    return parseStructuredResponse(content, RetrievalResponseSchema);
 }
