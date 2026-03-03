@@ -40,6 +40,7 @@ import {
 import { getBackfillMessageIds, getExtractedMessageIds } from './scheduler.js';
 import { parseExtractionResponse } from './structured.js';
 import { initGraphState, upsertEntity, upsertRelationship } from '../graph/graph.js';
+import { accumulateImportance, shouldReflect, generateReflections } from '../reflection/reflect.js';
 
 /**
  * Update character states based on extracted events
@@ -304,6 +305,39 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
             }
         }
         data.graph_message_count = (data.graph_message_count || 0) + messages.length;
+
+        // Stage 4.6: Reflection check (per character in new events)
+        if (events.length > 0) {
+            initGraphState(data); // Ensures reflection_state exists
+            accumulateImportance(data.reflection_state, events);
+
+            // Collect unique characters from new events
+            const characters = new Set();
+            for (const event of events) {
+                for (const c of event.characters_involved || []) characters.add(c);
+                for (const w of event.witnesses || []) characters.add(w);
+            }
+
+            // Check each character for reflection trigger
+            for (const characterName of characters) {
+                if (shouldReflect(data.reflection_state, characterName)) {
+                    try {
+                        const reflections = await generateReflections(
+                            characterName,
+                            data[MEMORIES_KEY] || [],
+                            data[CHARACTERS_KEY] || {}
+                        );
+                        if (reflections.length > 0) {
+                            data[MEMORIES_KEY].push(...reflections);
+                        }
+                        // Reset accumulator after reflection
+                        data.reflection_state[characterName].importance_sum = 0;
+                    } catch (error) {
+                        deps.console.error(`[OpenVault] Reflection error for ${characterName}:`, error);
+                    }
+                }
+            }
+        }
 
         // Stage 5: Result Committing
         const maxId = processedIds.length > 0 ? Math.max(...processedIds) : 0;

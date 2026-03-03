@@ -31,6 +31,15 @@ vi.mock('../../src/llm.js', () => ({
 vi.mock('../../src/ui/render.js', () => ({ refreshAllUI: vi.fn() }));
 vi.mock('../../src/ui/status.js', () => ({ setStatus: vi.fn() }));
 
+// Mock reflection module
+vi.mock('../../src/reflection/reflect.js', () => ({
+    accumulateImportance: vi.fn(),
+    shouldReflect: vi.fn(() => false),
+    generateReflections: vi.fn(async () => []),
+}));
+
+import { accumulateImportance, shouldReflect, generateReflections } from '../../src/reflection/reflect.js';
+
 import { extractMemories } from '../../src/extraction/extract.js';
 
 describe('extractMemories graph integration', () => {
@@ -93,5 +102,85 @@ describe('extractMemories graph integration', () => {
     it('increments graph_message_count', async () => {
         await extractMemories([0, 1]);
         expect(mockData.graph_message_count).toBeGreaterThan(0);
+    });
+});
+
+describe('extractMemories reflection integration', () => {
+    let mockContext;
+    let mockData;
+
+    beforeEach(() => {
+        // Use a reference object that initGraphState can modify
+        const dataRef = {
+            memories: [],
+            character_states: {},
+            last_processed_message_id: -1,
+            processed_message_ids: [],
+            graph: { nodes: {}, edges: {} },
+            graph_message_count: 0,
+            reflection_state: {},
+        };
+
+        mockData = dataRef;
+
+        mockContext = {
+            chat: [
+                { mes: 'Hello', is_user: true, name: 'User' },
+                { mes: 'Welcome to the Castle', is_user: false, name: 'King Aldric' },
+            ],
+            name1: 'User',
+            name2: 'King Aldric',
+            characterId: 'char1',
+            characters: { char1: { description: '' } },
+            chatMetadata: { openvault: mockData },
+            chatId: 'test-chat',
+            powerUserSettings: {},
+        };
+
+        setDeps({
+            getContext: () => mockContext,
+            getExtensionSettings: () => ({
+                [extensionName]: { ...defaultSettings, enabled: true },
+            }),
+            saveChatConditional: vi.fn(async () => true),
+            console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
+            Date: { now: () => 1000000 },
+        });
+
+        vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        resetDeps();
+    });
+
+    it('calls accumulateImportance after extraction', async () => {
+        await extractMemories([0, 1]);
+        expect(accumulateImportance).toHaveBeenCalled();
+    });
+
+    it('calls generateReflections when shouldReflect returns true', async () => {
+        shouldReflect.mockReturnValue(true);
+        generateReflections.mockResolvedValue([
+            { id: 'ref_1', type: 'reflection', summary: 'Test reflection', importance: 4, character: 'King Aldric' },
+        ]);
+
+        await extractMemories([0, 1]);
+
+        expect(generateReflections).toHaveBeenCalled();
+    });
+
+    it('resets importance accumulator after generating reflections', async () => {
+        shouldReflect.mockReturnValue(true);
+        generateReflections.mockResolvedValue([]);
+
+        // Initialize reflection_state with some accumulated importance
+        mockData.reflection_state['King Aldric'] = { importance_sum: 30 };
+
+        await extractMemories([0, 1]);
+
+        // Verify the reflection_state for the character was reset
+        const charState = mockData.reflection_state?.['King Aldric'];
+        expect(charState?.importance_sum).toBe(0);
     });
 });
