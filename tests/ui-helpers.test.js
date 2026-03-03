@@ -7,6 +7,7 @@ import {
     buildProfileOptions,
     calculateExtractionStats,
     extractCharactersSet,
+    filterEntities,
     filterMemories,
     formatEmotionSource,
     formatHiddenMessagesText,
@@ -88,6 +89,55 @@ describe('ui/helpers', () => {
             ];
             const result = filterMemories(mems, 'action', '');
             expect(result).toHaveLength(2);
+        });
+    });
+
+    describe('filterEntities', () => {
+        const entities = [
+            { name: 'King Aldric', type: 'PERSON', description: 'The aging ruler', mentions: 7 },
+            { name: 'Castle', type: 'PLACE', description: 'Ancient fortress', mentions: 3 },
+            { name: 'Royal Guard', type: 'ORGANIZATION', description: 'Elite soldiers', mentions: 5 },
+            { name: 'Magic Sword', type: 'OBJECT', description: 'Legendary blade', mentions: 2 },
+        ];
+
+        it('returns all entities when no filters', () => {
+            expect(filterEntities(entities, '', '')).toHaveLength(4);
+        });
+
+        it('filters by type', () => {
+            const result = filterEntities(entities, 'PERSON', '');
+            expect(result).toHaveLength(1);
+            expect(result[0].name).toBe('King Aldric');
+        });
+
+        it('filters by search query (name)', () => {
+            const result = filterEntities(entities, '', 'castle');
+            expect(result).toHaveLength(1);
+            expect(result[0].name).toBe('Castle');
+        });
+
+        it('filters by search query (description)', () => {
+            const result = filterEntities(entities, '', 'legendary');
+            expect(result).toHaveLength(1);
+            expect(result[0].name).toBe('Magic Sword');
+        });
+
+        it('combines type and search filters', () => {
+            const result = filterEntities(entities, 'PERSON', 'aldric');
+            expect(result).toHaveLength(1);
+        });
+
+        it('returns empty for no matches', () => {
+            expect(filterEntities(entities, '', 'nonexistent')).toHaveLength(0);
+        });
+
+        it('handles empty array', () => {
+            expect(filterEntities([], '', '')).toHaveLength(0);
+        });
+
+        it('search is case-insensitive', () => {
+            const result = filterEntities(entities, '', 'KING');
+            expect(result).toHaveLength(1);
         });
     });
 

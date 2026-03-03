@@ -30,6 +30,26 @@ export function filterMemories(memories, typeFilter, characterFilter) {
 }
 
 /**
+ * Filter entities by type and search query.
+ * @param {Array} entities - Array of { name, type, description, mentions }
+ * @param {string} typeFilter - Entity type (PERSON, PLACE, etc.) or "" for all
+ * @param {string} searchQuery - Text search on name/description (case-insensitive)
+ * @returns {Array} Filtered entities
+ */
+export function filterEntities(entities, typeFilter, searchQuery) {
+    const query = searchQuery.toLowerCase();
+    return entities.filter((e) => {
+        if (typeFilter && e.type !== typeFilter) return false;
+        if (query) {
+            const name = (e.name || '').toLowerCase();
+            const desc = (e.description || '').toLowerCase();
+            if (!name.includes(query) && !desc.includes(query)) return false;
+        }
+        return true;
+    });
+}
+
+/**
  * Sort memories by creation date (newest first)
  * @param {Array} memories - Array of memory objects
  * @returns {Array} New sorted array
