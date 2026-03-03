@@ -73,3 +73,23 @@ export function upsertRelationship(graphData, source, target, description) {
         };
     }
 }
+
+/**
+ * Create an empty flat graph structure.
+ * @returns {{ nodes: Object, edges: Object }}
+ */
+export function createEmptyGraph() {
+    return { nodes: {}, edges: {} };
+}
+
+/**
+ * Initialize graph-related state fields on the openvault data object.
+ * Does not overwrite existing fields.
+ * @param {Object} data - The openvault data object (mutated in place)
+ */
+export function initGraphState(data) {
+    if (!data.graph) data.graph = createEmptyGraph();
+    if (!data.communities) data.communities = {};
+    if (!data.reflection_state) data.reflection_state = {};
+    if (data.graph_message_count == null) data.graph_message_count = 0;
+}
