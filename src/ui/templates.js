@@ -259,3 +259,21 @@ export function renderCommunityAccordion(id, community) {
         </details>
     `;
 }
+
+/**
+ * Render a single entity card.
+ * @param {Object} entity - { name, type, description, mentions }
+ * @returns {string} HTML
+ */
+export function renderEntityCard(entity) {
+    return `
+        <div class="openvault-entity-card">
+            <div class="openvault-entity-header">
+                <span class="openvault-entity-name">${escapeHtml(entity.name)}</span>
+                <span class="openvault-entity-type-badge ${entity.type.toLowerCase()}">${escapeHtml(entity.type)}</span>
+            </div>
+            <div class="openvault-entity-description">${escapeHtml(entity.description || '')}</div>
+            <small class="openvault-entity-mentions">${entity.mentions || 0} mentions</small>
+        </div>
+    `;
+}

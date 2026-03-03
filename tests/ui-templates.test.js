@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderMemoryItem, renderReflectionProgress, renderCommunityAccordion } from '../src/ui/templates.js';
+import { renderMemoryItem, renderReflectionProgress, renderCommunityAccordion, renderEntityCard } from '../src/ui/templates.js';
 
 describe('ui/templates', () => {
     describe('renderMemoryItem', () => {
@@ -140,6 +140,40 @@ describe('ui/templates', () => {
             const community = { title: 'Test', summary: 'Test', findings: [], nodeKeys: [] };
             const html = renderCommunityAccordion('C0', community);
             expect(html).toContain('0 entities');
+        });
+    });
+
+    describe('renderEntityCard', () => {
+        it('renders entity name and type badge', () => {
+            const entity = { name: 'King Aldric', type: 'PERSON', description: 'The aging ruler', mentions: 7 };
+            const html = renderEntityCard(entity);
+            expect(html).toContain('King Aldric');
+            expect(html).toContain('PERSON');
+            expect(html).toContain('person'); // lowercase class
+        });
+
+        it('renders mention count', () => {
+            const entity = { name: 'Castle', type: 'PLACE', description: 'Ancient fortress', mentions: 3 };
+            const html = renderEntityCard(entity);
+            expect(html).toContain('3 mentions');
+        });
+
+        it('renders description', () => {
+            const entity = { name: 'Castle', type: 'PLACE', description: 'Ancient fortress', mentions: 1 };
+            const html = renderEntityCard(entity);
+            expect(html).toContain('Ancient fortress');
+        });
+
+        it('handles missing description', () => {
+            const entity = { name: 'Castle', type: 'PLACE', mentions: 1 };
+            const html = renderEntityCard(entity);
+            expect(html).toContain('Castle');
+        });
+
+        it('defaults mentions to 0', () => {
+            const entity = { name: 'Castle', type: 'PLACE', description: '' };
+            const html = renderEntityCard(entity);
+            expect(html).toContain('0 mentions');
         });
     });
 });
