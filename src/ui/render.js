@@ -24,7 +24,7 @@ import {
     sortMemoriesByDate,
 } from './helpers.js';
 import { refreshStats } from './status.js';
-import { renderCharacterState, renderMemoryEdit, renderMemoryItem, renderCommunityAccordion, renderEntityCard } from './templates.js';
+import { renderCharacterState, renderMemoryEdit, renderMemoryItem, renderCommunityAccordion, renderEntityCard, renderReflectionProgress } from './templates.js';
 
 // DOM Selectors
 const SELECTORS = {
@@ -311,6 +311,23 @@ export function renderCharacterStates() {
 }
 
 // =============================================================================
+// Reflection Progress Render
+// =============================================================================
+
+function renderReflectionProgressSection() {
+    const $container = $('#openvault_reflection_progress');
+    if ($container.length === 0) return;
+
+    const data = getOpenVaultData();
+    const reflectionState = data?.reflection_state || {};
+
+    const settings = getDeps().getExtensionSettings()['openvault'] || {};
+    const threshold = settings.reflectionThreshold ?? 30;
+
+    $container.html(renderReflectionProgress(reflectionState, threshold));
+}
+
+// =============================================================================
 // World Tab State and Render
 // =============================================================================
 
@@ -390,6 +407,7 @@ export function refreshAllUI() {
     refreshStats();
     renderMemoryList();
     renderCharacterStates();
+    renderReflectionProgressSection();
     renderWorldTab();
 }
 
