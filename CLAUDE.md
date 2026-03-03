@@ -23,8 +23,10 @@ OpenVault is an agentic memory extension for SillyTavern. It provides POV-aware 
 
 ## MAP: Progressive Disclosure
 Detailed instructions are lazily loaded when you visit these directories:
-- `/src/extraction/CLAUDE.md` - How the LLM extracts JSON memories from chat.
-- `/src/retrieval/CLAUDE.md` - How the Alpha-Blend (BM25 + Vector) scoring works.
+- `/src/extraction/CLAUDE.md` - Event extraction, entity/relationship graph CRUD.
+- `/src/retrieval/CLAUDE.md` - Alpha-Blend (BM25 + Vector) scoring, world context.
+- `/src/graph/CLAUDE.md` - Entity graph storage, GraphRAG communities.
+- `/src/reflection/CLAUDE.md` - Per-character reflection pipeline (Smallville).
 - `/src/ui/CLAUDE.md` - UI rendering, jQuery conventions, and template logic.
 - `/tests/CLAUDE.md` - Vitest conventions, stubs, and mock injection.
 

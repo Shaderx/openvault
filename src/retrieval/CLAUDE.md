@@ -1,16 +1,23 @@
 # Memory Retrieval & Scoring Subsystem
 
 ## WHAT
-This subsystem finds the most relevant memories for the current chat context and formats them for prompt injection.
+Finds relevant memories (events + reflections) and community summaries. Formats for prompt injection via named slots: `openvault_memory` and `openvault_world`.
 
 ## HOW: The Math (`math.js` & `scoring.js`)
-We use a hybrid **Alpha-Blend** scoring system:
-1. **Forgetfulness Curve**: Base score decays exponentially based on message distance. Importance 5 memories have a minimum score floor.
-2. **BM25 (Keyword)**: IDF-aware term frequency. Boosts exact entities extracted from the scene via `query-context.js`.
-3. **Vector (Semantic)**: Cosine similarity via WebGPU/Ollama.
-- **Formula**: `Total = Base + (Alpha * VectorBonus) + ((1 - Alpha) * BM25Bonus)`
+Hybrid **Alpha-Blend** scoring:
+1. **Forgetfulness Curve**: Exponential decay by message distance. Importance 5 = floor.
+2. **BM25**: IDF-aware term frequency via `query-context.js`.
+3. **Vector**: Cosine similarity via WebGPU/Ollama.
+- **Formula**: `Total = Base + (Alpha * Vector) + ((1 - Alpha) * BM25)`
+
+## HOW: World Context (`world-context.js`)
+- **Source**: GraphRAG community summaries from `src/graph/communities.js`.
+- **Retrieval**: Cosine similarity on community embeddings, token budget 2000.
+- **Format**: `<world_context>` XML tag with title/summary/findings.
+- **Injection**: Named slot `openvault_world` (higher in prompt than memories).
 
 ## GOTCHAS & RULES
-- **Pure Functions**: `math.js` must contain ONLY pure functions. Do not import `deps.js` or DOM elements here. It must be testable and potentially worker-safe.
-- **Formatting Buckets**: `formatting.js` strictly divides memories into `Old`, `Mid`, and `Recent` buckets based on `CURRENT_SCENE_SIZE` and `LEADING_UP_SIZE`.
-- **POV Filtering**: Always filter memories through `src/pov.js` before scoring. Only inject memories the active POV character(s) witnessed or know about.
+- **Pure Functions**: `math.js` ONLY. No `deps.js`, no DOM. Worker-safe.
+- **Named Slots**: Use `safeSetExtensionPrompt(content, name)` — `openvault_memory` or `openvault_world`.
+- **Formatting Buckets**: `formatting.js` divides into `Old`, `Mid`, `Recent` buckets.
+- **POV Filtering**: Filter through `src/pov.js` before scoring. Only inject witnessed/known memories.
