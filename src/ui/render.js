@@ -19,11 +19,12 @@ import {
     buildCharacterStateData,
     extractCharactersSet,
     filterMemories,
+    filterEntities,
     getPaginationInfo,
     sortMemoriesByDate,
 } from './helpers.js';
 import { refreshStats } from './status.js';
-import { renderCharacterState, renderMemoryEdit, renderMemoryItem } from './templates.js';
+import { renderCharacterState, renderMemoryEdit, renderMemoryItem, renderCommunityAccordion, renderEntityCard } from './templates.js';
 
 // DOM Selectors
 const SELECTORS = {
@@ -310,6 +311,61 @@ export function renderCharacterStates() {
 }
 
 // =============================================================================
+// World Tab State and Render
+// =============================================================================
+
+let entitySearchTimeout = null;
+
+function renderCommunityList() {
+    const $container = $('#openvault_community_list');
+    const $count = $('#openvault_community_count');
+    const data = getOpenVaultData();
+
+    const communities = data?.communities || {};
+    const ids = Object.keys(communities);
+
+    $count.text(ids.length);
+
+    if (ids.length === 0) {
+        $container.html('<p class="openvault-placeholder">No communities detected yet</p>');
+        return;
+    }
+
+    const html = ids.map(id => renderCommunityAccordion(id, communities[id])).join('');
+    $container.html(html);
+}
+
+function renderEntityList() {
+    const $container = $('#openvault_entity_list');
+    const $count = $('#openvault_entity_count');
+    const data = getOpenVaultData();
+
+    const nodes = data?.graph?.nodes || {};
+    const allEntities = Object.values(nodes);
+
+    const typeFilter = $('#openvault_entity_type_filter').val() || '';
+    const searchQuery = $('#openvault_entity_search').val()?.toLowerCase().trim() || '';
+
+    const filtered = filterEntities(allEntities, typeFilter, searchQuery);
+
+    $count.text(allEntities.length);
+
+    if (filtered.length === 0) {
+        const msg = searchQuery || typeFilter ? 'No entities match your filters' : 'No entities extracted yet';
+        $container.html(`<p class="openvault-placeholder">${msg}</p>`);
+        return;
+    }
+
+    const html = filtered.map(renderEntityCard).join('');
+    $container.html(html);
+}
+
+function renderWorldTab() {
+    renderCommunityList();
+    renderEntityList();
+}
+
+// =============================================================================
 // Browser Orchestration Layer
 // =============================================================================
 
@@ -317,15 +373,24 @@ export function initBrowser() {
     bindMemoryListEvents();
     renderMemoryList();
     renderCharacterStates();
+    renderWorldTab();
 
     $(SELECTORS.PREV_BTN).on('click', prevPage);
     $(SELECTORS.NEXT_BTN).on('click', nextPage);
+
+    // Entity browser events
+    $('#openvault_entity_type_filter').on('change', renderEntityList);
+    $('#openvault_entity_search').on('input', () => {
+        clearTimeout(entitySearchTimeout);
+        entitySearchTimeout = setTimeout(renderEntityList, 200);
+    });
 }
 
 export function refreshAllUI() {
     refreshStats();
     renderMemoryList();
     renderCharacterStates();
+    renderWorldTab();
 }
 
 export { prevPage as browserPrevPage, nextPage as browserNextPage, resetAndRender as browserResetAndRender };
