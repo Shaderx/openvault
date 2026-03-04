@@ -240,12 +240,20 @@ Correct output:
 {"reasoning": "Маша and Кай establish an explicit dom/sub dynamic for the first time. She kneels, hands behind back, calls herself his bitch and surrenders control. He takes her by the throat and sets safeword 'малина'. First BDSM contract with safeword = importance 5.", "events": [{"summary": "Маша knelt and submitted as Кай's sub; he choked her gently and established safeword 'малина'", "importance": 5, "characters_involved": ["Маша", "Кай"], "witnesses": [], "location": null, "is_secret": true, "emotional_impact": {"Маша": "submission, arousal", "Кай": "control, protectiveness"}, "relationship_impact": {"Маша->Кай": "full submission as sub", "Кай->Маша": "accepted dom role, established safeword"}}], "entities": [{"name": "Маша", "type": "PERSON", "description": "A submissive woman who surrendered to Кай as his sub"}, {"name": "Кай", "type": "PERSON", "description": "A dominant man who established control with safeword 'малина'"}], "relationships": [{"source": "Маша", "target": "Кай", "description": "Submissive sexual partner, safeword is малина"}, {"source": "Кай", "target": "Маша", "description": "Dominant sexual partner, set safeword малина"}]}
 </example>
 
-<example name="dedup_sex_continuation">
-Input messages: "[Лена]: *кричит, впиваясь ногтями в его спину* Блять... глубже... ещё... *обхватывает его бёдрами, не отпуская*"
-Established memories: "Лена and Вова had vaginal sex for the first time"
+<example name="political_betrayal">
+Input messages: "[Aldric]: *slams the treaty onto the table* Your envoy was seen meeting with the Ashborne rebels. Explain. [Sera]: *doesn't flinch* I did what needed to be done to protect this kingdom. Something you've been too afraid to do."
+Established memories: "Sera secretly met with Ashborne rebels to negotiate a ceasefire"
 
 Correct output:
-{"reasoning": "Лена and Вова are continuing vaginal sex. She screams, scratches his back, wraps her legs around him. Vaginal sex is ALREADY recorded in established memories. Increased intensity but same act type. No climax, no new kink, no new act. Dedup rule applies. Events must be empty.", "events": [], "entities": [], "relationships": []}
+{"reasoning": "Aldric confronts Sera about her secret rebel meeting. Sera doesn't deny it — she openly defends her actions and accuses Aldric of cowardice. The secret meeting was already recorded, but this PUBLIC CONFRONTATION is a new event: the secret is now exposed, and Sera is challenging Aldric's authority. Importance 4 for political confrontation and power shift.", "events": [{"summary": "Sera openly admitted to King Aldric that she met with Ashborne rebels, defending it as necessary and accusing him of cowardice", "importance": 4, "characters_involved": ["Aldric", "Sera"], "witnesses": [], "location": null, "is_secret": false, "emotional_impact": {"Aldric": "anger, betrayal", "Sera": "defiance, conviction"}, "relationship_impact": {"Sera->Aldric": "openly challenged his authority", "Aldric->Sera": "trust shattered by secret diplomacy"}}], "entities": [{"name": "Aldric", "type": "PERSON", "description": "A king confronting his advisor over secret rebel negotiations"}, {"name": "Sera", "type": "PERSON", "description": "An advisor who secretly negotiated with rebels and openly defended it"}, {"name": "Ashborne Rebels", "type": "FACTION", "description": "A rebel group Sera secretly negotiated a ceasefire with"}], "relationships": [{"source": "Sera", "target": "Aldric", "description": "Challenged his authority by defending secret rebel diplomacy"}, {"source": "Sera", "target": "Ashborne Rebels", "description": "Negotiated ceasefire on behalf of the kingdom"}]}
+</example>
+
+<example name="adventure_dedup">
+Input messages: "[Kira]: *rolls behind the pillar as another arrow whistles past* *returns fire with her crossbow, bolt embedding in the archer's shoulder*"
+Established memories: "Kira engaged in a ranged firefight with enemy archers in the temple ruins"
+
+Correct output:
+{"reasoning": "Kira dodges arrows and shoots back, hitting an archer's shoulder. BUT a ranged firefight with archers in the temple ruins is ALREADY recorded in established memories. This is a continuation of the same combat. No major outcome (no death, capture, or escape). No new element changing scene nature. Dedup rule applies. Events must be empty.", "events": [], "entities": [], "relationships": []}
 </example>
 
 <example name="alliance_pledge">
