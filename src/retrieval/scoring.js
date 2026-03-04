@@ -121,6 +121,12 @@ export async function selectRelevantMemories(memories, ctx) {
     // Cache scoring details for debug export
     cacheScoringDetails(scoredResults, selectedIds);
 
+    // Increment retrieval_hits counter for each selected memory
+    // Mutates in-place; next save cycle will persist the counter
+    for (const memory of finalResults) {
+        memory.retrieval_hits = (memory.retrieval_hits || 0) + 1;
+    }
+
     log(
         `Retrieval: ${memories.length} memories -> ${scoredMemories.length} scored -> ${finalResults.length} after token filter (${finalTokens} budget)`
     );
