@@ -17,12 +17,14 @@ function normalizeKey(name) {
 /**
  * Upsert an entity node into the flat graph structure.
  * Merges descriptions and increments mentions on duplicates.
+ * Descriptions are capped at a configurable number of segments.
  * @param {Object} graphData - The graph object { nodes, edges } (mutated in place)
  * @param {string} name - Entity name (original casing preserved on first insert)
  * @param {string} type - PERSON | PLACE | ORGANIZATION | OBJECT | CONCEPT
  * @param {string} description - Entity description
+ * @param {number} cap - Maximum number of description segments to retain (default: 3)
  */
-export function upsertEntity(graphData, name, type, description) {
+export function upsertEntity(graphData, name, type, description, cap = 3) {
     const key = normalizeKey(name);
     const existing = graphData.nodes[key];
 
@@ -31,6 +33,14 @@ export function upsertEntity(graphData, name, type, description) {
             existing.description = existing.description + ' | ' + description;
         }
         existing.mentions += 1;
+
+        // Cap description segments
+        const segments = existing.description.split(' | ');
+        if (segments.length > cap) {
+            // Remove oldest segments (from the beginning)
+            const cappedSegments = segments.slice(-cap);
+            existing.description = cappedSegments.join(' | ');
+        }
     } else {
         graphData.nodes[key] = {
             name: name.trim(),

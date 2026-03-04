@@ -356,9 +356,10 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
 
         // Stage 4.5: Graph Update — upsert entities and relationships
         initGraphState(data);
+        const entityCap = settings.entityDescriptionCap ?? 3;
         if (validated.entities) {
             for (const entity of validated.entities) {
-                upsertEntity(data.graph, entity.name, entity.type, entity.description);
+                upsertEntity(data.graph, entity.name, entity.type, entity.description, entityCap);
             }
         }
         if (validated.relationships) {

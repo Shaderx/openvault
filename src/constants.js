@@ -60,6 +60,8 @@ export const defaultSettings = {
     // World context settings
     worldContextBudget: 2000,
     communityDetectionInterval: 50,
+    // Entity settings
+    entityDescriptionCap: 3,
 };
 
 // Embedding prefix defaults per model

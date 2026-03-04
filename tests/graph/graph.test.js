@@ -36,6 +36,40 @@ describe('upsertEntity', () => {
         upsertEntity(graphData, 'king aldric', 'PERSON', 'Second');
         expect(graphData.nodes['king aldric'].name).toBe('King Aldric');
     });
+
+    it('caps description segments at configured limit', () => {
+        const cap = 3;
+        upsertEntity(graphData, 'Castle', 'PLACE', 'First desc', cap);
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Second desc', cap);
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Third desc', cap);
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Fourth desc', cap);
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Fifth desc', cap);
+
+        expect(graphData.nodes.castle.description).toBe('Third desc | Fourth desc | Fifth desc');
+        expect(graphData.nodes.castle.mentions).toBe(5);
+    });
+
+    it('uses default cap of 3 when not specified', () => {
+        upsertEntity(graphData, 'Castle', 'PLACE', 'First');
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Second');
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Third');
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Fourth');
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Fifth');
+
+        expect(graphData.nodes.castle.description).toBe('Third | Fourth | Fifth');
+        expect(graphData.nodes.castle.mentions).toBe(5);
+    });
+
+    it('does not add duplicate descriptions before capping', () => {
+        const cap = 3;
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Same desc', cap);
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Same desc', cap);
+        upsertEntity(graphData, 'Castle', 'PLACE', 'Different', cap);
+
+        // "Same desc" appears only once, "Different" added once, so only 2 segments total
+        expect(graphData.nodes.castle.description).toBe('Same desc | Different');
+        expect(graphData.nodes.castle.mentions).toBe(3);
+    });
 });
 
 describe('upsertRelationship', () => {
