@@ -147,7 +147,10 @@ export function formatContextForInjection(
         const isKnown = !memory.is_secret && (memory.witnesses?.length || 0) > 2;
         const prefix = isKnown ? '[Known] ' : '';
 
-        return `[${stars}] ${prefix}${memory.summary}`;
+        // Tag reflections with insight indicator
+        const reflectionTag = memory.type === 'reflection' ? ' \u2758insight\u2759' : '';
+
+        return `[${stars}] ${prefix}${memory.summary}${reflectionTag}`;
     };
 
     // Calculate token overhead for non-empty bucket headers
