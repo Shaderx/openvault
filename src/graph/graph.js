@@ -234,3 +234,88 @@ export function redirectEdges(graphData, oldKey, newKey) {
         }
     }
 }
+
+/**
+ * Retroactive graph consolidation: merge semantically duplicate nodes.
+ * Embeds all nodes lacking embeddings, then pairwise-compares within each type.
+ * Merges duplicates and redirects edges.
+ *
+ * @param {Object} graphData - The graph object { nodes, edges }
+ * @param {Object} settings - Extension settings
+ * @returns {Promise<{mergedCount: number, embeddedCount: number}>}
+ */
+export async function consolidateGraph(graphData, settings) {
+    const threshold = settings?.entityMergeSimilarityThreshold ?? 0.80;
+    let mergedCount = 0;
+    let embeddedCount = 0;
+
+    // Step 1: Embed all nodes that lack embeddings
+    for (const [key, node] of Object.entries(graphData.nodes)) {
+        if (!node.embedding) {
+            try {
+                node.embedding = await getDocumentEmbedding(`${node.type}: ${node.name}`);
+                if (node.embedding) embeddedCount++;
+            } catch {
+                // Skip nodes that can't be embedded
+            }
+        }
+    }
+
+    // Step 2: Group nodes by type
+    const byType = {};
+    for (const [key, node] of Object.entries(graphData.nodes)) {
+        if (!node.embedding) continue;
+        if (!byType[node.type]) byType[node.type] = [];
+        byType[node.type].push(key);
+    }
+
+    // Step 3: Pairwise comparison within each type
+    const mergeMap = new Map(); // oldKey -> newKey
+
+    for (const keys of Object.values(byType)) {
+        for (let i = 0; i < keys.length; i++) {
+            if (mergeMap.has(keys[i])) continue; // Already merged
+
+            for (let j = i + 1; j < keys.length; j++) {
+                if (mergeMap.has(keys[j])) continue;
+
+                const nodeA = graphData.nodes[keys[i]];
+                const nodeB = graphData.nodes[keys[j]];
+                const sim = cosineSimilarity(nodeA.embedding, nodeB.embedding);
+
+                if (sim >= threshold) {
+                    // Merge B into A (A has lower index = likely older/more established)
+                    const keepKey = nodeA.mentions >= nodeB.mentions ? keys[i] : keys[j];
+                    const removeKey = keepKey === keys[i] ? keys[j] : keys[i];
+
+                    mergeMap.set(removeKey, keepKey);
+                }
+            }
+        }
+    }
+
+    // Step 4: Execute merges
+    const entityCap = settings?.entityDescriptionCap ?? 3;
+    for (const [removeKey, keepKey] of mergeMap) {
+        const removedNode = graphData.nodes[removeKey];
+        if (!removedNode) continue;
+
+        // Merge description
+        upsertEntity(
+            graphData,
+            graphData.nodes[keepKey].name,
+            graphData.nodes[keepKey].type,
+            removedNode.description,
+            entityCap
+        );
+
+        // Redirect edges
+        redirectEdges(graphData, removeKey, keepKey);
+
+        // Remove old node
+        delete graphData.nodes[removeKey];
+        mergedCount++;
+    }
+
+    return { mergedCount, embeddedCount };
+}
