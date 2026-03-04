@@ -14,9 +14,15 @@ import {
 } from '../constants.js';
 
 /**
- * Maximum number of retry attempts for a failed extraction batch
+ * Backoff schedule in seconds for failed extraction batches.
+ * Retries indefinitely through this schedule until cumulative backoff exceeds MAX_BACKOFF_TOTAL_MS.
  */
-const MAX_BATCH_RETRIES = 3;
+const BACKOFF_SCHEDULE_SECONDS = [1, 2, 3, 10, 20, 30, 30, 60, 60];
+
+/**
+ * Maximum cumulative backoff time before stopping extraction entirely (15 minutes)
+ */
+const MAX_BACKOFF_TOTAL_MS = 15 * 60 * 1000;
 
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
@@ -459,6 +465,7 @@ export async function extractAllMessages(updateEventListenersFn) {
     let batchesProcessed = 0;
     let currentBatch = null;
     let retryCount = 0;
+    let cumulativeBackoffMs = 0;
 
     while (true) {
         // If we have no current batch or need to get a fresh one (after successful extraction)
@@ -500,7 +507,10 @@ export async function extractAllMessages(updateEventListenersFn) {
 
         // Update progress toast (use initial estimate for display consistency)
         const progress = Math.round((batchesProcessed / initialBatchCount) * 100);
-        const retryText = retryCount > 0 ? ` (retry ${retryCount}/${MAX_BATCH_RETRIES})` : '';
+        const retryText =
+            retryCount > 0
+                ? ` (retry ${retryCount}, backoff ${Math.round(cumulativeBackoffMs / 1000)}s/${Math.round(MAX_BACKOFF_TOTAL_MS / 1000)}s)`
+                : '';
         $('.openvault-backfill-toast .toast-message').text(
             `Backfill: ${batchesProcessed}/${initialBatchCount} batches (${Math.min(progress, 100)}%) - Processing...${retryText}`
         );
@@ -535,18 +545,37 @@ export async function extractAllMessages(updateEventListenersFn) {
             const isTimeout = error.message.includes('timed out');
             const errorType = isTimeout ? 'timeout' : 'error';
 
-            if (retryCount < MAX_BATCH_RETRIES) {
+            // Get backoff delay from schedule (cycle through schedule for retries beyond its length)
+            const scheduleIndex = Math.min(retryCount - 1, BACKOFF_SCHEDULE_SECONDS.length - 1);
+            const backoffSeconds = BACKOFF_SCHEDULE_SECONDS[scheduleIndex];
+            const backoffMs = backoffSeconds * 1000;
+            cumulativeBackoffMs += backoffMs;
+
+            // If cumulative backoff exceeds limit, stop extraction entirely
+            if (cumulativeBackoffMs >= MAX_BACKOFF_TOTAL_MS) {
                 log(
-                    `Batch ${batchesProcessed + 1} failed with ${errorType}, retrying (${retryCount}/${MAX_BATCH_RETRIES})...`
+                    `Batch ${batchesProcessed + 1} failed: cumulative backoff reached ${Math.round(cumulativeBackoffMs / 1000)}s (limit: ${Math.round(MAX_BACKOFF_TOTAL_MS / 1000)}s). Stopping extraction.`
                 );
-            } else {
-                log(`Batch ${batchesProcessed + 1} failed after ${MAX_BATCH_RETRIES} retries, skipping...`);
-                console.error('[OpenVault] Batch extraction error:', error);
-                // Move to next batch
-                currentBatch = null;
-                retryCount = 0;
-                batchesProcessed++; // Still count as processed (even if failed)
+                console.error('[OpenVault] Extraction stopped after exceeding backoff limit:', error);
+                showToast(
+                    'error',
+                    `Extraction stopped: API errors persisted for ${Math.round(cumulativeBackoffMs / 1000)}s. Check your API connection and try again.`,
+                    'OpenVault'
+                );
+                break;
             }
+
+            log(
+                `Batch ${batchesProcessed + 1} failed with ${errorType}, retrying in ${backoffSeconds}s (attempt ${retryCount}, cumulative backoff: ${Math.round(cumulativeBackoffMs / 1000)}s/${Math.round(MAX_BACKOFF_TOTAL_MS / 1000)}s)...`
+            );
+
+            // Update toast to show waiting state
+            $('.openvault-backfill-toast .toast-message').text(
+                `Backfill: ${batchesProcessed}/${initialBatchCount} batches - Waiting ${backoffSeconds}s before retry ${retryCount}...`
+            );
+
+            await new Promise((resolve) => setTimeout(resolve, backoffMs));
+            // Do NOT clear currentBatch or increment batchesProcessed - retry the same batch
         }
     }
 
