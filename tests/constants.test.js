@@ -13,7 +13,7 @@ describe('defaultSettings after smart retrieval removal', () => {
 
 describe('new feature settings', () => {
     it('has reflectionThreshold default', () => {
-        expect(defaultSettings.reflectionThreshold).toBe(30);
+        expect(defaultSettings.reflectionThreshold).toBe(40);
     });
 
     it('has worldContextBudget default', () => {
@@ -27,7 +27,7 @@ describe('new feature settings', () => {
 
 describe('UI_DEFAULT_HINTS for features', () => {
     it('has reflectionThreshold hint', () => {
-        expect(UI_DEFAULT_HINTS.reflectionThreshold).toBe(30);
+        expect(UI_DEFAULT_HINTS.reflectionThreshold).toBe(40);
     });
 
     it('has worldContextBudget hint', () => {

@@ -15,7 +15,7 @@ import { buildInsightExtractionPrompt, buildSalientQuestionsPrompt } from '../pr
 import { cosineSimilarity } from '../retrieval/math.js';
 import { generateId, log, sortMemoriesBySequence } from '../utils.js';
 
-const REFLECTION_THRESHOLD = 30;
+const REFLECTION_THRESHOLD = 40;
 
 /**
  * Check if a character has accumulated enough importance to trigger reflection.

@@ -56,7 +56,7 @@ export const defaultSettings = {
     // Extraction prompt settings
     extractionReasoning: false,
     // Reflection settings
-    reflectionThreshold: 30,
+    reflectionThreshold: 40,
     // World context settings
     worldContextBudget: 2000,
     communityDetectionInterval: 50,

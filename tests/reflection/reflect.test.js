@@ -56,18 +56,18 @@ describe('accumulateImportance', () => {
 });
 
 describe('shouldReflect', () => {
-    it('returns true when importance_sum >= 30 (default threshold)', () => {
-        const state = { Alice: { importance_sum: 30 } };
+    it('returns true when importance_sum >= 40 (default threshold)', () => {
+        const state = { Alice: { importance_sum: 40 } };
         expect(shouldReflect(state, 'Alice')).toBe(true);
     });
 
-    it('returns true when importance_sum > 30', () => {
+    it('returns true when importance_sum > 40', () => {
         const state = { Alice: { importance_sum: 45 } };
         expect(shouldReflect(state, 'Alice')).toBe(true);
     });
 
-    it('returns false when importance_sum < 30', () => {
-        const state = { Alice: { importance_sum: 29 } };
+    it('returns false when importance_sum < 40', () => {
+        const state = { Alice: { importance_sum: 39 } };
         expect(shouldReflect(state, 'Alice')).toBe(false);
     });
 
@@ -79,6 +79,16 @@ describe('shouldReflect', () => {
         const state = { Alice: { importance_sum: 20 } };
         expect(shouldReflect(state, 'Alice', 20)).toBe(true);
         expect(shouldReflect(state, 'Alice', 30)).toBe(false);
+    });
+
+    it('does not trigger reflection below threshold of 40', () => {
+        const state = { Alice: { importance_sum: 35 } };
+        expect(shouldReflect(state, 'Alice')).toBe(false);
+    });
+
+    it('triggers reflection at threshold of 40', () => {
+        const state = { Alice: { importance_sum: 40 } };
+        expect(shouldReflect(state, 'Alice')).toBe(true);
     });
 });
 
