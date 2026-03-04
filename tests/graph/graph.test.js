@@ -1,5 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { createEmptyGraph, initGraphState, upsertEntity, upsertRelationship } from '../../src/graph/graph.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createEmptyGraph, initGraphState, upsertEntity, upsertRelationship, mergeOrInsertEntity } from '../../src/graph/graph.js';
+
+// Mock embeddings module
+vi.mock('../../src/embeddings.js', () => ({
+    getDocumentEmbedding: vi.fn(),
+}));
 
 describe('upsertEntity', () => {
     let graphData;
@@ -207,5 +212,75 @@ describe('initGraphState', () => {
         expect(data.communities.C0.title).toBe('Test');
         expect(data.reflection_state['King Aldric'].importance_sum).toBe(15);
         expect(data.graph_message_count).toBe(42);
+    });
+});
+
+describe('mergeOrInsertEntity', () => {
+    let graphData;
+    const mockSettings = { entityMergeSimilarityThreshold: 0.80 };
+
+    beforeEach(() => {
+        graphData = { nodes: {}, edges: {} };
+        vi.clearAllMocks();
+    });
+
+    it('uses fast path for exact key match', async () => {
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+        getDocumentEmbedding.mockResolvedValue(null);
+
+        upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
+        const key = await mergeOrInsertEntity(graphData, 'castle', 'PLACE', 'Updated', 3, mockSettings);
+        expect(key).toBe('castle');
+        expect(graphData.nodes.castle.mentions).toBe(2);
+        expect(Object.keys(graphData.nodes)).toHaveLength(1);
+    });
+
+    it('creates new node when no semantic match exists', async () => {
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+        getDocumentEmbedding.mockResolvedValue(null);
+
+        upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
+        graphData.nodes.castle.embedding = [1, 0, 0];
+
+        const key = await mergeOrInsertEntity(graphData, 'Dragon', 'PERSON', 'A beast', 3, mockSettings);
+        expect(key).toBe('dragon');
+        expect(Object.keys(graphData.nodes)).toHaveLength(2);
+    });
+
+    it('merges into existing node when semantic similarity exceeds threshold', async () => {
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+        // Return very similar embedding for "Vova's Apartment"
+        getDocumentEmbedding.mockResolvedValue([0.9, 0.1, 0]);
+
+        upsertEntity(graphData, "Vova's House", 'PLACE', 'Home');
+        graphData.nodes['vova house'].embedding = [0.9, 0.1, 0];
+
+        const key = await mergeOrInsertEntity(graphData, "Vova's Apartment", 'PLACE', 'Flat', 3, mockSettings);
+        expect(key).toBe('vova house');
+        expect(graphData.nodes['vova house'].mentions).toBe(2);
+        expect(Object.keys(graphData.nodes)).toHaveLength(1);
+    });
+
+    it('does not merge entities of different types', async () => {
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+        getDocumentEmbedding.mockResolvedValue([1, 0, 0]);
+
+        upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
+        graphData.nodes.castle.embedding = [1, 0, 0];
+
+        const key = await mergeOrInsertEntity(graphData, 'Castle', 'PERSON', 'A person named Castle', 3, mockSettings);
+        // Fast-path key match fires first regardless of type
+        expect(key).toBe('castle');
+        expect(graphData.nodes.castle.type).toBe('PLACE'); // Original type preserved
+    });
+
+    it('falls back to insert when embeddings are unavailable', async () => {
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+        getDocumentEmbedding.mockResolvedValue(null);
+
+        upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
+        const key = await mergeOrInsertEntity(graphData, 'Fortress', 'PLACE', 'A stronghold', 3, mockSettings);
+        expect(key).toBe('fortress');
+        expect(Object.keys(graphData.nodes)).toHaveLength(2);
     });
 });

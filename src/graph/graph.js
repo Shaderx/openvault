@@ -5,6 +5,9 @@
  * All data stored in chatMetadata.openvault.graph as { nodes, edges }.
  */
 
+import { getDocumentEmbedding } from '../embeddings.js';
+import { cosineSimilarity } from '../retrieval/math.js';
+
 /**
  * Normalize an entity name to a consistent key.
  * - Lowercases the name
@@ -13,7 +16,7 @@
  * @param {string} name
  * @returns {string}
  */
-function normalizeKey(name) {
+export function normalizeKey(name) {
     return name
         .toLowerCase()
         .replace(/[''\u2019]s\b/g, '') // Strip possessives: 's, 's, 's
@@ -116,4 +119,66 @@ export function initGraphState(data) {
     if (!data.communities) data.communities = {};
     if (!data.reflection_state) data.reflection_state = {};
     if (data.graph_message_count == null) data.graph_message_count = 0;
+}
+
+/**
+ * Merge-or-insert an entity with semantic deduplication.
+ * Fast path: exact normalizeKey match → upsert.
+ * Slow path: embed name, compare against same-type nodes, merge if similar.
+ * Fallback: if embeddings unavailable, insert as new node.
+ *
+ * @param {Object} graphData - The graph object { nodes, edges }
+ * @param {string} name - Entity name
+ * @param {string} type - Entity type
+ * @param {string} description - Entity description
+ * @param {number} cap - Description segment cap
+ * @param {Object} settings - Extension settings
+ * @returns {Promise<string>} The key of the node (existing or new)
+ */
+export async function mergeOrInsertEntity(graphData, name, type, description, cap, settings) {
+    const key = normalizeKey(name);
+
+    // Fast path: exact key match
+    if (graphData.nodes[key]) {
+        upsertEntity(graphData, name, type, description, cap);
+        return key;
+    }
+
+    // Slow path: semantic match
+    let newEmbedding;
+    try {
+        newEmbedding = await getDocumentEmbedding(`${type}: ${name}`);
+    } catch {
+        newEmbedding = null;
+    }
+
+    if (!newEmbedding) {
+        upsertEntity(graphData, name, type, description, cap);
+        return key;
+    }
+
+    const threshold = settings?.entityMergeSimilarityThreshold ?? 0.80;
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const [existingKey, node] of Object.entries(graphData.nodes)) {
+        if (node.type !== type) continue;
+        if (!node.embedding) continue;
+
+        const sim = cosineSimilarity(newEmbedding, node.embedding);
+        if (sim >= threshold && sim > bestScore) {
+            bestMatch = existingKey;
+            bestScore = sim;
+        }
+    }
+
+    if (bestMatch) {
+        upsertEntity(graphData, graphData.nodes[bestMatch].name, type, description, cap);
+        return bestMatch;
+    }
+
+    // No match: create new node with embedding
+    upsertEntity(graphData, name, type, description, cap);
+    graphData.nodes[key].embedding = newEmbedding;
+    return key;
 }
