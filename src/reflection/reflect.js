@@ -5,6 +5,7 @@
  * Synthesizes raw events into high-level insights.
  */
 
+import { extensionName } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings, getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import { parseInsightExtractionResponse, parseSalientQuestionsResponse } from '../extraction/structured.js';
@@ -63,6 +64,21 @@ export function accumulateImportance(reflectionState, newEvents) {
  */
 export async function generateReflections(characterName, allMemories, characterStates) {
     const deps = getDeps();
+    const settings = deps.getExtensionSettings()?.[extensionName] || {};
+    const maxReflections = settings.maxReflectionsPerCharacter ?? 50;
+
+    // Archive old reflections if cap is reached
+    const characterReflections = allMemories.filter(
+        (m) => m.type === 'reflection' && m.character === characterName && !m.archived
+    );
+    if (characterReflections.length >= maxReflections) {
+        const toArchive = characterReflections.length - maxReflections + 1; // +1 to make room for new ones
+        const sortedBySequence = [...characterReflections].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+        for (let i = 0; i < toArchive && i < sortedBySequence.length; i++) {
+            sortedBySequence[i].archived = true;
+        }
+        log(`Reflection: Archived ${toArchive} old reflections for ${characterName} (cap: ${maxReflections})`);
+    }
 
     // Filter memories to what this character knows
     const data = { character_states: characterStates };

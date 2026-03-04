@@ -114,8 +114,10 @@ async function selectRelevantMemoriesSimple(memories, ctx, limit) {
  */
 export async function selectRelevantMemories(memories, ctx) {
     if (!memories || memories.length === 0) return [];
+    // Skip archived reflections in retrieval
+    const activeMemories = memories.filter((m) => !m.archived);
     const { finalTokens } = ctx;
-    const { memories: scoredMemories, scoredResults } = await selectRelevantMemoriesSimple(memories, ctx, 1000);
+    const { memories: scoredMemories, scoredResults } = await selectRelevantMemoriesSimple(activeMemories, ctx, 1000);
     const finalResults = sliceToTokenBudget(scoredMemories, finalTokens);
     const selectedIds = new Set(finalResults.map((m) => m.id));
 
@@ -129,7 +131,7 @@ export async function selectRelevantMemories(memories, ctx) {
     }
 
     log(
-        `Retrieval: ${memories.length} memories -> ${scoredMemories.length} scored -> ${finalResults.length} after token filter (${finalTokens} budget)`
+        `Retrieval: ${activeMemories.length} active memories -> ${scoredMemories.length} scored -> ${finalResults.length} after token filter (${finalTokens} budget)`
     );
     return finalResults;
 }
