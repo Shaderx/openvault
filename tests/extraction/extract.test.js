@@ -115,6 +115,15 @@ describe('extractMemories graph integration', () => {
         await extractMemories([0, 1]);
         expect(mockData.graph_message_count).toBeGreaterThan(0);
     });
+
+    it('sets type to "event" on all extracted memory objects', async () => {
+        await extractMemories([0, 1]);
+        expect(mockData.memories).toBeDefined();
+        expect(mockData.memories.length).toBeGreaterThan(0);
+        for (const memory of mockData.memories) {
+            expect(memory.type).toBe('event');
+        }
+    });
 });
 
 describe('extractMemories reflection integration', () => {

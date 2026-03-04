@@ -319,6 +319,7 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
 
         events = events.map((event, index) => ({
             id: `event_${Date.now()}_${index}`,
+            type: 'event',
             ...event,
             message_ids: messageIdsArray,
             sequence: minMessageId * 1000 + index,
