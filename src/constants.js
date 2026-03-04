@@ -26,6 +26,7 @@ export const defaultSettings = {
     enabled: true,
     extractionProfile: '',
     debugMode: false,
+    requestLogging: false,
     // Extraction settings
     messagesPerExtraction: 30,
     extractionBuffer: 5, // Recent messages to exclude from auto-extraction
