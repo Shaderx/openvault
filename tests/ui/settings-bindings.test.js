@@ -38,3 +38,14 @@ describe('settings.js binds all 7 new settings', () => {
         });
     }
 });
+
+describe('settings.js handles new tab names', () => {
+    it('does not reference old tab name "configuration"', () => {
+        expect(settingsSource).not.toContain('"configuration"');
+    });
+
+    it('does not reference old tab name "system"', () => {
+        // Check for data-tab="system" style references, not the word "system" in comments
+        expect(settingsSource).not.toMatch(/data-tab=["']system["']/);
+    });
+});
