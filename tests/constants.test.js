@@ -38,3 +38,32 @@ describe('UI_DEFAULT_HINTS for features', () => {
         expect(UI_DEFAULT_HINTS.communityDetectionInterval).toBe(50);
     });
 });
+
+describe('dedupJaccardThreshold default', () => {
+    it('has dedupJaccardThreshold in defaultSettings', () => {
+        expect(defaultSettings.dedupJaccardThreshold).toBe(0.6);
+    });
+
+    it('has dedupJaccardThreshold in UI_DEFAULT_HINTS', () => {
+        expect(UI_DEFAULT_HINTS.dedupJaccardThreshold).toBe(0.6);
+    });
+});
+
+describe('all settings used in backend have UI hints', () => {
+    const requiredHints = [
+        'forgetfulnessBaseLambda',
+        'forgetfulnessImportance5Floor',
+        'reflectionDecayThreshold',
+        'entityDescriptionCap',
+        'maxReflectionsPerCharacter',
+        'communityStalenessThreshold',
+        'dedupJaccardThreshold',
+    ];
+
+    for (const key of requiredHints) {
+        it(`has UI_DEFAULT_HINTS.${key}`, () => {
+            expect(UI_DEFAULT_HINTS[key]).toBeDefined();
+            expect(UI_DEFAULT_HINTS[key]).toBe(defaultSettings[key]);
+        });
+    }
+});

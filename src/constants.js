@@ -50,6 +50,7 @@ export const defaultSettings = {
     vectorSimilarityThreshold: 0.5,
     // Deduplication settings
     dedupSimilarityThreshold: 0.85, // Cosine similarity threshold for filtering duplicates (0-1)
+    dedupJaccardThreshold: 0.6,     // Token-overlap (Jaccard index) threshold for near-duplicate filtering
     // Forgetfulness curve settings (scoring)
     forgetfulnessBaseLambda: 0.05, // Base decay rate for exponential curve
     forgetfulnessImportance5Floor: 5, // Minimum score for importance-5 memories
@@ -132,4 +133,13 @@ export const UI_DEFAULT_HINTS = {
     // Entity merge settings
     entityMergeSimilarityThreshold: defaultSettings.entityMergeSimilarityThreshold,
     edgeDescriptionCap: defaultSettings.edgeDescriptionCap,
+    // Decay & forgetfulness curve tuning
+    forgetfulnessBaseLambda: defaultSettings.forgetfulnessBaseLambda,
+    forgetfulnessImportance5Floor: defaultSettings.forgetfulnessImportance5Floor,
+    reflectionDecayThreshold: defaultSettings.reflectionDecayThreshold,
+    // Graph cap settings
+    entityDescriptionCap: defaultSettings.entityDescriptionCap,
+    maxReflectionsPerCharacter: defaultSettings.maxReflectionsPerCharacter,
+    // Dedup
+    dedupJaccardThreshold: defaultSettings.dedupJaccardThreshold,
 };
