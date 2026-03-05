@@ -156,6 +156,78 @@ export function initGraphState(data) {
  * @param {Object} settings - Extension settings
  * @returns {Promise<string>} The key of the node (existing or new)
  */
+
+/**
+ * Check if two token sets have sufficient overlap to consider merging.
+ * Requires at least the specified ratio (default 0.5) of tokens to overlap.
+ * Substring containment is treated as a separate positive signal.
+ *
+ * @param {Set<string>} tokensA - First set of tokens
+ * @param {Set<string>} tokensB - Second set of tokens
+ * @param {number} minOverlapRatio - Minimum overlap ratio (default: 0.5)
+ * @param {string} [keyA] - Original key A for substring check
+ * @param {string} [keyB] - Original key B for substring check
+ * @returns {boolean}
+ */
+export function hasSufficientTokenOverlap(tokensA, tokensB, minOverlapRatio = 0.5, keyA = '', keyB = '') {
+    // Helper: find longest common substring
+    function longestCommonSubstring(a, b) {
+        const longest = [0, 0];
+        for (let i = 0; i < a.length; i++) {
+            for (let j = 0; j < b.length; j++) {
+                let k = 0;
+                while (i + k < a.length && j + k < b.length && a[i + k] === b[j + k]) {
+                    k++;
+                }
+                if (k > longest[0]) longest[0] = k;
+            }
+        }
+        return longest[0];
+    }
+
+    // Direct substring containment is always a positive signal
+    if (keyA && keyB && (keyA.includes(keyB) || keyB.includes(keyA))) {
+        return true;
+    }
+
+    // Fuzzy substring: significant common prefix/suffix (e.g., "alice" vs "alicia")
+    if (keyA && keyB && keyA.length > 3 && keyB.length > 3) {
+        const commonLen = longestCommonSubstring(keyA, keyB);
+        const minLen = Math.min(keyA.length, keyB.length);
+        if (commonLen / minLen >= 0.6) { // 60% of shorter string
+            return true;
+        }
+    }
+
+    // Filter out common adjectives/stop words (basic list)
+    const stopWords = new Set([
+        'the', 'a', 'an', 'this', 'that', 'these', 'those',
+        'red', 'blue', 'green', 'yellow', 'black', 'white',
+        'burgundy', 'dark', 'light', 'large', 'small', 'big',
+        'old', 'new', 'young', 'first', 'last', 'other'
+    ]);
+
+    const significantA = new Set([...tokensA].filter(t => !stopWords.has(t.toLowerCase())));
+    const significantB = new Set([...tokensB].filter(t => !stopWords.has(t.toLowerCase())));
+
+    if (significantA.size === 0 || significantB.size === 0) {
+        return false;
+    }
+
+    // Calculate overlap
+    let overlapCount = 0;
+    for (const token of significantA) {
+        if (significantB.has(token)) {
+            overlapCount++;
+        }
+    }
+
+    const minSize = Math.min(significantA.size, significantB.size);
+    const overlapRatio = overlapCount / minSize;
+
+    return overlapRatio >= minOverlapRatio;
+}
+
 export async function mergeOrInsertEntity(graphData, name, type, description, cap, settings) {
     const key = normalizeKey(name);
 
@@ -189,14 +261,12 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
         if (node.type !== type) continue;
         if (!node.embedding) continue;
 
-        // Require token overlap or substring containment to prevent false merges
-        // Token overlap: "king aldric" & "king" share "king" — merge candidate
-        // Substring: "alice" & "alicia" — one contains the other — merge candidate
-        // No relation: "suzy" & "vova" — skip regardless of embedding similarity
-        const existingTokens = existingKey.split(/\s+/);
-        const hasTokenOverlap = existingTokens.some(t => newTokens.has(t));
-        const hasSubstring = key.includes(existingKey) || existingKey.includes(key);
-        if (!hasTokenOverlap && !hasSubstring) continue;
+        const existingTokens = new Set(existingKey.split(/\s+/));
+
+        // Use improved token overlap guard
+        if (!hasSufficientTokenOverlap(newTokens, existingTokens, 0.5, key, existingKey)) {
+            continue;
+        }
 
         const sim = cosineSimilarity(newEmbedding, node.embedding);
         if (sim >= threshold && sim > bestScore) {
@@ -326,11 +396,12 @@ export async function consolidateGraph(graphData, settings) {
             for (let j = i + 1; j < keys.length; j++) {
                 if (mergeMap.has(keys[j])) continue;
 
-                // Token-overlap or substring guard: prevent false merges
-                const tokensJ = keys[j].split(/\s+/);
-                const hasTokenOverlap = tokensJ.some(t => tokensI.has(t));
-                const hasSubstring = keys[i].includes(keys[j]) || keys[j].includes(keys[i]);
-                if (!hasTokenOverlap && !hasSubstring) continue;
+                const tokensJ = new Set(keys[j].split(/\s+/));
+
+                // Use improved token overlap guard
+                if (!hasSufficientTokenOverlap(tokensI, tokensJ, 0.5, keys[i], keys[j])) {
+                    continue;
+                }
 
                 const nodeA = graphData.nodes[keys[i]];
                 const nodeB = graphData.nodes[keys[j]];
