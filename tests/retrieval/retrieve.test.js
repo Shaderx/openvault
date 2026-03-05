@@ -88,7 +88,7 @@ describe('reflection retrieval', () => {
         // selectRelevantMemories should have received BOTH the event and the reflection
         const calledWith = selectRelevantMemories.mock.calls[0]?.[0];
         expect(calledWith).toBeDefined();
-        const ids = calledWith.map(m => m.id);
+        const ids = calledWith.map((m) => m.id);
         expect(ids).toContain('ev1');
         expect(ids).toContain('ref1');
     });

@@ -8,8 +8,8 @@
 import { extensionName, QUERY_CONTEXT_DEFAULTS } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getOptimalChunkSize } from '../embeddings.js';
-import { tokenize } from './math.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
+import { tokenize } from './math.js';
 
 /**
  * Extract entities from a single text

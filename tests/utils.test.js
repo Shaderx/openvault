@@ -442,7 +442,7 @@ describe('utils', () => {
                 events: [1, 2, 3],
                 entities: [],
                 relationships: [],
-                reasoning: null
+                reasoning: null,
             });
         });
 
@@ -582,7 +582,7 @@ describe('utils', () => {
                 events: [{ id: 1 }],
                 entities: [],
                 relationships: [],
-                reasoning: null
+                reasoning: null,
             });
         });
 
@@ -607,7 +607,7 @@ describe('utils', () => {
                 events: [{ id: 1, summary: 'test' }],
                 entities: [],
                 relationships: [],
-                reasoning: null
+                reasoning: null,
             });
         });
 

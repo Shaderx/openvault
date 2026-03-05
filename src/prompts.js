@@ -239,10 +239,7 @@ Respond with a single JSON object containing "events" key. No other text.`
  */
 export function buildGraphExtractionPrompt({ messages, names, extractedEvents = [], context = {} }) {
     const { char: characterName, user: userName } = names;
-    const {
-        charDesc: characterDescription = '',
-        personaDesc: personaDescription = '',
-    } = context;
+    const { charDesc: characterDescription = '', personaDesc: personaDescription = '' } = context;
 
     const systemPrompt = `<role>
 You are a knowledge graph extractor for roleplay conversations.
@@ -329,9 +326,8 @@ Correct output:
 
     const charactersSection = formatCharacters(characterName, userName, characterDescription, personaDescription);
     const contextSection = charactersSection ? `<context>\n${charactersSection}\n</context>\n` : '';
-    const eventsSection = extractedEvents.length > 0
-        ? `<extracted_events>\n${extractedEvents.join('\n')}\n</extracted_events>\n`
-        : '';
+    const eventsSection =
+        extractedEvents.length > 0 ? `<extracted_events>\n${extractedEvents.join('\n')}\n</extracted_events>\n` : '';
 
     const userPrompt = `${contextSection}
 <messages>

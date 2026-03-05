@@ -36,8 +36,18 @@ vi.mock('../../src/llm.js', () => ({
         return JSON.stringify({});
     }),
     LLM_CONFIGS: {
-        extraction_events: { profileSettingKey: 'extractionProfile', maxTokens: 4000, errorContext: 'Event Extraction', timeoutMs: 120000 },
-        extraction_graph: { profileSettingKey: 'extractionProfile', maxTokens: 2000, errorContext: 'Graph Extraction', timeoutMs: 90000 },
+        extraction_events: {
+            profileSettingKey: 'extractionProfile',
+            maxTokens: 4000,
+            errorContext: 'Event Extraction',
+            timeoutMs: 120000,
+        },
+        extraction_graph: {
+            profileSettingKey: 'extractionProfile',
+            maxTokens: 2000,
+            errorContext: 'Graph Extraction',
+            timeoutMs: 90000,
+        },
     },
 }));
 
@@ -61,9 +71,9 @@ vi.mock('../../src/graph/communities.js', () => ({
     updateCommunitySummaries: vi.fn(async () => ({})),
 }));
 
-import { callLLM, LLM_CONFIGS } from '../../src/llm.js';
 import { extractMemories, updateCharacterStatesFromEvents } from '../../src/extraction/extract.js';
 import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../../src/graph/communities.js';
+import { callLLM, LLM_CONFIGS } from '../../src/llm.js';
 
 describe('extractMemories graph integration', () => {
     let mockContext;
@@ -352,7 +362,7 @@ describe('updateCharacterStatesFromEvents', () => {
         updateCharacterStatesFromEvents(events, mockData, ['King Aldric', 'User']);
 
         expect(mockData.character_states['King Aldric']).toBeDefined();
-        expect(mockData.character_states['don']).toBeUndefined();
+        expect(mockData.character_states.don).toBeUndefined();
     });
 
     it('creates character states for valid characters in witnesses', () => {
@@ -367,7 +377,7 @@ describe('updateCharacterStatesFromEvents', () => {
         updateCharacterStatesFromEvents(events, mockData, ['King Aldric', 'User']);
 
         expect(mockData.character_states['King Aldric']).toBeDefined();
-        expect(mockData.character_states['User']).toBeDefined();
+        expect(mockData.character_states.User).toBeDefined();
         expect(mockData.character_states['King Aldric'].known_events).toContain('event_1');
     });
 
@@ -383,7 +393,7 @@ describe('updateCharacterStatesFromEvents', () => {
         updateCharacterStatesFromEvents(events, mockData, ['King Aldric', 'User']);
 
         expect(mockData.character_states['King Aldric']).toBeDefined();
-        expect(mockData.character_states['Stranger']).toBeUndefined();
+        expect(mockData.character_states.Stranger).toBeUndefined();
     });
 
     it('allows characters from characters_involved even if not in validCharNames', () => {
@@ -399,8 +409,8 @@ describe('updateCharacterStatesFromEvents', () => {
 
         updateCharacterStatesFromEvents(events, mockData, ['King Aldric', 'User']);
 
-        expect(mockData.character_states['Queen']).toBeDefined();
-        expect(mockData.character_states['Queen'].current_emotion).toBe('worried');
+        expect(mockData.character_states.Queen).toBeDefined();
+        expect(mockData.character_states.Queen.current_emotion).toBe('worried');
     });
 });
 
@@ -426,8 +436,8 @@ describe('cleanupCharacterStates', () => {
         cleanupCharacterStates(mockData, ['King Aldric', 'User']);
 
         expect(mockData.character_states['King Aldric']).toBeDefined();
-        expect(mockData.character_states['User']).toBeDefined();
-        expect(mockData.character_states['Stranger']).toBeUndefined();
+        expect(mockData.character_states.User).toBeDefined();
+        expect(mockData.character_states.Stranger).toBeUndefined();
     });
 
     it('keeps character states found in memories characters_involved', () => {
@@ -441,8 +451,8 @@ describe('cleanupCharacterStates', () => {
         cleanupCharacterStates(mockData, ['King Aldric', 'User']);
 
         expect(mockData.character_states['King Aldric']).toBeDefined();
-        expect(mockData.character_states['Queen']).toBeDefined();
-        expect(mockData.character_states['Stranger']).toBeUndefined();
+        expect(mockData.character_states.Queen).toBeDefined();
+        expect(mockData.character_states.Stranger).toBeUndefined();
     });
 
     it('handles empty character_states gracefully', () => {
@@ -461,7 +471,7 @@ describe('cleanupCharacterStates', () => {
         cleanupCharacterStates(mockData, []);
 
         expect(mockData.character_states['King Aldric']).toBeDefined();
-        expect(mockData.character_states['Queen']).toBeUndefined();
+        expect(mockData.character_states.Queen).toBeUndefined();
     });
 });
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getDocumentEmbedding } from '../../src/embeddings.js';
 import {
     consolidateGraph,
     createEmptyGraph,
@@ -8,7 +9,6 @@ import {
     upsertEntity,
     upsertRelationship,
 } from '../../src/graph/graph.js';
-import { getDocumentEmbedding } from '../../src/embeddings.js';
 
 // Mock embeddings module
 vi.mock('../../src/embeddings.js', () => ({
@@ -322,25 +322,25 @@ describe('redirectEdges', () => {
     it('redirects edges from old key to new key', () => {
         upsertRelationship(graphData, 'Bob', 'Castle', 'Lives in');
         redirectEdges(graphData, 'bob', 'alice');
-        expect(graphData.edges['alice__castle']).toBeDefined();
-        expect(graphData.edges['alice__castle'].description).toBe('Lives in');
-        expect(graphData.edges['bob__castle']).toBeUndefined();
+        expect(graphData.edges.alice__castle).toBeDefined();
+        expect(graphData.edges.alice__castle.description).toBe('Lives in');
+        expect(graphData.edges.bob__castle).toBeUndefined();
     });
 
     it('merges edge descriptions when redirect creates a duplicate', () => {
         upsertRelationship(graphData, 'Alice', 'Castle', 'Rules from');
         upsertRelationship(graphData, 'Bob', 'Castle', 'Visits often');
         redirectEdges(graphData, 'bob', 'alice');
-        expect(graphData.edges['alice__castle'].description).toContain('Rules from');
-        expect(graphData.edges['alice__castle'].description).toContain('Visits often');
-        expect(graphData.edges['bob__castle']).toBeUndefined();
+        expect(graphData.edges.alice__castle.description).toContain('Rules from');
+        expect(graphData.edges.alice__castle.description).toContain('Visits often');
+        expect(graphData.edges.bob__castle).toBeUndefined();
     });
 
     it('handles edges where old key is the target', () => {
         upsertRelationship(graphData, 'Castle', 'Bob', 'Contains');
         redirectEdges(graphData, 'bob', 'alice');
-        expect(graphData.edges['castle__alice']).toBeDefined();
-        expect(graphData.edges['castle__bob']).toBeUndefined();
+        expect(graphData.edges.castle__alice).toBeDefined();
+        expect(graphData.edges.castle__bob).toBeUndefined();
     });
 
     it('does nothing when no edges reference old key', () => {
@@ -355,8 +355,8 @@ describe('redirectEdges', () => {
         upsertRelationship(graphData, 'Charlie', 'Bob', 'Knows');
         redirectEdges(graphData, 'bob', 'charlie');
         // Edge would become charlie__charlie (self-loop), should be removed
-        expect(graphData.edges['charlie__charlie']).toBeUndefined();
-        expect(graphData.edges['charlie__bob']).toBeUndefined();
+        expect(graphData.edges.charlie__charlie).toBeUndefined();
+        expect(graphData.edges.charlie__bob).toBeUndefined();
     });
 });
 
@@ -373,7 +373,7 @@ describe('edge creation with semantic merge', () => {
             mentions: 5,
             embedding: [1, 0, 0],
         };
-        graphData.nodes['suzy'] = {
+        graphData.nodes.suzy = {
             name: 'Suzy',
             type: 'PERSON',
             description: 'A student',
@@ -386,9 +386,7 @@ describe('edge creation with semantic merge', () => {
         const settings = { entityMergeSimilarityThreshold: 0.8 };
 
         // mergeOrInsertEntity should merge "Vova's Room" into "vova apartment"
-        const resolvedKey = await mergeOrInsertEntity(
-            graphData, "Vova's Room", 'PLACE', 'A room', 3, settings
-        );
+        const resolvedKey = await mergeOrInsertEntity(graphData, "Vova's Room", 'PLACE', 'A room', 3, settings);
         expect(resolvedKey).toBe('vova apartment');
 
         // Now create a relationship using the ORIGINAL name "Vova's Room"
@@ -406,13 +404,19 @@ describe('_mergeRedirects serialization', () => {
     it('_mergeRedirects is not enumerable or is cleaned before serialization', async () => {
         const { getDocumentEmbedding } = await import('../../src/embeddings.js');
         const graphData = createEmptyGraph();
-        graphData.nodes['alice'] = {
-            name: 'Alice', type: 'PERSON', description: 'A person', mentions: 3, embedding: [1, 0],
+        graphData.nodes.alice = {
+            name: 'Alice',
+            type: 'PERSON',
+            description: 'A person',
+            mentions: 3,
+            embedding: [1, 0],
         };
         getDocumentEmbedding.mockResolvedValue([0.99, 0.05]);
 
         // Use "Alice Smith" so token-overlap guard ("alice" token shared) allows merge
-        await mergeOrInsertEntity(graphData, 'Alice Smith', 'PERSON', 'Also Alice', 3, { entityMergeSimilarityThreshold: 0.8 });
+        await mergeOrInsertEntity(graphData, 'Alice Smith', 'PERSON', 'Also Alice', 3, {
+            entityMergeSimilarityThreshold: 0.8,
+        });
 
         // _mergeRedirects should exist at runtime
         expect(graphData._mergeRedirects).toBeDefined();

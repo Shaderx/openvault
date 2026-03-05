@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { shouldSkipReflectionGeneration } from '../../src/reflection/reflect.js';
-import { setDeps } from '../../src/deps.js';
 import { extensionName } from '../../src/constants.js';
+import { setDeps } from '../../src/deps.js';
+import { shouldSkipReflectionGeneration } from '../../src/reflection/reflect.js';
 
 describe('shouldSkipReflectionGeneration', () => {
     beforeEach(() => {
@@ -20,9 +20,7 @@ describe('shouldSkipReflectionGeneration', () => {
     });
 
     it('should return { shouldSkip: false, reason: null } when existingReflections is empty', () => {
-        const recentMemories = [
-            { summary: 'Alice trusted Bob', embedding: [0.1, 0.2, 0.3] },
-        ];
+        const recentMemories = [{ summary: 'Alice trusted Bob', embedding: [0.1, 0.2, 0.3] }];
         const result = shouldSkipReflectionGeneration(recentMemories, [], 0.85);
         expect(result.shouldSkip).toBe(false);
         expect(result.reason).toBe(null);
@@ -45,9 +43,7 @@ describe('shouldSkipReflectionGeneration', () => {
     });
 
     it('should return false when recent events are novel (<85% similarity)', () => {
-        const recentMemories = [
-            { summary: 'Alice met a new character Carol', embedding: [0, 0, 1], importance: 5 },
-        ];
+        const recentMemories = [{ summary: 'Alice met a new character Carol', embedding: [0, 0, 1], importance: 5 }];
 
         const existingReflections = [
             { summary: 'Alice trusts Bob', embedding: [1, 0, 0] }, // 0% similar
@@ -63,9 +59,7 @@ describe('shouldSkipReflectionGeneration', () => {
         const recentMemories = [
             { summary: 'Event without embedding' }, // No embedding
         ];
-        const existingReflections = [
-            { summary: 'Existing reflection', embedding: [1, 0, 0] },
-        ];
+        const existingReflections = [{ summary: 'Existing reflection', embedding: [1, 0, 0] }];
 
         const result = shouldSkipReflectionGeneration(recentMemories, existingReflections, 0.85);
 
@@ -74,9 +68,7 @@ describe('shouldSkipReflectionGeneration', () => {
     });
 
     it('should use default threshold of 0.85 when not provided', () => {
-        const recentMemories = [
-            { summary: 'Alice trusted Bob', embedding: [0.9, 0.1, 0], importance: 5 },
-        ];
+        const recentMemories = [{ summary: 'Alice trusted Bob', embedding: [0.9, 0.1, 0], importance: 5 }];
         const existingReflections = [
             { summary: 'Alice trusts Bob', embedding: [1, 0, 0] }, // ~90% similar
         ];

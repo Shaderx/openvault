@@ -7,8 +7,8 @@
 
 import { getDocumentEmbedding } from '../embeddings.js';
 import { cosineSimilarity } from '../retrieval/math.js';
-import { log } from '../utils.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
+import { log } from '../utils.js';
 
 /**
  * Resolve a raw entity name to its final graph key, accounting for merge redirects.

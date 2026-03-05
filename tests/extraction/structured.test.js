@@ -40,7 +40,8 @@ describe('parseEvent', () => {
     });
 
     it('strips markdown for single event', () => {
-        const content = '```json\n{"summary": "Bob found an ancient map in the dusty library", "importance": 3, "characters_involved": []}\n```';
+        const content =
+            '```json\n{"summary": "Bob found an ancient map in the dusty library", "importance": 3, "characters_involved": []}\n```';
         const result = parseEvent(content);
         expect(result.summary).toBe('Bob found an ancient map in the dusty library');
     });
@@ -153,16 +154,18 @@ describe('parseEventExtractionResponse', () => {
     it('parses valid event extraction JSON', () => {
         const json = JSON.stringify({
             reasoning: 'test reasoning',
-            events: [{
-                summary: 'A significant event happened in the story today',
-                importance: 3,
-                characters_involved: ['Alice'],
-                witnesses: [],
-                location: null,
-                is_secret: false,
-                emotional_impact: {},
-                relationship_impact: {},
-            }],
+            events: [
+                {
+                    summary: 'A significant event happened in the story today',
+                    importance: 3,
+                    characters_involved: ['Alice'],
+                    witnesses: [],
+                    location: null,
+                    is_secret: false,
+                    emotional_impact: {},
+                    relationship_impact: {},
+                },
+            ],
         });
         const result = parseEventExtractionResponse(json);
         expect(result.events).toHaveLength(1);

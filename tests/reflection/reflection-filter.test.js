@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { filterDuplicateReflections } from '../../src/reflection/reflect.js';
-import { setDeps } from '../../src/deps.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { extensionName } from '../../src/constants.js';
+import { setDeps } from '../../src/deps.js';
+import { filterDuplicateReflections } from '../../src/reflection/reflect.js';
 
 describe('filterDuplicateReflections - 3-Tier Replacement', () => {
     let existingMemories;
@@ -124,7 +124,7 @@ describe('filterDuplicateReflections - 3-Tier Replacement', () => {
         expect(result1.toArchiveIds).toHaveLength(0);
 
         // With 0.90 reject threshold, 88% should trigger replace
-        const result2 = filterDuplicateReflections(newReflections, existingMemories, 0.90, 0.80);
+        const result2 = filterDuplicateReflections(newReflections, existingMemories, 0.9, 0.8);
         expect(result2.toAdd).toHaveLength(1);
         expect(result2.toArchiveIds).toEqual(['ref_001']);
     });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { hasSufficientTokenOverlap } from '../../src/graph/graph.js';
 
 describe('hasSufficientTokenOverlap', () => {
@@ -20,12 +20,6 @@ describe('hasSufficientTokenOverlap', () => {
         const keyA = 'alice';
         const keyB = 'alicia';
 
-        expect(hasSufficientTokenOverlap(
-            new Set([keyA]),
-            new Set([keyB]),
-            0.5,
-            keyA,
-            keyB
-        )).toBe(true); // Substring containment
+        expect(hasSufficientTokenOverlap(new Set([keyA]), new Set([keyB]), 0.5, keyA, keyB)).toBe(true); // Substring containment
     });
 });

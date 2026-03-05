@@ -765,8 +765,8 @@ describe('old bucket 50% cap', () => {
         const result = formatContextForInjection(allMemories, [], null, 'Test', 200, 5000);
 
         // Count how many old memories appear vs recent
-        const oldCount = oldMemories.filter(m => result.includes(m.summary)).length;
-        const recentCount = recentMemories.filter(m => result.includes(m.summary)).length;
+        const oldCount = oldMemories.filter((m) => result.includes(m.summary)).length;
+        const recentCount = recentMemories.filter((m) => result.includes(m.summary)).length;
 
         // Old memories should NOT consume everything — recent should still appear
         expect(recentCount).toBeGreaterThan(0);
