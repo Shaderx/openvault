@@ -3,6 +3,14 @@
  *
  * Per-character reflection system inspired by the Smallville paper.
  * Synthesizes raw events into high-level insights.
+ *
+ * REFLECTION BUDGET MECHANISM:
+ * - Primary: 3-Tier Replacement (filterDuplicateReflections) prevents accumulation
+ *   by replacing similar reflections (80-89% similarity) rather than adding.
+ * - Secondary: Hard cap (maxReflectionsPerCharacter: 50) archives oldest reflections
+ *   when exceeded.
+ * - Tertiary: Pre-Flight Similarity Gate skips generation when recent events
+ *   align with existing insights (>85%).
  */
 
 import { extensionName } from '../constants.js';
