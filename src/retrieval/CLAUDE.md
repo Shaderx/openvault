@@ -1,5 +1,7 @@
 # Memory Retrieval & Scoring Subsystem
 
+> For the big picture of how this fits into the whole app, see `docs/ARCHITECTURE.md`.
+
 ## WHAT
 Finds relevant memories (events + reflections) and community summaries. Formats for prompt injection via named slots: `openvault_memory` and `openvault_world`.
 
@@ -7,6 +9,7 @@ Finds relevant memories (events + reflections) and community summaries. Formats 
 Hybrid **Alpha-Blend** scoring:
 1. **Forgetfulness Curve**: Exponential decay by message distance. Importance 5 = floor.
 2. **BM25**: IDF-aware term frequency via `query-context.js`.
+   - **IDF-Aware Query Adjustment**: Query tokens weighted by inverse document frequency BEFORE scoring. Prevents common named entities (e.g., main character's name) from artificially inflating scores when repeated.
 3. **Vector**: Cosine similarity via WebGPU/Ollama.
 4. **Reflection Decay**: Reflections older than 500 messages get linear decay (floor 0.25×).
 - **Formula**: `Total = Base + (Alpha * Vector) + ((1 - Alpha) * BM25)`
@@ -18,7 +21,7 @@ Hybrid **Alpha-Blend** scoring:
 
 ## HOW: World Context (`world-context.js`)
 - **Source**: GraphRAG community summaries from `src/graph/communities.js`.
-- **Retrieval**: Cosine similarity on community embeddings, token budget from `settings.worldContextBudget` (default 2000).
+- **Retrieval**: Pure Vector similarity (cosine) ONLY — bypasses BM25 entirely. Token budget from `settings.worldContextBudget` (default 2000).
 - **Format**: `<world_context>` XML tag with title/summary/findings.
 - **Injection**: Named slot `openvault_world` (higher in prompt than memories).
 

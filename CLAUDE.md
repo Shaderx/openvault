@@ -23,6 +23,7 @@ OpenVault is an agentic memory extension for SillyTavern. It provides POV-aware 
 
 ## MAP: Progressive Disclosure
 Detailed instructions are lazily loaded when you visit these directories:
+- `/docs/ARCHITECTURE.md` - Full architecture.
 - `/src/extraction/CLAUDE.md` - Event extraction, entity/relationship graph CRUD.
 - `/src/retrieval/CLAUDE.md` - Alpha-Blend (BM25 + Vector) scoring, world context.
 - `/src/graph/CLAUDE.md` - Entity graph storage, GraphRAG communities.

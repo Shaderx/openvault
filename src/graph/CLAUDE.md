@@ -1,5 +1,7 @@
 # Graph & GraphRAG Subsystem
 
+> For the big picture of how this fits into the whole app, see `docs/ARCHITECTURE.md`.
+
 ## WHAT
 Flat-JSON entity/relationship storage with semantic deduplication and Louvain community detection. Data lives in `chatMetadata.openvault.graph` and `.communities`.
 
@@ -8,7 +10,9 @@ Flat-JSON entity/relationship storage with semantic deduplication and Louvain co
 - **Keys**: Nodes keyed by `normalizeKey(name)` (lowercase, strips possessives, collapses whitespace). Edges: `${source}__${target}`.
 - **Entity Upsert**: `upsertEntity` merges descriptions with ` | `, caps at 3 segments (FIFO), increments mentions.
 - **Relationship Upsert**: `upsertRelationship` increments weight, merges descriptions, caps at 5 segments.
-- **Semantic Merge**: `mergeOrInsertEntity` — fast path for exact key match, slow path uses embedding similarity (threshold 0.8) to dedupe same-type entities. Stores embedding on nodes.
+- **Semantic Merge**: `mergeOrInsertEntity` — fast path for exact key match, slow path uses embedding similarity (threshold 0.94) to dedupe same-type entities. Stores embedding on nodes.
+  - **Token Overlap Guard**: Breaks keys into word tokens, strips RP stopwords (via `stopword` lib + custom dicts: "the", "red", "large", "burgundy", etc.), requires >=50% token overlap OR direct substring match.
+  - **Why**: Prevents "Burgundy panties" from merging with "Burgundy candle" despite high cosine similarity from the shared adjective.
 - **Key Resolution**: `_resolveKey()` consults `_mergeRedirects` map to handle entity merge redirects when creating edges.
 
 ## HOW: Consolidation (`consolidateGraph`)

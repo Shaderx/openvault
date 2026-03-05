@@ -1,5 +1,7 @@
 # Memory Extraction Subsystem
 
+> For the big picture of how this fits into the whole app, see `docs/ARCHITECTURE.md`.
+
 ## WHAT
 Extracts events, entities, and relationships from chat. Converts raw messages into structured JSON, deduplicates, embeds. Triggers reflection and community detection pipelines.
 
@@ -15,6 +17,8 @@ Extracts events, entities, and relationships from chat. Converts raw messages in
 9. **Commit**: Deduplicate (Cosine >= 0.85), save to `chatMetadata`.
 
 ## GOTCHAS & RULES
+- **JSON Array Recovery**: If LLM returns malformed JSON (e.g., missing wrapping array), attempts to recover via regex before failing. Expected retry via backoff scheduler.
+- **Event Summary Minimum**: 30 characters strictly enforced via Zod schema. LLM failures here are expected — scheduler retries automatically.
 - **Entity Keys**: Always normalize via `normalizeKey()` (lowercase, strips possessives) before graph operations. LLM outputs original casing.
 - **Key Normalization**: `source`/`target` in relationships resolved via `_resolveKey()` to handle entity merge redirects.
 - **Zod Schemas**: Defined in `structured.js`, converted to JSON Schema Draft-04 for ST.

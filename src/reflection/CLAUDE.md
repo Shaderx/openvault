@@ -1,5 +1,7 @@
 # Reflection Engine
 
+> For the big picture of how this fits into the whole app, see `docs/ARCHITECTURE.md`.
+
 ## WHAT
 Per-character synthesis of raw events into high-level insights (Smallville paper). Reflections are stored as memories with `type: 'reflection'`.
 
@@ -29,3 +31,10 @@ Per-character synthesis of raw events into high-level insights (Smallville paper
 ## RETRIEVAL SCORING
 - Reflections included in retrieval alongside events (see `src/retrieval/retrieve.js`).
 - **Reflection Decay**: In `math.js`, reflections older than 500 messages get linear decay (floor 0.25×). Prevents stale insights from dominating.
+
+## LIFECYCLE & DEDUPLICATION
+- **Pre-flight Gate**: Before spending 4 LLM calls, checks if top 3 recent events align (>85% cosine) with existing reflections. Aborts if no meaningful change detected.
+- **3-Tier Replacement Strategy** (applied after generating new reflections):
+  - `>= 90%`: **Reject** — Exact duplicate concept, discard new reflection.
+  - `80% - 89%`: **Replace** — Same theme, updated evidence. Old reflection marked `archived: true`, new one added.
+  - `< 80%`: **Add** — Genuinely new insight, append to memories.
