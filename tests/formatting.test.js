@@ -741,3 +741,36 @@ describe('formatting', () => {
         });
     });
 });
+
+describe('old bucket 50% cap', () => {
+    it('caps old bucket memories at 50% of available token budget', () => {
+        // Create 20 old memories (~10 tokens each = ~200 tokens) and 5 recent (~50 tokens)
+        const oldMemories = Array.from({ length: 20 }, (_, i) => ({
+            id: `old_${i}`,
+            summary: `Old event number ${i} happened long ago in the story`,
+            importance: 3,
+            message_ids: [i + 1],
+            sequence: (i + 1) * 1000,
+        }));
+        const recentMemories = Array.from({ length: 5 }, (_, i) => ({
+            id: `recent_${i}`,
+            summary: `Recent event ${i} just happened in the current scene`,
+            importance: 3,
+            message_ids: [4950 + i],
+            sequence: (4950 + i) * 1000,
+        }));
+
+        const allMemories = [...oldMemories, ...recentMemories];
+        // Use a very small budget that can't fit all old memories
+        const result = formatContextForInjection(allMemories, [], null, 'Test', 200, 5000);
+
+        // Count how many old memories appear vs recent
+        const oldCount = oldMemories.filter(m => result.includes(m.summary)).length;
+        const recentCount = recentMemories.filter(m => result.includes(m.summary)).length;
+
+        // Old memories should NOT consume everything — recent should still appear
+        expect(recentCount).toBeGreaterThan(0);
+        // Old should be capped (not all 20 should fit if budget is tight)
+        expect(oldCount).toBeLessThan(20);
+    });
+});

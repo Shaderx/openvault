@@ -196,10 +196,10 @@ export function calculateScore(memory, contextEmbedding, chatLength, constants, 
     // Core forgetfulness formula: Score = Importance × e^(-λ × Distance)
     const base = importance * Math.exp(-lambda * distance);
 
-    // Importance-5 floor: never drops below minimum score
+    // Importance-5 soft floor: never drops below 1.0 (baseline relevant)
     let baseAfterFloor = base;
     if (importance === 5) {
-        baseAfterFloor = Math.max(base, constants.IMPORTANCE_5_FLOOR);
+        baseAfterFloor = Math.max(base, 1.0);
     }
 
     const recencyPenalty = baseAfterFloor - base;

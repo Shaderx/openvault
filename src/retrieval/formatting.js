@@ -176,17 +176,29 @@ export function formatContextForInjection(
     }
 
     const availableForMemories = tokenBudget - overheadTokens;
-
-    // Truncate memories to fit budget (across all buckets)
-    const allMemories = [...buckets.old, ...buckets.mid, ...buckets.recent];
-    let currentTokens = 0;
     const fittingMemoryIds = new Set();
 
-    for (const memory of allMemories) {
+    // Cap "The Story So Far" (old) bucket at 50% of memory budget
+    const oldBudget = availableForMemories * 0.5;
+    let oldTokens = 0;
+    for (const memory of buckets.old) {
         const memoryTokens = estimateTokens(memory.summary || '') + 5;
-        if (currentTokens + memoryTokens <= availableForMemories) {
+        if (oldTokens + memoryTokens <= oldBudget) {
             fittingMemoryIds.add(memory.id);
-            currentTokens += memoryTokens;
+            oldTokens += memoryTokens;
+        } else {
+            break;
+        }
+    }
+
+    // Mid + Recent get remaining budget (including unused old budget)
+    const remainingBudget = availableForMemories - oldTokens;
+    let otherTokens = 0;
+    for (const memory of [...buckets.mid, ...buckets.recent]) {
+        const memoryTokens = estimateTokens(memory.summary || '') + 5;
+        if (otherTokens + memoryTokens <= remainingBudget) {
+            fittingMemoryIds.add(memory.id);
+            otherTokens += memoryTokens;
         } else {
             break;
         }

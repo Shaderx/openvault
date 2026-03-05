@@ -85,6 +85,27 @@ describe('math.js - alpha-blend scoring', () => {
         // Similarity 0 < threshold 0.5, so no bonus
         expect(result.vectorBonus).toBe(0);
     });
+
+    it('importance-5 memory uses soft floor of 1.0 instead of hard IMPORTANCE_5_FLOOR', () => {
+        const memory = { importance: 5, message_ids: [10], embedding: null };
+        const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 5 };
+        const settings = { vectorSimilarityThreshold: 0.5, alpha: 0.7, combinedBoostWeight: 15 };
+        // At distance 990 from chat position 1000, the natural decay should be well below 5
+        const result = calculateScore(memory, null, 1000, constants, settings, 0);
+        // With soft floor: baseAfterFloor should be >= 1.0 but NOT >= 5.0
+        expect(result.baseAfterFloor).toBeGreaterThanOrEqual(1.0);
+        expect(result.baseAfterFloor).toBeLessThan(5.0);
+    });
+
+    it('importance-5 memory still decays naturally when above soft floor', () => {
+        const memory = { importance: 5, message_ids: [95], embedding: null };
+        const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 5 };
+        const settings = { vectorSimilarityThreshold: 0.5, alpha: 0.7, combinedBoostWeight: 15 };
+        // At distance 5, natural decay is very small: 5 * e^(-0.002*5) ≈ 4.95
+        const result = calculateScore(memory, null, 100, constants, settings, 0);
+        // Should use natural value, no floor needed
+        expect(result.baseAfterFloor).toBeCloseTo(result.base, 2);
+    });
 });
 
 describe('math.js - IDF-aware entity boost', () => {
@@ -249,8 +270,8 @@ describe('math.js - reflection decay', () => {
         const reflection = { type: 'reflection', importance: 5, message_ids: [0] };
         const result = calculateScore(reflection, null, 2000, constants, settings, 0);
 
-        // Score should be at least 0.25 times the floor value
-        expect(result.total).toBeGreaterThanOrEqual(constants.IMPORTANCE_5_FLOOR * 0.25);
+        // With soft floor of 1.0, after 0.25 decay factor, score should be at least 0.25
+        expect(result.total).toBeGreaterThanOrEqual(0.25);
     });
 
     it('does not apply decay when within threshold', () => {
@@ -265,8 +286,9 @@ describe('math.js - reflection decay', () => {
         const reflection = { type: 'reflection', importance: 5, message_ids: [600] };
         const result = calculateScore(reflection, null, 1000, constants, settings, 0);
 
-        // Reflection at distance 400 should get floor value (no extra decay)
-        expect(result.total).toBeCloseTo(constants.IMPORTANCE_5_FLOOR, 1);
+        // With soft floor of 1.0, importance-5 at distance 400 naturally decays to ~2.25
+        // Since 2.25 > 1.0, soft floor doesn't apply - should use natural value
+        expect(result.total).toBeCloseTo(2.25, 0);
     });
 });
 
