@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
 
 // -------------------------------------------------------------------------
 // Test: Validate the HTML template has the correct 4-tab structure

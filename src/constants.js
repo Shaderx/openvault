@@ -50,7 +50,7 @@ export const defaultSettings = {
     vectorSimilarityThreshold: 0.5,
     // Deduplication settings
     dedupSimilarityThreshold: 0.85, // Cosine similarity threshold for filtering duplicates (0-1)
-    dedupJaccardThreshold: 0.6,     // Token-overlap (Jaccard index) threshold for near-duplicate filtering
+    dedupJaccardThreshold: 0.6, // Token-overlap (Jaccard index) threshold for near-duplicate filtering
     // Forgetfulness curve settings (scoring)
     forgetfulnessBaseLambda: 0.05, // Base decay rate for exponential curve
     forgetfulnessImportance5Floor: 5, // Minimum score for importance-5 memories
