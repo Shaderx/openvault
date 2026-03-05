@@ -36,3 +36,15 @@ describe('LLM_CONFIGS community config', () => {
         expect(LLM_CONFIGS.community.getJsonSchema).toBeInstanceOf(Function);
     });
 });
+
+describe('LLM_CONFIGS split extraction', () => {
+    it('has extraction_events config', () => {
+        expect(LLM_CONFIGS.extraction_events).toBeDefined();
+        expect(LLM_CONFIGS.extraction_events.maxTokens).toBe(4000);
+    });
+
+    it('has extraction_graph config', () => {
+        expect(LLM_CONFIGS.extraction_graph).toBeDefined();
+        expect(LLM_CONFIGS.extraction_graph.maxTokens).toBe(2000);
+    });
+});

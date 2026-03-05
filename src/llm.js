@@ -9,7 +9,9 @@ import { extensionName } from './constants.js';
 import { getDeps } from './deps.js';
 import {
     getCommunitySummaryJsonSchema,
+    getEventExtractionJsonSchema,
     getExtractionJsonSchema,
+    getGraphExtractionJsonSchema,
     getInsightExtractionJsonSchema,
     getSalientQuestionsJsonSchema,
 } from './extraction/structured.js';
@@ -25,6 +27,20 @@ export const LLM_CONFIGS = {
         errorContext: 'Extraction',
         timeoutMs: 120000, // 2 minutes max for extraction
         getJsonSchema: getExtractionJsonSchema,
+    },
+    extraction_events: {
+        profileSettingKey: 'extractionProfile',
+        maxTokens: 4000,
+        errorContext: 'Event Extraction',
+        timeoutMs: 120000,
+        getJsonSchema: getEventExtractionJsonSchema,
+    },
+    extraction_graph: {
+        profileSettingKey: 'extractionProfile',
+        maxTokens: 2000,
+        errorContext: 'Graph Extraction',
+        timeoutMs: 90000,
+        getJsonSchema: getGraphExtractionJsonSchema,
     },
     reflection_questions: {
         profileSettingKey: 'extractionProfile',
