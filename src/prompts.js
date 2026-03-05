@@ -101,7 +101,7 @@ The JSON object MUST have this EXACT structure with ALL ${extractionReasoning ? 
 }
 
 CRITICAL FORMAT RULES — violating ANY of these will cause a system error:
-1. The top level MUST be a JSON object { }, NEVER a bare array [ ].
+1. The top level MUST be a JSON object { }, NEVER a bare array [ ]. NEVER wrap your entire response in [ ].
 2. ALL ${extractionReasoning ? 'FOUR keys ("reasoning", "events", "entities", "relationships")' : 'THREE keys ("events", "entities", "relationships")'} MUST always be present.
 3. If nothing was found, use empty arrays: "events": [], "entities": [], "relationships": [].
 4. Do NOT wrap output in markdown code blocks (no \`\`\`json).
@@ -111,6 +111,8 @@ CRITICAL FORMAT RULES — violating ANY of these will cause a system error:
 </output_schema>
 
 <detail_rules>
+Event summaries MUST be complete, highly descriptive sentences (minimum 6 words, 30 characters).
+Do not extract fragmented thoughts or micro-actions like "Character breathed" or "She nodded."
 When writing event summaries, be specific and factual. Vague descriptions are useless.
 
 For sexual/intimate content — name the exact act:
