@@ -541,8 +541,14 @@ describe('filterSimilarEvents - intra-batch Jaccard dedup', () => {
         // These have identical meaning but different phrasing — cosine on short embeddings may miss them
         // Text chosen to have >60% token overlap after stopword filtering
         const newEvents = [
-            { summary: 'Suzy proposed daily morning training sessions for Vova starting at seven', embedding: [0.9, 0.1] },
-            { summary: 'Suzy proposed daily morning training sessions with warmup drills for Vova', embedding: [0.1, 0.9] },
+            {
+                summary: 'Suzy proposed daily morning training sessions for Vova starting at seven',
+                embedding: [0.9, 0.1],
+            },
+            {
+                summary: 'Suzy proposed daily morning training sessions with warmup drills for Vova',
+                embedding: [0.1, 0.9],
+            },
             { summary: 'Vova went to the store to buy groceries', embedding: [0.5, 0.5] },
         ];
         const existingMemories = [];

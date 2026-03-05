@@ -223,7 +223,9 @@ export function filterSimilarEvents(newEvents, existingMemories, cosineThreshold
                 if (!memory.embedding) continue;
                 const similarity = cosineSimilarity(event.embedding, memory.embedding);
                 if (similarity >= cosineThreshold) {
-                    log(`Dedup: Skipping "${event.summary}..." (${(similarity * 100).toFixed(1)}% similar to existing)`);
+                    log(
+                        `Dedup: Skipping "${event.summary}..." (${(similarity * 100).toFixed(1)}% similar to existing)`
+                    );
                     return false;
                 }
             }
@@ -238,11 +240,13 @@ export function filterSimilarEvents(newEvents, existingMemories, cosineThreshold
         let isDuplicate = false;
         for (const keptEvent of kept) {
             const keptTokens = new Set(tokenize(keptEvent.summary || ''));
-            const intersection = [...eventTokens].filter(t => keptTokens.has(t)).length;
+            const intersection = [...eventTokens].filter((t) => keptTokens.has(t)).length;
             const union = new Set([...eventTokens, ...keptTokens]).size;
             const jaccard = union > 0 ? intersection / union : 0;
             if (jaccard >= jaccardThreshold) {
-                log(`Dedup: Skipping "${event.summary.slice(0, 60)}..." (Jaccard ${(jaccard * 100).toFixed(1)}% with "${keptEvent.summary.slice(0, 60)}...")`);
+                log(
+                    `Dedup: Skipping "${event.summary.slice(0, 60)}..." (Jaccard ${(jaccard * 100).toFixed(1)}% with "${keptEvent.summary.slice(0, 60)}...")`
+                );
                 isDuplicate = true;
                 break;
             }

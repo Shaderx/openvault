@@ -331,10 +331,10 @@ describe('scoreMemories - dynamic character stopwords', () => {
 
         // With filtering, the park/dog memory should score higher relative to others
         // because "suzy" no longer inflates all scores equally
-        const parkMemoryWith = resultWith.find(r => r.memory.summary.includes('park'));
-        const pastaMemoryWith = resultWith.find(r => r.memory.summary.includes('pasta'));
-        const parkMemoryWithout = resultWithout.find(r => r.memory.summary.includes('park'));
-        const pastaMemoryWithout = resultWithout.find(r => r.memory.summary.includes('pasta'));
+        const parkMemoryWith = resultWith.find((r) => r.memory.summary.includes('park'));
+        const pastaMemoryWith = resultWith.find((r) => r.memory.summary.includes('pasta'));
+        const parkMemoryWithout = resultWithout.find((r) => r.memory.summary.includes('park'));
+        const pastaMemoryWithout = resultWithout.find((r) => r.memory.summary.includes('pasta'));
 
         // The gap between park and pasta should be larger with filtering
         const gapWith = parkMemoryWith.score - pastaMemoryWith.score;

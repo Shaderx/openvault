@@ -45,7 +45,15 @@ export function getScoringParams() {
  */
 function scoreMemoriesDirect(memories, contextEmbedding, chatLength, limit, queryTokens, characterNames = []) {
     const { constants, settings } = getScoringParams();
-    const scored = scoreMemories(memories, contextEmbedding, chatLength, constants, settings, queryTokens, characterNames);
+    const scored = scoreMemories(
+        memories,
+        contextEmbedding,
+        chatLength,
+        constants,
+        settings,
+        queryTokens,
+        characterNames
+    );
     const topScored = scored.slice(0, limit);
     return {
         memories: topScored.map((r) => r.memory),
