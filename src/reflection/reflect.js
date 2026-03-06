@@ -21,7 +21,9 @@ import { callLLM, LLM_CONFIGS } from '../llm.js';
 import { filterMemoriesByPOV } from '../pov.js';
 import { buildInsightExtractionPrompt, buildSalientQuestionsPrompt } from '../prompts.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
-import { generateId, log, sortMemoriesBySequence } from '../utils.js';
+import { generateId } from '../utils/data.js';
+import { log } from '../utils/logging.js';
+import { sortMemoriesBySequence } from '../utils/text.js';
 
 const REFLECTION_THRESHOLD = 40;
 

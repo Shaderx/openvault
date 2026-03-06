@@ -4,7 +4,7 @@
  * Formats memories and character presence for injection into prompts.
  */
 
-import { estimateTokens } from '../utils.js';
+import { estimateTokens } from '../utils/text.js';
 
 // Narrative engine constants
 export const CURRENT_SCENE_SIZE = 100; // "Current Scene" = last 100 messages

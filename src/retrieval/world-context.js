@@ -4,7 +4,7 @@
  * Retrieves relevant community summaries for injection into the prompt.
  */
 
-import { estimateTokens } from '../utils.js';
+import { estimateTokens } from '../utils/text.js';
 import { cosineSimilarity } from './math.js';
 
 /**
