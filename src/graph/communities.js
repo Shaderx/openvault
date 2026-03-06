@@ -12,7 +12,7 @@ import { getQueryEmbedding } from '../embeddings.js';
 import { parseCommunitySummaryResponse } from '../extraction/structured.js';
 import { callLLM, LLM_CONFIGS } from '../llm.js';
 import { buildCommunitySummaryPrompt } from '../prompts.js';
-import { log } from '../utils.js';
+import { log, yieldToMain } from '../utils.js';
 
 /**
  * Convert flat graph data to a graphology instance.
@@ -193,6 +193,7 @@ export async function updateCommunitySummaries(
     const updatedCommunities = {};
 
     for (const [communityId, group] of Object.entries(communityGroups)) {
+        await yieldToMain();
         // Skip solo nodes - they don't form a meaningful community
         if (group.nodeKeys.length < 2) continue;
 

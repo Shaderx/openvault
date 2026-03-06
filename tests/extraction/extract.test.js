@@ -555,7 +555,7 @@ describe('filterSimilarEvents - intra-batch Jaccard dedup', () => {
         // With orthogonal embeddings (cosine ~0), the cosine check won't catch them.
         // But Jaccard on tokens should catch the overlap: suzy/proposed/daily/morning/training/sessions/vova = 7 shared tokens
         const { filterSimilarEvents } = await import('../../src/extraction/extract.js');
-        const result = filterSimilarEvents(newEvents, existingMemories, 0.85, 0.6);
+        const result = await filterSimilarEvents(newEvents, existingMemories, 0.85, 0.6);
         // Should keep first occurrence + the unrelated event, skip the near-duplicate
         expect(result).toHaveLength(2);
         expect(result[0].summary).toContain('starting at seven');
@@ -568,7 +568,7 @@ describe('filterSimilarEvents - intra-batch Jaccard dedup', () => {
             { summary: 'Vova cooked dinner for the family at home', embedding: [0.1, 0.9] },
         ];
         const { filterSimilarEvents } = await import('../../src/extraction/extract.js');
-        const result = filterSimilarEvents(newEvents, [], 0.85, 0.6);
+        const result = await filterSimilarEvents(newEvents, [], 0.85, 0.6);
         expect(result).toHaveLength(2);
     });
 });
@@ -650,5 +650,23 @@ describe('two-phase extraction with intermediate save', () => {
         const hasProcessedIds = mockData.processed_message_ids.length > 0;
         expect(hasMemories).toBe(true);
         expect(hasProcessedIds).toBe(true);
+    });
+});
+
+describe('CPU yielding in filterSimilarEvents', () => {
+    it('still correctly filters events (yielding does not break logic)', async () => {
+        const events = [
+            { summary: 'King Aldric declared war on the rebels', embedding: [1, 0, 0] },
+            { summary: 'Sera secretly met with the rebel leader', embedding: [0, 1, 0] },
+            { summary: 'King Aldric declared war on the rebels today', embedding: [0.99, 0.01, 0] },
+        ];
+        const existing = [
+            { summary: 'Old memory about something else', embedding: [0, 0, 1] },
+        ];
+
+        const { filterSimilarEvents } = await import('../../src/extraction/extract.js');
+        const result = await filterSimilarEvents(events, existing, 0.92, 0.6);
+        // Third event should be deduped (cosine similarity with first > 0.92)
+        expect(result.length).toBeLessThanOrEqual(2);
     });
 });

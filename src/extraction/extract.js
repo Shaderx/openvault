@@ -46,6 +46,7 @@ import {
     showToast,
     sliceToTokenBudget,
     sortMemoriesBySequence,
+    yieldToMain,
 } from '../utils.js';
 import { getBackfillMessageIds, getExtractedMessageIds } from './scheduler.js';
 import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
@@ -213,12 +214,20 @@ function selectMemoriesForExtraction(data, settings) {
  * @param {number} cosineThreshold - Cosine similarity threshold for existing memory dedup
  * @param {number} jaccardThreshold - Jaccard token similarity threshold for intra-batch dedup
  */
-export function filterSimilarEvents(newEvents, existingMemories, cosineThreshold = 0.92, jaccardThreshold = 0.6) {
-    // Phase 1: Filter against existing memories (cosine, unchanged)
+export async function filterSimilarEvents(newEvents, existingMemories, cosineThreshold = 0.92, jaccardThreshold = 0.6) {
+    // Phase 1: Filter against existing memories (cosine)
     let filtered = newEvents;
     if (existingMemories?.length) {
-        filtered = newEvents.filter((event) => {
-            if (!event.embedding) return true;
+        const results = [];
+        let idx = 0;
+        for (const event of newEvents) {
+            if (idx % 10 === 0) await yieldToMain();
+            idx++;
+            if (!event.embedding) {
+                results.push(event);
+                continue;
+            }
+            let isDuplicate = false;
             for (const memory of existingMemories) {
                 if (!memory.embedding) continue;
                 const similarity = cosineSimilarity(event.embedding, memory.embedding);
@@ -226,16 +235,20 @@ export function filterSimilarEvents(newEvents, existingMemories, cosineThreshold
                     log(
                         `Dedup: Skipping "${event.summary}..." (${(similarity * 100).toFixed(1)}% similar to existing)`
                     );
-                    return false;
+                    isDuplicate = true;
+                    break;
                 }
             }
-            return true;
-        });
+            if (!isDuplicate) results.push(event);
+        }
+        filtered = results;
     }
 
     // Phase 2: Intra-batch Jaccard dedup
     const kept = [];
-    for (const event of filtered) {
+    for (let i = 0; i < filtered.length; i++) {
+        if (i % 10 === 0) await yieldToMain();
+        const event = filtered[i];
         const eventTokens = new Set(tokenize(event.summary || ''));
         let isDuplicate = false;
         for (const keptEvent of kept) {
@@ -306,7 +319,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
     const messages = messagesToExtract;
     const batchId = `batch_${deps.Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const silent = options.silent || false;
+    const _silent = options.silent || false;
 
     log(`Extracting ${messages.length} messages`);
 
@@ -399,7 +412,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             const dedupThreshold = settings.dedupSimilarityThreshold ?? 0.92;
             const jaccardThreshold = settings.dedupJaccardThreshold ?? 0.6;
             const existingMemoriesList = data.memories || [];
-            events = filterSimilarEvents(events, existingMemoriesList, dedupThreshold, jaccardThreshold);
+            events = await filterSimilarEvents(events, existingMemoriesList, dedupThreshold, jaccardThreshold);
 
             if (events.length < validated.events.length) {
                 log(`Dedup: Filtered ${validated.events.length - events.length} similar events`);
