@@ -244,6 +244,7 @@ export function onMessageReceived(messageId) {
 const EVENT_MAP = [
     ['GENERATION_AFTER_COMMANDS', onBeforeGeneration],
     ['GENERATION_ENDED', onGenerationEnded],
+    ['GENERATION_STOPPED', onGenerationEnded],
     ['MESSAGE_RECEIVED', onMessageReceived],
     ['CHAT_CHANGED', onChatChanged],
 ];
