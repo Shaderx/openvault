@@ -633,11 +633,8 @@ describe('utils', () => {
 
     describe('yieldToMain', () => {
         it('returns a promise that resolves', async () => {
-            const before = performance.now();
             await yieldToMain();
-            const after = performance.now();
-            // Should resolve (not hang), elapsed time is >= 0
-            expect(after - before).toBeGreaterThanOrEqual(0);
+            // scheduler.yield() resolves — no hang
         });
     });
 });

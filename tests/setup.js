@@ -3,6 +3,11 @@
  * Runs before all tests to configure the test environment.
  */
 
+// Mock scheduler API (browser-only, not available in Node/vitest)
+global.scheduler = {
+    yield: () => Promise.resolve(),
+};
+
 // Mock fetch API globally for tests that need it
 global.fetch = vi.fn(() =>
     Promise.resolve({
