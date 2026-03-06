@@ -1,6 +1,6 @@
 import { jsonrepair } from 'https://esm.sh/jsonrepair';
 import { z } from 'https://esm.sh/zod';
-import { stripThinkingTags } from '../utils.js';
+import { stripThinkingTags } from '../utils/text.js';
 
 // --- Schemas (inlined from schemas/) ---
 
