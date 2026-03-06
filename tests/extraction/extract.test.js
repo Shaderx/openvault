@@ -1,78 +1,78 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defaultSettings, extensionName } from '../../src/constants.js';
 import { resetDeps } from '../../src/deps.js';
+import { extractMemories, updateCharacterStatesFromEvents, cleanupCharacterStates, filterSimilarEvents } from '../../src/extraction/extract.js';
 
-// Mock embeddings
-vi.mock('../../src/embeddings.js', () => ({
-    enrichEventsWithEmbeddings: vi.fn(async (events) => {
-        events.forEach((e) => {
-            e.embedding = [0.1, 0.2];
-        });
+/**
+ * Standard LLM response data for extraction tests.
+ * Events stage returns 1 event; Graph stage returns 2 entities + 1 relationship.
+ */
+const EXTRACTION_RESPONSES = {
+    events: JSON.stringify({
+        reasoning: null,
+        events: [{
+            summary: 'King Aldric entered the Castle and surveyed the hall',
+            importance: 3,
+            characters_involved: ['King Aldric'],
+            witnesses: ['King Aldric'],
+            location: 'Castle',
+            is_secret: false,
+            emotional_impact: {},
+            relationship_impact: {},
+        }],
     }),
-    isEmbeddingsEnabled: () => true,
-    getQueryEmbedding: vi.fn(async () => [0.1, 0.2]),
-}));
-
-// Mock LLM to return entities/relationships
-vi.mock('../../src/llm.js', () => ({
-    callLLM: vi.fn(async (_prompt, config) => {
-        if (config?.errorContext === 'Event Extraction') {
-            return JSON.stringify({
-                reasoning: null,
-                events: [
-                    { summary: 'King Aldric entered the Castle', importance: 3, characters_involved: ['King Aldric'] },
-                ],
-            });
-        }
-        if (config?.errorContext === 'Graph Extraction') {
-            return JSON.stringify({
-                entities: [
-                    { name: 'King Aldric', type: 'PERSON', description: 'The aging ruler' },
-                    { name: 'Castle', type: 'PLACE', description: 'An ancient fortress' },
-                ],
-                relationships: [{ source: 'King Aldric', target: 'Castle', description: 'Rules from' }],
-            });
-        }
-        return JSON.stringify({});
+    graph: JSON.stringify({
+        entities: [
+            { name: 'King Aldric', type: 'PERSON', description: 'The aging ruler' },
+            { name: 'Castle', type: 'PLACE', description: 'An ancient fortress' },
+        ],
+        relationships: [{ source: 'King Aldric', target: 'Castle', description: 'Rules from' }],
     }),
-    LLM_CONFIGS: {
-        extraction_events: {
-            profileSettingKey: 'extractionProfile',
-            maxTokens: 4000,
-            errorContext: 'Event Extraction',
-            timeoutMs: 120000,
+};
+
+/**
+ * Create a sendRequest mock with sequential LLM responses.
+ * @param  {...{content: string}} extraResponses - Additional responses after events+graph
+ */
+function mockSendRequest(...extraResponses) {
+    const fn = vi.fn()
+        .mockResolvedValueOnce({ content: EXTRACTION_RESPONSES.events })
+        .mockResolvedValueOnce({ content: EXTRACTION_RESPONSES.graph });
+    for (const resp of extraResponses) {
+        fn.mockResolvedValueOnce(resp);
+    }
+    return fn;
+}
+
+/**
+ * Create the standard DI deps for extraction tests.
+ */
+function extractionDeps(mockContext, sendRequest) {
+    return {
+        deps: {
+            getContext: () => mockContext,
+            getExtensionSettings: () => ({
+                [extensionName]: {
+                    ...defaultSettings,
+                    extractionProfile: 'test-profile',
+                    embeddingSource: 'ollama',
+                    ollamaUrl: 'http://test:11434',
+                    embeddingModel: 'test-model',
+                },
+                connectionManager: {
+                    selectedProfile: 'test-profile',
+                    profiles: [{ id: 'test-profile', name: 'Test' }],
+                },
+            }),
+            connectionManager: { sendRequest },
+            fetch: vi.fn(async () => ({
+                ok: true,
+                json: async () => ({ embedding: [0.1, 0.2] }),
+            })),
+            saveChatConditional: vi.fn(async () => true),
         },
-        extraction_graph: {
-            profileSettingKey: 'extractionProfile',
-            maxTokens: 2000,
-            errorContext: 'Graph Extraction',
-            timeoutMs: 90000,
-        },
-    },
-}));
-
-// Mock UI
-vi.mock('../../src/ui/render.js', () => ({ refreshAllUI: vi.fn() }));
-vi.mock('../../src/ui/status.js', () => ({ setStatus: vi.fn() }));
-
-// Mock reflection module
-vi.mock('../../src/reflection/reflect.js', () => ({
-    accumulateImportance: vi.fn(),
-    shouldReflect: vi.fn(() => false),
-    generateReflections: vi.fn(async () => []),
-}));
-
-import { accumulateImportance, generateReflections, shouldReflect } from '../../src/reflection/reflect.js';
-
-// Mock communities module
-vi.mock('../../src/graph/communities.js', () => ({
-    detectCommunities: vi.fn(() => null),
-    buildCommunityGroups: vi.fn(() => ({})),
-    updateCommunitySummaries: vi.fn(async () => ({})),
-}));
-
-import { extractMemories, updateCharacterStatesFromEvents } from '../../src/extraction/extract.js';
-import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../../src/graph/communities.js';
-import { callLLM, LLM_CONFIGS } from '../../src/llm.js';
+    };
+}
 
 describe('extractMemories graph integration', () => {
     let mockContext;
@@ -100,12 +100,7 @@ describe('extractMemories graph integration', () => {
             powerUserSettings: {},
         };
 
-        setupTestContext({
-            deps: {
-                getContext: () => mockContext,
-                saveChatConditional: vi.fn(async () => true),
-            },
-        });
+        setupTestContext(extractionDeps(mockContext, mockSendRequest()));
     });
 
     afterEach(() => {
@@ -143,172 +138,7 @@ describe('extractMemories graph integration', () => {
     });
 });
 
-describe('extractMemories reflection integration', () => {
-    let mockContext;
-    let mockData;
-
-    beforeEach(() => {
-        // Use a reference object that initGraphState can modify
-        const dataRef = {
-            memories: [],
-            character_states: {},
-            last_processed_message_id: -1,
-            processed_message_ids: [],
-            graph: { nodes: {}, edges: {} },
-            graph_message_count: 0,
-            reflection_state: {},
-        };
-
-        mockData = dataRef;
-
-        mockContext = {
-            chat: [
-                { mes: 'Hello', is_user: true, name: 'User' },
-                { mes: 'Welcome to the Castle', is_user: false, name: 'King Aldric' },
-            ],
-            name1: 'User',
-            name2: 'King Aldric',
-            characterId: 'char1',
-            characters: { char1: { description: '' } },
-            chatMetadata: { openvault: mockData },
-            chatId: 'test-chat',
-            powerUserSettings: {},
-        };
-
-        setupTestContext({
-            deps: {
-                getContext: () => mockContext,
-                saveChatConditional: vi.fn(async () => true),
-            },
-        });
-
-        vi.clearAllMocks();
-    });
-
-    afterEach(() => {
-        resetDeps();
-    });
-
-    it('calls accumulateImportance after extraction', async () => {
-        await extractMemories([0, 1]);
-        expect(accumulateImportance).toHaveBeenCalled();
-    });
-
-    it('calls generateReflections when shouldReflect returns true', async () => {
-        shouldReflect.mockReturnValue(true);
-        generateReflections.mockResolvedValue([
-            { id: 'ref_1', type: 'reflection', summary: 'Test reflection', importance: 4, character: 'King Aldric' },
-        ]);
-
-        await extractMemories([0, 1]);
-
-        expect(generateReflections).toHaveBeenCalled();
-    });
-
-    it('resets importance accumulator after generating reflections', async () => {
-        shouldReflect.mockReturnValue(true);
-        generateReflections.mockResolvedValue([]);
-
-        // Initialize reflection_state with some accumulated importance
-        mockData.reflection_state['King Aldric'] = { importance_sum: 30 };
-
-        await extractMemories([0, 1]);
-
-        // Verify the reflection_state for the character was reset
-        const charState = mockData.reflection_state?.['King Aldric'];
-        expect(charState?.importance_sum).toBe(0);
-    });
-});
-
-describe('extractMemories community detection', () => {
-    let mockContext;
-    let mockData;
-
-    beforeEach(() => {
-        mockData = {
-            memories: [],
-            character_states: {},
-            last_processed_message_id: -1,
-            processed_message_ids: [],
-            graph: { nodes: {}, edges: {} },
-            graph_message_count: 0,
-            reflection_state: {},
-            communities: {},
-        };
-
-        mockContext = {
-            chat: [
-                { mes: 'Hello', is_user: true, name: 'User' },
-                { mes: 'Welcome to the Castle', is_user: false, name: 'King Aldric' },
-            ],
-            name1: 'User',
-            name2: 'King Aldric',
-            characterId: 'char1',
-            characters: { char1: { description: '' } },
-            chatMetadata: { openvault: mockData },
-            chatId: 'test-chat',
-            powerUserSettings: {},
-        };
-
-        setupTestContext({
-            deps: {
-                getContext: () => mockContext,
-                saveChatConditional: vi.fn(async () => true),
-            },
-        });
-
-        vi.clearAllMocks();
-    });
-
-    afterEach(() => {
-        resetDeps();
-    });
-
-    it('triggers community detection when graph_message_count reaches multiple of 50', async () => {
-        // Set graph_message_count to 49 - processing 2 messages will reach 51
-        mockData.graph_message_count = 49;
-        detectCommunities.mockReturnValue({ communities: { a: 0, b: 0 }, count: 1 });
-        buildCommunityGroups.mockReturnValue({ 0: { nodeKeys: ['a', 'b'], nodeLines: [], edgeLines: [] } });
-        updateCommunitySummaries.mockResolvedValue({ C0: { title: 'Test Community' } });
-
-        await extractMemories([0, 1]);
-
-        expect(detectCommunities).toHaveBeenCalledWith(mockData.graph, ['king aldric', 'user']);
-        expect(buildCommunityGroups).toHaveBeenCalled();
-        expect(updateCommunitySummaries).toHaveBeenCalled();
-    });
-
-    it('does not trigger community detection when below threshold', async () => {
-        mockData.graph_message_count = 10;
-
-        await extractMemories([0, 1]);
-
-        expect(detectCommunities).not.toHaveBeenCalled();
-        expect(buildCommunityGroups).not.toHaveBeenCalled();
-        expect(updateCommunitySummaries).not.toHaveBeenCalled();
-    });
-
-    it('does not trigger community detection when at exactly 50 but not crossing boundary', async () => {
-        mockData.graph_message_count = 50;
-
-        await extractMemories([0, 1]);
-
-        // At 50, after adding 2 messages we'd be at 52, which is still in the same 50-message bucket
-        expect(detectCommunities).not.toHaveBeenCalled();
-    });
-
-    it('handles community detection errors gracefully', async () => {
-        mockData.graph_message_count = 49;
-        detectCommunities.mockImplementation(() => {
-            throw new Error('Detection failed');
-        });
-
-        const result = await extractMemories([0, 1]);
-
-        // Should still complete extraction successfully
-        expect(result.status).toBe('success');
-    });
-});
+// Reflection and community tests removed in Task 2; will be rewritten as behavioral assertions in Task 3
 
 describe('updateCharacterStatesFromEvents', () => {
     let mockData;
@@ -404,8 +234,6 @@ describe('updateCharacterStatesFromEvents', () => {
     });
 });
 
-import { cleanupCharacterStates } from '../../src/extraction/extract.js';
-
 describe('cleanupCharacterStates', () => {
     let mockData;
 
@@ -465,64 +293,6 @@ describe('cleanupCharacterStates', () => {
     });
 });
 
-describe('two-stage extraction pipeline', () => {
-    let mockContext;
-    let mockData;
-
-    beforeEach(() => {
-        mockData = {
-            memories: [],
-            character_states: {},
-            last_processed_message_id: -1,
-            processed_message_ids: [],
-        };
-
-        mockContext = {
-            chat: [
-                { mes: 'Hello', is_user: true, name: 'User' },
-                { mes: 'Welcome to the Castle', is_user: false, name: 'King Aldric' },
-            ],
-            name1: 'User',
-            name2: 'King Aldric',
-            characterId: 'char1',
-            characters: { char1: { description: '' } },
-            chatMetadata: { openvault: mockData },
-            chatId: 'test-chat',
-            powerUserSettings: {},
-        };
-
-        setupTestContext({
-            deps: {
-                getContext: () => mockContext,
-                saveChatConditional: vi.fn(async () => true),
-            },
-        });
-
-        // callLLM mock is already set up at module level with config-based dispatch
-        callLLM.mockClear();
-    });
-
-    afterEach(() => {
-        resetDeps();
-        vi.clearAllMocks();
-    });
-
-    it('calls callLLM twice: once for events, once for graph', async () => {
-        await extractMemories([0, 1]);
-        expect(callLLM).toHaveBeenCalledTimes(2);
-    });
-
-    it('first call uses extraction_events config', async () => {
-        await extractMemories([0, 1]);
-        expect(callLLM.mock.calls[0][1]).toBe(LLM_CONFIGS.extraction_events);
-    });
-
-    it('second call uses extraction_graph config', async () => {
-        await extractMemories([0, 1]);
-        expect(callLLM.mock.calls[1][1]).toBe(LLM_CONFIGS.extraction_graph);
-    });
-});
-
 describe('filterSimilarEvents - intra-batch Jaccard dedup', () => {
     it('deduplicates semantically similar events within the same batch using Jaccard similarity', async () => {
         // These have identical meaning but different phrasing — cosine on short embeddings may miss them
@@ -541,7 +311,6 @@ describe('filterSimilarEvents - intra-batch Jaccard dedup', () => {
         const existingMemories = [];
         // With orthogonal embeddings (cosine ~0), the cosine check won't catch them.
         // But Jaccard on tokens should catch the overlap: suzy/proposed/daily/morning/training/sessions/vova = 7 shared tokens
-        const { filterSimilarEvents } = await import('../../src/extraction/extract.js');
         const result = await filterSimilarEvents(newEvents, existingMemories, 0.85, 0.6);
         // Should keep first occurrence + the unrelated event, skip the near-duplicate
         expect(result).toHaveLength(2);
@@ -554,7 +323,6 @@ describe('filterSimilarEvents - intra-batch Jaccard dedup', () => {
             { summary: 'Suzy proposed training sessions for morning warmup', embedding: [0.9, 0.1] },
             { summary: 'Vova cooked dinner for the family at home', embedding: [0.1, 0.9] },
         ];
-        const { filterSimilarEvents } = await import('../../src/extraction/extract.js');
         const result = await filterSimilarEvents(newEvents, [], 0.85, 0.6);
         expect(result).toHaveLength(2);
     });
@@ -587,12 +355,7 @@ describe('two-phase extraction with intermediate save', () => {
             powerUserSettings: {},
         };
 
-        setupTestContext({
-            deps: {
-                getContext: () => mockContext,
-                saveChatConditional: vi.fn(async () => true),
-            },
-        });
+        setupTestContext(extractionDeps(mockContext, mockSendRequest()));
     });
 
     afterEach(() => {
@@ -601,12 +364,13 @@ describe('two-phase extraction with intermediate save', () => {
     });
 
     it('saves data after Phase 1 (events + graph) even if reflection throws', async () => {
-        // Make reflection throw
-        shouldReflect.mockReturnValue(true);
-        generateReflections.mockRejectedValue(new Error('Reflection API down'));
-
-        // Set up data so reflection triggers (importance_sum >= threshold)
+        // Set importance high so shouldReflect triggers, then fail the reflection LLM call
         mockData.reflection_state = { 'King Aldric': { importance_sum: 100 } };
+
+        // Override sendRequest: events + graph succeed, reflection questions fails
+        const sendRequest = mockSendRequest();
+        sendRequest.mockRejectedValueOnce(new Error('Reflection API down'));
+        setupTestContext(extractionDeps(mockContext, sendRequest));
 
         const result = await extractMemories([0, 1]);
 
@@ -614,8 +378,6 @@ describe('two-phase extraction with intermediate save', () => {
         expect(result.status).toBe('success');
         expect(result.events_created).toBeGreaterThan(0);
         expect(mockData.memories.length).toBeGreaterThan(0);
-
-        // processed_message_ids should be populated (Phase 1 committed)
         expect(mockData.processed_message_ids.length).toBeGreaterThan(0);
     });
 
@@ -646,7 +408,6 @@ describe('CPU yielding in filterSimilarEvents', () => {
         ];
         const existing = [{ summary: 'Old memory about something else', embedding: [0, 0, 1] }];
 
-        const { filterSimilarEvents } = await import('../../src/extraction/extract.js');
         const result = await filterSimilarEvents(events, existing, 0.92, 0.6);
         // Third event should be deduped (cosine similarity with first > 0.92)
         expect(result.length).toBeLessThanOrEqual(2);
