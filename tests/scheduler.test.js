@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { PROCESSED_MESSAGES_KEY } from '../src/constants.js';
 import { getNextBatch } from '../src/extraction/scheduler.js';
-import { estimateTokens } from '../src/utils.js';
+import { estimateTokens } from '../src/utils/text.js';
 
 describe('scheduler token-aware batching', () => {
     it('limits batch to maxTokens parameter', () => {
