@@ -14,7 +14,7 @@ describe('buildSalientQuestionsPrompt', () => {
             { summary: 'Alice fought the dragon', importance: 5 },
         ];
         const result = buildSalientQuestionsPrompt('Alice', memories);
-        expect(result).toHaveLength(2);
+        expect(result).toHaveLength(3);
         expect(result[0].role).toBe('system');
         expect(result[1].role).toBe('user');
         expect(result[1].content).toContain('Alice');
@@ -37,7 +37,7 @@ describe('buildInsightExtractionPrompt', () => {
             { id: 'ev_002', summary: 'Alice was wounded' },
         ];
         const result = buildInsightExtractionPrompt('Alice', 'How has Alice changed?', memories);
-        expect(result).toHaveLength(2);
+        expect(result).toHaveLength(3);
         expect(result[0].role).toBe('system');
         expect(result[1].content).toContain('How has Alice changed?');
         expect(result[1].content).toContain('ev_001');
@@ -67,7 +67,7 @@ describe('buildCommunitySummaryPrompt', () => {
         const nodes = ['- Castle (PLACE): An ancient fortress'];
         const edges = ['- King Aldric → Castle: Rules from [weight: 4]'];
         const result = buildCommunitySummaryPrompt(nodes, edges);
-        expect(result).toHaveLength(2);
+        expect(result).toHaveLength(3);
         expect(result[0].role).toBe('system');
         expect(result[1].role).toBe('user');
         expect(result[1].content).toContain('Castle');
@@ -128,7 +128,7 @@ describe('buildEventExtractionPrompt', () => {
             names: { char: 'Alice', user: 'Bob' },
             context: {},
         });
-        expect(result).toHaveLength(2);
+        expect(result).toHaveLength(3);
         expect(result[0].role).toBe('system');
         expect(result[1].role).toBe('user');
     });
@@ -218,7 +218,7 @@ describe('buildGraphExtractionPrompt', () => {
             extractedEvents: ['Alice greeted Bob warmly'],
             context: {},
         });
-        expect(result).toHaveLength(2);
+        expect(result).toHaveLength(3);
         expect(result[0].role).toBe('system');
         expect(result[1].role).toBe('user');
     });
@@ -244,5 +244,52 @@ describe('buildGraphExtractionPrompt', () => {
         const systemContent = result[0].content;
         expect(systemContent).not.toContain('"importance"');
         expect(systemContent).not.toContain('"is_secret"');
+    });
+});
+
+describe('CN preamble and assistant prefill', () => {
+    it('all prompts include CN system preamble in system message', () => {
+        const eventResult = buildEventExtractionPrompt({
+            messages: '[A]: test',
+            names: { char: 'A', user: 'B' },
+            context: {},
+        });
+        const graphResult = buildGraphExtractionPrompt({
+            messages: '[A]: test',
+            names: { char: 'A', user: 'B' },
+        });
+        const salientResult = buildSalientQuestionsPrompt('A', [{ summary: 'test', importance: 3 }]);
+        const insightResult = buildInsightExtractionPrompt('A', 'q?', [{ id: '1', summary: 't' }]);
+        const communityResult = buildCommunitySummaryPrompt([], []);
+
+        for (const result of [eventResult, graphResult, salientResult, insightResult, communityResult]) {
+            expect(result[0].content).toContain('<system_config>');
+            expect(result[0].content).toContain('</system_config>');
+        }
+    });
+
+    it('event extraction prefills assistant with think tag', () => {
+        const result = buildEventExtractionPrompt({
+            messages: '[A]: test',
+            names: { char: 'A', user: 'B' },
+            context: {},
+        });
+        expect(result[2].role).toBe('assistant');
+        expect(result[2].content).toBe('<think>\n');
+    });
+
+    it('non-think prompts prefill assistant with JSON opener', () => {
+        const graphResult = buildGraphExtractionPrompt({
+            messages: '[A]: test',
+            names: { char: 'A', user: 'B' },
+        });
+        const salientResult = buildSalientQuestionsPrompt('A', [{ summary: 'test', importance: 3 }]);
+        const insightResult = buildInsightExtractionPrompt('A', 'q?', [{ id: '1', summary: 't' }]);
+        const communityResult = buildCommunitySummaryPrompt([], []);
+
+        for (const result of [graphResult, salientResult, insightResult, communityResult]) {
+            expect(result[2].role).toBe('assistant');
+            expect(result[2].content).toBe('{');
+        }
     });
 });
