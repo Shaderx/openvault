@@ -43,9 +43,9 @@ global.toastr = {
     error: () => ({}),
 };
 
+import { defaultSettings, extensionName } from '../src/constants.js';
 // ── Shared test context helper ──
 import { setDeps } from '../src/deps.js';
-import { defaultSettings, extensionName } from '../src/constants.js';
 
 /**
  * Standard test context setup. Replaces per-file setDeps boilerplate.

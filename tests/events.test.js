@@ -4,10 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../src/deps.js', () => ({
     getDeps: () => ({
         getContext: () => ({
-            chat: [
-                { is_user: true },
-                { is_user: false },
-            ],
+            chat: [{ is_user: true }, { is_user: false }],
         }),
     }),
 }));
@@ -38,8 +35,16 @@ vi.mock('../src/extraction/worker.js', () => ({
 // ── Stub mocks: prevent loading real modules (events.js imports these but
 //    onMessageReceived never calls them) ──
 vi.mock('../src/embeddings.js', () => ({ clearEmbeddingCache: vi.fn() }));
-vi.mock('../src/extraction/extract.js', () => ({ extractMemories: vi.fn(), extractAllMessages: vi.fn(), cleanupCharacterStates: vi.fn() }));
-vi.mock('../src/extraction/scheduler.js', () => ({ getBackfillStats: vi.fn(), getExtractedMessageIds: vi.fn(), getNextBatch: vi.fn() }));
+vi.mock('../src/extraction/extract.js', () => ({
+    extractMemories: vi.fn(),
+    extractAllMessages: vi.fn(),
+    cleanupCharacterStates: vi.fn(),
+}));
+vi.mock('../src/extraction/scheduler.js', () => ({
+    getBackfillStats: vi.fn(),
+    getExtractedMessageIds: vi.fn(),
+    getNextBatch: vi.fn(),
+}));
 vi.mock('../src/retrieval/retrieve.js', () => ({ updateInjection: vi.fn() }));
 vi.mock('../src/retrieval/debug-cache.js', () => ({ clearRetrievalDebug: vi.fn() }));
 vi.mock('../src/ui/render.js', () => ({ refreshAllUI: vi.fn(), resetMemoryBrowserPage: vi.fn() }));

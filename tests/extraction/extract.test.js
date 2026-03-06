@@ -644,9 +644,7 @@ describe('CPU yielding in filterSimilarEvents', () => {
             { summary: 'Sera secretly met with the rebel leader', embedding: [0, 1, 0] },
             { summary: 'King Aldric declared war on the rebels today', embedding: [0.99, 0.01, 0] },
         ];
-        const existing = [
-            { summary: 'Old memory about something else', embedding: [0, 0, 1] },
-        ];
+        const existing = [{ summary: 'Old memory about something else', embedding: [0, 0, 1] }];
 
         const { filterSimilarEvents } = await import('../../src/extraction/extract.js');
         const result = await filterSimilarEvents(events, existing, 0.92, 0.6);

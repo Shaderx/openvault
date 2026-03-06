@@ -37,12 +37,12 @@ describe('utils', () => {
             chatMetadata: {},
             chatId: 'test-chat-123',
         };
-        setDeps({
-            console: mockConsole,
-            getContext: () => mockContext,
-            getExtensionSettings: () => ({
-                [extensionName]: { enabled: true, debugMode: true },
-            }),
+        setupTestContext({
+            settings: { debugMode: true },
+            deps: {
+                console: mockConsole,
+                getContext: () => mockContext,
+            },
         });
     });
 

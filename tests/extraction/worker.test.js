@@ -136,11 +136,7 @@ describe('worker loop batch processing', () => {
         await vi.waitFor(() => expect(isWorkerRunning()).toBe(false), { timeout: 5000 });
 
         expect(extractMemoriesMock).toHaveBeenCalledOnce();
-        expect(extractMemoriesMock).toHaveBeenCalledWith(
-            [0, 1, 2, 3, 4],
-            'chat_123',
-            { silent: true }
-        );
+        expect(extractMemoriesMock).toHaveBeenCalledWith([0, 1, 2, 3, 4], 'chat_123', { silent: true });
     });
 
     it('sets status to extracting then ready', async () => {
