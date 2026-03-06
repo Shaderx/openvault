@@ -29,136 +29,75 @@ describe('query-context', () => {
         vi.clearAllMocks();
     });
 
-    describe('extractQueryContext', () => {
-        describe('entity extraction', () => {
-            it('extracts Latin capitalized names', () => {
-                // Use multiple messages so frequency filter doesn't eliminate entities
+    describe('extractQueryContext — graph-anchored', () => {
+        describe('entity detection from graph nodes', () => {
+            it('detects graph entity names in messages', () => {
                 const messages = [
                     { mes: 'Sarah went to the Cabin with Marcus' },
                     { mes: 'They talked for hours.' },
-                    { mes: 'It was a good day.' },
+                    { mes: 'Nothing else happened.' },
                 ];
-                const result = extractQueryContext(messages);
-
+                const graphNodes = {
+                    sarah: { name: 'Sarah', type: 'PERSON' },
+                    cabin: { name: 'Cabin', type: 'PLACE' },
+                    marcus: { name: 'Marcus', type: 'PERSON' },
+                };
+                const result = extractQueryContext(messages, [], graphNodes);
                 expect(result.entities).toContain('Sarah');
                 expect(result.entities).toContain('Cabin');
                 expect(result.entities).toContain('Marcus');
             });
 
-            it('extracts Cyrillic names', () => {
+            it('does NOT detect words that are not in graph', () => {
                 const messages = [
-                    { mes: 'Саша пошла в Москву' },
-                    { mes: 'Там было хорошо.' },
-                    { mes: 'Она вернулась домой.' },
+                    { mes: 'Запомни это. Держись крепче. The weather is nice.' },
+                    { mes: 'Another message.' },
+                    { mes: 'One more.' },
                 ];
-                const result = extractQueryContext(messages);
-
-                expect(result.entities).toContain('Саша');
-                expect(result.entities).toContain('Москву');
-            });
-
-            it('filters common Latin sentence starters', () => {
-                const messages = [
-                    { mes: 'The quick fox. Then Sarah arrived. This is a test.' },
-                    { mes: 'Another message here.' },
-                    { mes: 'And one more.' },
-                ];
-                const result = extractQueryContext(messages);
-
+                const graphNodes = {
+                    sarah: { name: 'Sarah', type: 'PERSON' },
+                };
+                const result = extractQueryContext(messages, [], graphNodes);
+                expect(result.entities).not.toContain('Запомни');
+                expect(result.entities).not.toContain('Держись');
                 expect(result.entities).not.toContain('The');
-                expect(result.entities).not.toContain('Then');
-                expect(result.entities).not.toContain('This');
-                expect(result.entities).toContain('Sarah');
             });
 
-            it('filters common Cyrillic sentence starters', () => {
+            it('matches Russian inflectional forms via stemming', () => {
                 const messages = [
-                    { mes: 'После обеда Саша ушла. Когда она вернулась...' },
-                    { mes: 'Она была рада.' },
-                    { mes: 'Все было хорошо.' },
+                    { mes: 'Подошла к Елену и сказала' },
+                    { mes: 'Потом ушла.' },
+                    { mes: 'Вернулась.' },
                 ];
-                const result = extractQueryContext(messages);
-
-                expect(result.entities).not.toContain('После');
-                expect(result.entities).not.toContain('Когда');
-                expect(result.entities).toContain('Саша');
+                const graphNodes = {
+                    елена: { name: 'Елена', type: 'PERSON' },
+                };
+                const result = extractQueryContext(messages, [], graphNodes);
+                expect(result.entities).toContain('Елена');
             });
 
-            it('filters Russian interjections and filler words', () => {
+            it('matches aliases from merged entities', () => {
                 const messages = [
-                    { mes: 'Ага полностью. Воны какие-то. Ну ладно, Саша пошла.' },
-                    { mes: 'Да, Хорошо. Блин, забыл.' },
-                    { mes: 'Угу, Конечно.' },
+                    { mes: 'Lily came into the room.' },
+                    { mes: 'She sat down.' },
+                    { mes: 'Nothing else.' },
                 ];
-                const result = extractQueryContext(messages);
-
-                expect(result.entities).not.toContain('Ага');
-                expect(result.entities).not.toContain('Воны');
-                expect(result.entities).not.toContain('Ладно');
-                expect(result.entities).not.toContain('Хорошо');
-                expect(result.entities).not.toContain('Блин');
-                expect(result.entities).not.toContain('Угу');
-                expect(result.entities).not.toContain('Конечно');
-                expect(result.entities).toContain('Саша');
-            });
-
-            it('requires minimum 3 characters', () => {
-                const messages = [
-                    { mes: 'Mr Jo went home. Sarah stayed.' },
-                    { mes: 'It was late.' },
-                    { mes: 'Time to sleep.' },
-                ];
-                const result = extractQueryContext(messages);
-
-                expect(result.entities).not.toContain('Mr');
-                expect(result.entities).not.toContain('Jo');
-                expect(result.entities).toContain('Sarah');
-            });
-        });
-
-        describe('recency weighting', () => {
-            it('weights recent messages higher', () => {
-                const messages = [
-                    { mes: 'Marcus arrived at the door.' }, // newest, index 0
-                    { mes: 'Sarah left earlier.' }, // middle, index 1
-                    { mes: 'Bob was there too.' }, // index 2
-                    { mes: 'Charlie came by.' }, // index 3
-                    { mes: 'Marcus spoke first.' }, // oldest, index 4
-                ];
-                const result = extractQueryContext(messages);
-
-                // Marcus appears in newest (weight 1.0) and oldest (weight ~0.64)
-                // Sarah appears only in index 1 (weight ~0.91)
-                // Marcus should have higher total weight
-                expect(result.weights.Marcus).toBeGreaterThan(result.weights.Sarah);
-            });
-
-            it('returns top entities sorted by weight', () => {
-                const messages = [
-                    { mes: 'Alice talked to Bob. Alice smiled.' }, // Alice 2x, Bob 1x
-                    { mes: 'Charlie arrived at noon.' }, // Charlie 1x
-                    { mes: 'David waved hello.' }, // David 1x
-                    { mes: 'Alice left the room.' }, // Alice 1x
-                    { mes: 'Everyone said goodbye.' }, // no entities
-                ];
-                const result = extractQueryContext(messages);
-
-                // Alice appears 3 times across 2 messages (40%), should be first
-                expect(result.entities[0]).toBe('Alice');
+                const graphNodes = {
+                    vova: { name: 'Vova', type: 'PERSON', aliases: ['Vova (aka Lily)'] },
+                };
+                const result = extractQueryContext(messages, [], graphNodes);
+                expect(result.entities).toContain('Vova');
             });
         });
 
         describe('active characters', () => {
-            it('boosts known character names', () => {
+            it('boosts known character names even without graph', () => {
                 const messages = [
                     { mes: 'Someone mentioned the cabin.' },
                     { mes: 'It was quiet outside.' },
                     { mes: 'Nothing else happened.' },
                 ];
-                const activeCharacters = ['Elena', 'Viktor'];
-                const result = extractQueryContext(messages, activeCharacters);
-
-                // Active characters get boosted even if not in messages
+                const result = extractQueryContext(messages, ['Elena', 'Viktor'], {});
                 expect(result.entities).toContain('Elena');
                 expect(result.entities).toContain('Viktor');
             });
@@ -172,13 +111,35 @@ describe('query-context', () => {
                     { mes: 'Alice came back.' },
                     { mes: 'Charlie arrived.' },
                 ];
-                const result = extractQueryContext(messages);
-
-                // Alice appears in 3/4 (75%) messages, should be filtered
+                const graphNodes = {
+                    alice: { name: 'Alice', type: 'PERSON' },
+                    bob: { name: 'Bob', type: 'PERSON' },
+                    charlie: { name: 'Charlie', type: 'PERSON' },
+                };
+                const result = extractQueryContext(messages, [], graphNodes);
                 expect(result.entities).not.toContain('Alice');
-                // Bob and Charlie appear in fewer messages
                 expect(result.entities).toContain('Bob');
                 expect(result.entities).toContain('Charlie');
+            });
+        });
+
+        describe('recency weighting', () => {
+            it('weights recent messages higher', () => {
+                const messages = [
+                    { mes: 'Marcus arrived at the door.' },
+                    { mes: 'Sarah left earlier.' },
+                    { mes: 'Bob was there too.' },
+                    { mes: 'Charlie came by.' },
+                    { mes: 'Marcus spoke first.' },
+                ];
+                const graphNodes = {
+                    marcus: { name: 'Marcus', type: 'PERSON' },
+                    sarah: { name: 'Sarah', type: 'PERSON' },
+                    bob: { name: 'Bob', type: 'PERSON' },
+                    charlie: { name: 'Charlie', type: 'PERSON' },
+                };
+                const result = extractQueryContext(messages, [], graphNodes);
+                expect(result.weights.Marcus).toBeGreaterThan(result.weights.Sarah);
             });
         });
 
@@ -195,13 +156,13 @@ describe('query-context', () => {
                 expect(result.weights).toEqual({});
             });
 
-            it('handles messages with no entities', () => {
+            it('handles empty graph gracefully', () => {
                 const messages = [
                     { mes: 'just lowercase text here' },
-                    { mes: 'more lowercase words' },
+                    { mes: 'more words' },
                     { mes: 'nothing special' },
                 ];
-                const result = extractQueryContext(messages);
+                const result = extractQueryContext(messages, [], {});
                 expect(result.entities).toEqual([]);
             });
         });

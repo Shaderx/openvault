@@ -2,59 +2,14 @@
  * OpenVault Query Context Extraction
  *
  * Extracts entities and themes from recent chat context for enriched retrieval queries.
- * Supports both Latin and Cyrillic text. Uses rule-based extraction (no ML model).
+ * Uses graph-anchored stem matching to detect known entities.
  */
 
 import { extensionName, QUERY_CONTEXT_DEFAULTS } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getOptimalChunkSize } from '../embeddings.js';
-import { isLikelyImperative } from '../utils/russian-imperatives.js';
-import { ALL_STOPWORDS } from '../utils/stopwords.js';
+import { stemName, stemWord } from '../utils/stemmer.js';
 import { tokenize } from './math.js';
-
-/**
- * Extract entities from a single text
- * @param {string} text - Text to extract entities from
- * @returns {string[]} Array of extracted entities
- */
-function extractFromText(text) {
-    if (!text) return [];
-
-    const entities = [];
-
-    // Capitalized words - Latin alphabet (3+ chars)
-    const latinMatches = text.match(/\b[A-Z][a-z]{2,}\b/g) || [];
-    for (const match of latinMatches) {
-        if (!ALL_STOPWORDS.has(match.toLowerCase())) {
-            entities.push(match);
-        }
-    }
-
-    // Capitalized words - Cyrillic alphabet (3+ chars)
-    // Note: \b doesn't work with Cyrillic, so use lookahead/lookbehind or split approach
-    const cyrillicMatches = text.match(/(?:^|[^а-яёА-ЯЁ])([А-ЯЁ][а-яё]{2,})(?=[^а-яёА-ЯЁ]|$)/g) || [];
-    for (const match of cyrillicMatches) {
-        // Clean up the match (remove leading non-Cyrillic char)
-        const cleaned = match.replace(/^[^А-ЯЁ]+/, '');
-        if (cleaned && !ALL_STOPWORDS.has(cleaned.toLowerCase()) && !isLikelyImperative(cleaned)) {
-            entities.push(cleaned);
-        }
-    }
-
-    // Quoted speech (captures emphasis) - both Latin and Cyrillic quotes
-    const latinQuotes = text.match(/"([^"]+)"/g) || [];
-    const cyrillicQuotes = text.match(/«([^»]+)»/g) || [];
-    const allQuotes = [...latinQuotes, ...cyrillicQuotes];
-    for (const quote of allQuotes) {
-        // Extract just the content without quotes
-        const content = quote.replace(/["«»]/g, '').trim();
-        if (content.length >= 3 && content.length <= 50) {
-            entities.push(content);
-        }
-    }
-
-    return entities;
-}
 
 /**
  * Get settings for query context extraction
@@ -72,37 +27,59 @@ function getQueryContextSettings() {
 }
 
 /**
- * Extract entities from recent messages with recency weighting
+ * Extract entities from recent messages using graph-anchored stem matching
  * @param {Array<{mes: string}>} messages - Recent messages (newest first)
  * @param {string[]} [activeCharacters=[]] - Known character names (highest priority)
+ * @param {Object} [graphNodes={}] - Graph nodes keyed by normalized name
  * @returns {{entities: string[], weights: Object<string, number>}}
  */
-export function extractQueryContext(messages, activeCharacters = []) {
+export function extractQueryContext(messages, activeCharacters = [], graphNodes = {}) {
     if (!messages || messages.length === 0) {
         return { entities: [], weights: {} };
     }
 
     const settings = getQueryContextSettings();
+
+    // Build stem → display name map from graph nodes + aliases + characters
+    const stemToEntity = new Map();
+    for (const [, node] of Object.entries(graphNodes)) {
+        for (const stem of stemName(node.name)) {
+            stemToEntity.set(stem, node.name);
+        }
+        for (const alias of node.aliases || []) {
+            for (const stem of stemName(alias)) {
+                stemToEntity.set(stem, node.name);
+            }
+        }
+    }
+    for (const char of activeCharacters) {
+        for (const stem of stemName(char)) {
+            stemToEntity.set(stem, char);
+        }
+    }
+
     const entityScores = new Map();
+    const entityMessageCounts = new Map();
     const messagesToScan = messages.slice(0, settings.entityWindowSize);
 
-    // Track entity frequency across all messages for filtering
-    const entityMessageCounts = new Map();
-
-    // Process each message
     messagesToScan.forEach((msg, index) => {
         const recencyWeight = 1 - index * settings.recencyDecayFactor;
         const text = msg.mes || msg.message || '';
-        const entities = extractFromText(text);
 
-        // Count which messages each entity appears in
-        const uniqueEntitiesInMsg = new Set(entities);
-        for (const entity of uniqueEntitiesInMsg) {
-            entityMessageCounts.set(entity, (entityMessageCounts.get(entity) || 0) + 1);
+        // Stem message words (no stopword filter — entity names could be stopwords)
+        const words = (text.toLowerCase().match(/[\p{L}0-9]+/gu) || [])
+            .filter(w => w.length > 2)
+            .map(stemWord)
+            .filter(w => w.length > 2);
+
+        const matchedInMsg = new Set();
+        for (const word of words) {
+            const entity = stemToEntity.get(word);
+            if (entity) matchedInMsg.add(entity);
         }
 
-        // Accumulate weighted scores
-        for (const entity of entities) {
+        for (const entity of matchedInMsg) {
+            entityMessageCounts.set(entity, (entityMessageCounts.get(entity) || 0) + 1);
             const current = entityScores.get(entity) || { count: 0, weightSum: 0 };
             current.count++;
             current.weightSum += recencyWeight;
@@ -110,17 +87,16 @@ export function extractQueryContext(messages, activeCharacters = []) {
         }
     });
 
-    // Add known character names with high priority
-    const _charNamesSet = new Set(activeCharacters.map((c) => c.toLowerCase()));
+    // Boost active characters
     for (const charName of activeCharacters) {
         if (charName && charName.length >= 2) {
             const current = entityScores.get(charName) || { count: 0, weightSum: 0 };
-            current.weightSum += 3.0; // High boost for known characters
+            current.weightSum += 3.0;
             entityScores.set(charName, current);
         }
     }
 
-    // Filter out entities appearing in >50% of messages (too common)
+    // Filter entities appearing in >50% of messages
     const threshold = messagesToScan.length * 0.5;
     for (const [entity, count] of entityMessageCounts.entries()) {
         if (count > threshold) {
@@ -135,7 +111,6 @@ export function extractQueryContext(messages, activeCharacters = []) {
 
     const entities = sorted.map(([entity]) => entity);
     const weights = Object.fromEntries(sorted.map(([entity, data]) => [entity, data.weightSum]));
-
     return { entities, weights };
 }
 
