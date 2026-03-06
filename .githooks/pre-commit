@@ -1,0 +1,23 @@
+#!/bin/bash
+# Pre-commit hook: run Biome unsafe fixes on staged files
+
+# Get list of staged files (excluding deletions)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=d)
+
+if [ -z "$STAGED_FILES" ]; then
+    exit 0
+fi
+
+# Filter for files Biome can handle (js,ts,jsx,tsx,json,jsonc)
+BIOME_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|ts|jsx|tsx|json|jsonc)$' || true)
+
+if [ -z "$BIOME_FILES" ]; then
+    exit 0
+fi
+
+# Run Biome check with unsafe fixes
+echo "Running Biome unsafe fixes..."
+npx @biomejs/biome check --write --unsafe $BIOME_FILES
+
+# Add any modified files back to staging
+git add $BIOME_FILES
