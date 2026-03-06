@@ -70,6 +70,7 @@ async function testOllamaConnection() {
 }
 
 import { extractAllMessages } from '../extraction/extract.js';
+import { isWorkerRunning } from '../extraction/worker.js';
 import { deleteCurrentChatData, deleteCurrentChatEmbeddings, getOpenVaultData, showToast } from '../utils.js';
 
 // =============================================================================
@@ -110,6 +111,10 @@ function saveSetting(key, value) {
 // =============================================================================
 
 async function handleExtractAll() {
+    if (isWorkerRunning()) {
+        showToast('warning', 'Background extraction in progress. Please wait.', 'OpenVault');
+        return;
+    }
     await extractAllMessages(updateEventListeners);
 }
 

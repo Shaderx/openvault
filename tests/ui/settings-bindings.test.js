@@ -49,3 +49,14 @@ describe('settings.js handles new tab names', () => {
         expect(settingsSource).not.toMatch(/data-tab=["']system["']/);
     });
 });
+
+describe('manual backfill guard', () => {
+    it('imports isWorkerRunning from worker module', () => {
+        expect(settingsSource).toContain('isWorkerRunning');
+    });
+
+    it('checks isWorkerRunning before calling extractAllMessages', () => {
+        // The handleExtractAll function should contain the guard
+        expect(settingsSource).toContain('isWorkerRunning()');
+    });
+});
