@@ -20,6 +20,7 @@ OpenVault is an agentic memory extension for SillyTavern. It provides POV-aware 
 - **Testing**: `npm run test` (Vitest with JSDOM). Tests use stubbed ST dependencies.
 - **Linting/Formatting**: `npm run lint` and `npm run format`. We use Biome. **Do not format code manually**, rely on the linter.
 - **Sync Version**: `npm run sync-version` (syncs package.json to manifest.json).
+- **Pre-commit Hook**: Automatically runs `biome check --write --unsafe` on staged files and re-stages them. Your commit will include any auto-fixes applied by Biome. Dont check after!
 
 ## MAP: Progressive Disclosure
 Detailed instructions are lazily loaded when you visit these directories:
