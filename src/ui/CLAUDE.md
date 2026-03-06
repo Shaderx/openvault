@@ -52,3 +52,4 @@ function renderEntityList() {
 - **No Inline Event Handlers**: Bind all events using jQuery `.on()` in `initBrowser()` or `bindUIElements()`.
 - **XSS Prevention**: Always wrap dynamic user data in `escapeHtml()` from `src/utils.js` before placing it in template strings.
 - **Debounced Saves**: Always use `getDeps().saveSettingsDebounced()` when an input changes to avoid spamming the ST backend.
+- **Manual Backfill Guard**: `handleExtractAll()` checks `isWorkerRunning()` from `src/extraction/worker.js` before starting. Shows warning toast if background worker is active. Mutual exclusion with the worker (worker also yields if manual backfill starts).

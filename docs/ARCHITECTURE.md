@@ -8,12 +8,30 @@ This document outlines the high-level data flow, scoring mathematics, and system
 
 ## 1. The Global Pipeline
 
-OpenVault operates on a trigger-based pipeline, mostly firing after `MESSAGE_RECEIVED` (when the AI replies) or `GENERATION_AFTER_COMMANDS` (before the AI generates).
+OpenVault operates on two decoupled paths: a **background path** (extraction, triggered by `MESSAGE_RECEIVED`) and a **critical path** (retrieval, triggered by `GENERATION_AFTER_COMMANDS`).
+
+### Two-Path Architecture
+
+```text
+CRITICAL PATH (synchronous, fast — runs on Generate):
+  1. autoHideOldMessages()
+  2. retrieveAndInjectContext()
+  3. Return control to SillyTavern
+
+BACKGROUND PATH (async, silent — runs on AI reply):
+  MESSAGE_RECEIVED → wakeUpBackgroundWorker() → fire-and-forget
+  Worker loop processes batches sequentially with 2s yield between each.
+```
+
+The background worker (`src/extraction/worker.js`) is single-instance (boolean guard), uses exponential backoff on failure, and halts if the user switches chats. New `MESSAGE_RECEIVED` events reset the backoff timer via a monotonic `wakeGeneration` counter with interruptible sleep.
+
+### Extraction Pipeline (Background)
 
 ```text
 [ Chat Messages ]
        │
        ▼
+═══ PHASE 1 (Critical — gates auto-hide) ═══
 1. EXTRACTION STAGE (Two-Stage Pipeline)
    ├─ Stage A: Event Extraction (events only, reasoning via external CoT)
    ├─ Stage B: Graph Extraction (entities + relationships, using events as context)
@@ -26,6 +44,10 @@ OpenVault operates on a trigger-based pipeline, mostly firing after `MESSAGE_REC
    └─ Semantic Merge: Cosine Sim > 0.94 + Token Overlap Guard (Stopwords filtered)
        │
        ▼
+   INTERMEDIATE SAVE — events, graph, processed_message_ids persisted
+       │
+       ▼
+═══ PHASE 2 (Enrichment — non-critical, errors swallowed) ═══
 3. REFLECTION STAGE (Agentic Insight)
    ├─ Trigger: Character `importance_sum` >= 40
    ├─ Pre-flight Gate: Abort if recent events >85% similar to existing insights
@@ -39,6 +61,14 @@ OpenVault operates on a trigger-based pipeline, mostly firing after `MESSAGE_REC
    └─ LLM Summary: Generates dynamic lorebook entries (Title, Summary, Findings)
        │
        ▼
+   FINAL SAVE — reflections, communities persisted
+```
+
+Phase 2 failures are caught and logged — they do NOT propagate to the worker's retry loop. If reflection or community detection crashes, Phase 1 data is already saved.
+
+### Retrieval Pipeline (Synchronous)
+
+```text
 5. RETRIEVAL & INJECTION STAGE (Generation prep)
    ├─ BM25 + Vector Alpha-Blend Scoring
    ├─ Budgeting: Slice to `retrievalFinalTokens` limit

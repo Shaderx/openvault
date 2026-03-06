@@ -33,4 +33,4 @@ Detailed instructions are lazily loaded when you visit these directories:
 
 ## GOTCHAS
 - **Always strip `<think>` tags**: Models often return reasoning tags before JSON. Use `stripThinkingTags()` from `src/utils.js` before parsing any LLM output.
-- **State Locks**: Because ST is event-driven, use `src/state.js` (`operationState`) to prevent concurrent extractions/retrievals.
+- **State Locks**: `operationState.extractionInProgress` in `src/state.js` is used ONLY by manual backfill (`extractAllMessages`). The background worker uses its own `isRunning` flag in `src/extraction/worker.js`. These two systems have mutual exclusion: worker yields if manual backfill starts, manual backfill button rejects if worker is running.
