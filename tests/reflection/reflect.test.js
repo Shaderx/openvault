@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings, extensionName } from '../../src/constants.js';
-import { resetDeps, setDeps } from '../../src/deps.js';
+import { resetDeps } from '../../src/deps.js';
 import {
     accumulateImportance,
     filterDuplicateReflections,
@@ -133,12 +133,8 @@ describe('generateReflections', () => {
     };
 
     beforeEach(() => {
-        setDeps({
-            console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
-            getExtensionSettings: () => ({
-                [extensionName]: { ...defaultSettings },
-            }),
-            Date: { now: () => 2000000 },
+        setupTestContext({
+            deps: { Date: { now: () => 2000000 } },
         });
 
         // Step 1: Return 3 salient questions

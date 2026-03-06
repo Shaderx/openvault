@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings, extensionName } from '../../src/constants.js';
-import { resetDeps, setDeps } from '../../src/deps.js';
+import { resetDeps } from '../../src/deps.js';
 import {
     buildCommunityGroups,
     detectCommunities,
@@ -192,13 +192,7 @@ vi.mock('../../src/extraction/structured.js', () => ({
 
 describe('updateCommunitySummaries', () => {
     beforeEach(() => {
-        setDeps({
-            console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
-            getExtensionSettings: () => ({
-                [extensionName]: { ...defaultSettings },
-            }),
-            Date: { now: () => 1000000 },
-        });
+        setupTestContext();
 
         mockCallLLM.mockResolvedValue(
             JSON.stringify({
