@@ -63,19 +63,11 @@ import { cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { clearAllLocks } from '../state.js';
 import { refreshAllUI } from '../ui/render.js';
 import { setStatus } from '../ui/status.js';
-import {
-    estimateTokens,
-    getCurrentChatId,
-    getOpenVaultData,
-    isExtensionEnabled,
-    log,
-    safeSetExtensionPrompt,
-    saveOpenVaultData,
-    showToast,
-    sliceToTokenBudget,
-    sortMemoriesBySequence,
-    yieldToMain,
-} from '../utils.js';
+import { getCurrentChatId, getOpenVaultData, saveOpenVaultData } from '../utils/data.js';
+import { showToast } from '../utils/dom.js';
+import { log } from '../utils/logging.js';
+import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
+import { estimateTokens, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 import { getBackfillMessageIds, getExtractedMessageIds } from './scheduler.js';
 import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
 
