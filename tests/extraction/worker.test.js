@@ -31,6 +31,11 @@ vi.mock('../../src/state.js', () => ({
     operationState: { extractionInProgress: false },
 }));
 
+// Mock constants
+vi.mock('../../src/constants.js', () => ({
+    extensionName: 'openvault',
+}));
+
 describe('worker single-instance guard', () => {
     let wakeUpBackgroundWorker, isWorkerRunning;
 
@@ -93,5 +98,148 @@ describe('interruptibleSleep', () => {
         vi.useRealTimers();
         // Resolved early due to generation change
         expect(true).toBe(true);
+    });
+});
+
+describe('worker loop batch processing', () => {
+    let wakeUpBackgroundWorker, isWorkerRunning;
+    let extractMemoriesMock, getNextBatchMock, setStatusMock;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        vi.resetModules();
+
+        // Make getNextBatch return one batch, then null (no more work)
+        const schedulerMock = await import('../../src/extraction/scheduler.js');
+        getNextBatchMock = schedulerMock.getNextBatch;
+        let callCount = 0;
+        getNextBatchMock.mockImplementation(() => {
+            callCount++;
+            if (callCount === 1) return [0, 1, 2, 3, 4];
+            return null; // No more batches
+        });
+
+        const extractMock = await import('../../src/extraction/extract.js');
+        extractMemoriesMock = extractMock.extractMemories;
+
+        const statusMock = await import('../../src/ui/status.js');
+        setStatusMock = statusMock.setStatus;
+
+        const mod = await import('../../src/extraction/worker.js');
+        wakeUpBackgroundWorker = mod.wakeUpBackgroundWorker;
+        isWorkerRunning = mod.isWorkerRunning;
+    });
+
+    it('processes one batch and stops when no more batches', async () => {
+        wakeUpBackgroundWorker();
+        // Wait for the async loop to finish
+        await vi.waitFor(() => expect(isWorkerRunning()).toBe(false), { timeout: 5000 });
+
+        expect(extractMemoriesMock).toHaveBeenCalledOnce();
+        expect(extractMemoriesMock).toHaveBeenCalledWith(
+            [0, 1, 2, 3, 4],
+            'chat_123',
+            { silent: true }
+        );
+    });
+
+    it('sets status to extracting then ready', async () => {
+        wakeUpBackgroundWorker();
+        await vi.waitFor(() => expect(isWorkerRunning()).toBe(false), { timeout: 5000 });
+
+        expect(setStatusMock).toHaveBeenCalledWith('extracting');
+        expect(setStatusMock).toHaveBeenLastCalledWith('ready');
+    });
+});
+
+describe('worker loop stops on chat switch', () => {
+    let wakeUpBackgroundWorker, isWorkerRunning;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        vi.resetModules();
+
+        // getNextBatch always returns a batch (infinite work)
+        const schedulerMock = await import('../../src/extraction/scheduler.js');
+        schedulerMock.getNextBatch.mockReturnValue([0, 1, 2]);
+
+        // Make getCurrentChatId change after first call
+        const utilsMock = await import('../../src/utils.js');
+        let chatCallCount = 0;
+        utilsMock.getCurrentChatId.mockImplementation(() => {
+            chatCallCount++;
+            return chatCallCount <= 1 ? 'chat_123' : 'chat_456';
+        });
+
+        const mod = await import('../../src/extraction/worker.js');
+        wakeUpBackgroundWorker = mod.wakeUpBackgroundWorker;
+        isWorkerRunning = mod.isWorkerRunning;
+    });
+
+    it('halts worker when chat ID changes', async () => {
+        wakeUpBackgroundWorker();
+        await vi.waitFor(() => expect(isWorkerRunning()).toBe(false), { timeout: 5000 });
+
+        const { extractMemories } = await import('../../src/extraction/extract.js');
+        // Should not have processed any batches since chat switched
+        expect(extractMemories).not.toHaveBeenCalled();
+    });
+});
+
+describe('worker fast-fails on chat-switch error during extraction', () => {
+    let wakeUpBackgroundWorker, isWorkerRunning;
+    let extractMemoriesMock;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        vi.resetModules();
+
+        const schedulerMock = await import('../../src/extraction/scheduler.js');
+        schedulerMock.getNextBatch.mockReturnValue([0, 1, 2]);
+
+        // extractMemories throws the chat-switch error
+        const extractMock = await import('../../src/extraction/extract.js');
+        extractMemoriesMock = extractMock.extractMemories;
+        extractMemoriesMock.mockRejectedValue(new Error('Chat changed during extraction'));
+
+        const mod = await import('../../src/extraction/worker.js');
+        wakeUpBackgroundWorker = mod.wakeUpBackgroundWorker;
+        isWorkerRunning = mod.isWorkerRunning;
+    });
+
+    it('breaks immediately without entering backoff sleep', async () => {
+        wakeUpBackgroundWorker();
+        await vi.waitFor(() => expect(isWorkerRunning()).toBe(false), { timeout: 5000 });
+
+        // Should have called extractMemories exactly once (no retries)
+        expect(extractMemoriesMock).toHaveBeenCalledOnce();
+    });
+});
+
+describe('worker loop yields to manual backfill', () => {
+    let wakeUpBackgroundWorker, isWorkerRunning;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        vi.resetModules();
+
+        const schedulerMock = await import('../../src/extraction/scheduler.js');
+        schedulerMock.getNextBatch.mockReturnValue([0, 1, 2]);
+
+        // Set manual backfill flag
+        const stateMock = await import('../../src/state.js');
+        stateMock.operationState.extractionInProgress = true;
+
+        const mod = await import('../../src/extraction/worker.js');
+        wakeUpBackgroundWorker = mod.wakeUpBackgroundWorker;
+        isWorkerRunning = mod.isWorkerRunning;
+    });
+
+    it('breaks out of loop when extractionInProgress is true', async () => {
+        wakeUpBackgroundWorker();
+        await vi.waitFor(() => expect(isWorkerRunning()).toBe(false), { timeout: 5000 });
+
+        const { extractMemories } = await import('../../src/extraction/extract.js');
+        expect(extractMemories).not.toHaveBeenCalled();
     });
 });

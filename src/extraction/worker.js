@@ -6,8 +6,19 @@
  * Uses a wakeGeneration counter to reset backoff when new messages arrive.
  */
 
+import { getDeps } from '../deps.js';
+import { extensionName } from '../constants.js';
+import { getCurrentChatId, getOpenVaultData, isExtensionEnabled, log } from '../utils.js';
+import { getNextBatch } from './scheduler.js';
+import { extractMemories } from './extract.js';
+import { setStatus } from '../ui/status.js';
+import { operationState } from '../state.js';
+
 let isRunning = false;
 let wakeGeneration = 0;
+
+const BACKOFF_SCHEDULE_SECONDS = [1, 2, 3, 10, 20, 30, 30, 60, 60];
+const MAX_BACKOFF_TOTAL_MS = 15 * 60 * 1000;
 
 /**
  * Wake up the background worker. Fire-and-forget.
@@ -62,8 +73,93 @@ export async function interruptibleSleep(totalMs, generationAtStart) {
 }
 
 /**
- * Main worker loop. Stub — will be implemented in Task 4.
+ * Main worker loop. Processes extraction batches in the background.
  */
 async function runWorkerLoop() {
-    // Stub: immediately returns. Full implementation in Task 4.
+    const targetChatId = getCurrentChatId();
+    let retryCount = 0;
+    let cumulativeBackoffMs = 0;
+    let lastSeenGeneration = wakeGeneration;
+
+    try {
+        while (true) {
+            // Guard: Chat switched?
+            if (getCurrentChatId() !== targetChatId) {
+                log('Worker: Chat switched, stopping.');
+                break;
+            }
+
+            // Guard: Extension disabled?
+            if (!isExtensionEnabled()) {
+                log('Worker: Extension disabled, stopping.');
+                break;
+            }
+
+            // Guard: Manual backfill took over?
+            if (operationState.extractionInProgress) {
+                log('Worker: Manual backfill took over, yielding.');
+                break;
+            }
+
+            // Check for new wake signal (reset backoff)
+            if (wakeGeneration !== lastSeenGeneration) {
+                retryCount = 0;
+                cumulativeBackoffMs = 0;
+                lastSeenGeneration = wakeGeneration;
+            }
+
+            // Get fresh state each iteration
+            const deps = getDeps();
+            const context = deps.getContext();
+            const chat = context.chat || [];
+            const data = getOpenVaultData();
+            const settings = deps.getExtensionSettings()[extensionName];
+
+            if (!data || !settings?.enabled) break;
+
+            const batchSize = settings.messagesPerExtraction || 5;
+            const bufferSize = settings.extractionBuffer || 5;
+
+            // Get next batch
+            const batch = getNextBatch(chat, data, batchSize, bufferSize);
+            if (!batch) break; // No complete batches, go to sleep
+
+            // Process
+            setStatus('extracting');
+            log(`Worker: Processing batch [${batch[0]}..${batch[batch.length - 1]}]`);
+
+            try {
+                await extractMemories(batch, targetChatId, { silent: true });
+                retryCount = 0;
+                cumulativeBackoffMs = 0;
+            } catch (err) {
+                // Fast-fail on chat switch — don't retry, just stop
+                if (err.message === 'Chat changed during extraction') {
+                    log('Worker: Chat changed during extraction. Halting immediately.');
+                    break;
+                }
+
+                retryCount++;
+                const scheduleIndex = Math.min(retryCount - 1, BACKOFF_SCHEDULE_SECONDS.length - 1);
+                const backoffMs = BACKOFF_SCHEDULE_SECONDS[scheduleIndex] * 1000;
+                cumulativeBackoffMs += backoffMs;
+
+                if (cumulativeBackoffMs >= MAX_BACKOFF_TOTAL_MS) {
+                    log(`Worker: Backoff limit exceeded (${Math.round(cumulativeBackoffMs / 1000)}s), stopping.`);
+                    break;
+                }
+
+                log(`Worker: Batch failed (attempt ${retryCount}), retrying in ${BACKOFF_SCHEDULE_SECONDS[scheduleIndex]}s`);
+                await interruptibleSleep(backoffMs, lastSeenGeneration);
+                continue; // Retry same batch
+            }
+
+            // Yield to browser between batches
+            await new Promise((r) => setTimeout(r, 2000));
+        }
+    } catch (err) {
+        getDeps().console.error('[OpenVault] Background worker error:', err);
+    } finally {
+        setStatus('ready');
+    }
 }
