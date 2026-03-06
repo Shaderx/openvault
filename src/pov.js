@@ -6,7 +6,8 @@
 
 import { CHARACTERS_KEY, MEMORIES_KEY } from './constants.js';
 import { getDeps } from './deps.js';
-import { getOpenVaultData, log } from './utils.js';
+import { getOpenVaultData } from './utils/data.js';
+import { log } from './utils/logging.js';
 
 /**
  * Filter memories by POV accessibility

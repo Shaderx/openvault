@@ -14,7 +14,9 @@ import {
     getInsightExtractionJsonSchema,
     getSalientQuestionsJsonSchema,
 } from './extraction/structured.js';
-import { log, logRequest, showToast, withTimeout } from './utils.js';
+import { showToast } from './utils/dom.js';
+import { log, logRequest } from './utils/logging.js';
+import { withTimeout } from './utils/st-helpers.js';
 
 /**
  * LLM configuration presets

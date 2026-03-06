@@ -7,7 +7,7 @@
 
 import { extensionName } from './constants.js';
 import { getDeps } from './deps.js';
-import { log } from './utils.js';
+import { log } from './utils/logging.js';
 
 /**
  * Round embedding vector to 4 decimal places if embeddingRounding is enabled.
