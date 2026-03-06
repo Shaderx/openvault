@@ -13,6 +13,7 @@ Flat-JSON entity/relationship storage with semantic deduplication and Louvain co
 - **Semantic Merge**: `mergeOrInsertEntity` — fast path for exact key match, slow path uses embedding similarity (threshold 0.94) to dedupe same-type entities. Embeddings include `type`, `name`, AND `description` to prevent false merges (e.g., "Cotton rope" vs "White cotton panties").
   - **Token Overlap Guard**: Breaks keys into word tokens, strips RP stopwords (via `stopword` lib + custom dicts: "the", "red", "large", "burgundy", etc.), requires >=50% token overlap OR direct substring match.
   - **Why**: Prevents "Burgundy panties" from merging with "Burgundy candle" despite high cosine similarity from the shared adjective.
+  - **Alias Persistence**: When entities merge, the old name is preserved as an `aliases` array on the surviving node. Enables retrieval-time matching of previously-used entity names (e.g., "Vova (aka Lily)" → "Vova").
 - **Key Resolution**: `_resolveKey()` consults `_mergeRedirects` map to handle entity merge redirects when creating edges.
 
 ## HOW: Consolidation (`consolidateGraph`)

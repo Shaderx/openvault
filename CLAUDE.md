@@ -29,6 +29,7 @@ Detailed instructions are lazily loaded when you visit these directories:
 - `/src/graph/CLAUDE.md` - Entity graph storage, GraphRAG communities.
 - `/src/reflection/CLAUDE.md` - Per-character reflection pipeline (Smallville).
 - `/src/ui/CLAUDE.md` - UI rendering, jQuery conventions, and template logic.
+- `/src/utils/CLAUDE.md` - Shared utilities (stemmer, stopwords, imperatives).
 - `/tests/CLAUDE.md` - Vitest conventions, stubs, and mock injection.
 
 ## GOTCHAS
