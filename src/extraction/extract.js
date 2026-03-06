@@ -263,7 +263,7 @@ export function filterSimilarEvents(newEvents, existingMemories, cosineThreshold
  * @param {string} [targetChatId=null] - Optional chat ID to verify before saving
  * @returns {Promise<{status: string, events_created?: number, messages_processed?: number, reason?: string}>}
  */
-export async function extractMemories(messageIds = null, targetChatId = null) {
+export async function extractMemories(messageIds = null, targetChatId = null, options = {}) {
     if (!isExtensionEnabled()) {
         return { status: 'skipped', reason: 'disabled' };
     }
@@ -306,6 +306,7 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
 
     const messages = messagesToExtract;
     const batchId = `batch_${deps.Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const silent = options.silent || false;
 
     log(`Extracting ${messages.length} messages`);
 
@@ -388,11 +389,8 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
 
         log(`LLM returned ${events.length} events from ${messages.length} messages`);
 
-        // Track processed message IDs
+        // Track processed message IDs (will be committed in Phase 1)
         const processedIds = messages.map((m) => m.id);
-        data[PROCESSED_MESSAGES_KEY] = data[PROCESSED_MESSAGES_KEY] || [];
-        data[PROCESSED_MESSAGES_KEY].push(...processedIds);
-        log(`Marked ${processedIds.length} messages as processed (total: ${data[PROCESSED_MESSAGES_KEY].length})`);
 
         // Stage 4: Event Processing (embedding + deduplication)
         if (events.length > 0) {
@@ -433,7 +431,30 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
         // Clean up runtime-only merge redirects (don't persist to storage)
         delete data.graph._mergeRedirects;
 
-        // Stage 4.6: Reflection check (per character in new events)
+        // ===== PHASE 1 COMMIT: Events + Graph are done =====
+        const maxId = processedIds.length > 0 ? Math.max(...processedIds) : 0;
+
+        if (events.length > 0) {
+            data[MEMORIES_KEY] = data[MEMORIES_KEY] || [];
+            data[MEMORIES_KEY].push(...events);
+            updateCharacterStatesFromEvents(events, data, [characterName, userName]);
+        }
+
+        // Mark processed AFTER events are committed to memories
+        data[PROCESSED_MESSAGES_KEY] = data[PROCESSED_MESSAGES_KEY] || [];
+        data[PROCESSED_MESSAGES_KEY].push(...processedIds);
+        data[LAST_PROCESSED_KEY] = Math.max(data[LAST_PROCESSED_KEY] || -1, maxId);
+        log(`Phase 1 complete: ${events.length} events, ${processedIds.length} messages processed`);
+
+        // Intermediate save — Phase 1 data is now persisted
+        const phase1Saved = await saveOpenVaultData(targetChatId);
+        if (!phase1Saved && targetChatId) {
+            throw new Error('Chat changed during extraction');
+        }
+
+        // ===== PHASE 2: Enrichment (non-critical) =====
+        try {
+            // Stage 4.6: Reflection check (per character in new events)
         if (events.length > 0) {
             initGraphState(data); // Ensures reflection_state exists
             accumulateImportance(data.reflection_state, events);
@@ -496,21 +517,12 @@ export async function extractMemories(messageIds = null, targetChatId = null) {
             }
         }
 
-        // Stage 5: Result Committing
-        const maxId = processedIds.length > 0 ? Math.max(...processedIds) : 0;
-
-        if (events.length > 0) {
-            data[MEMORIES_KEY] = data[MEMORIES_KEY] || [];
-            data[MEMORIES_KEY].push(...events);
-
-            updateCharacterStatesFromEvents(events, data, [characterName, userName]);
-        }
-
-        data[LAST_PROCESSED_KEY] = Math.max(data[LAST_PROCESSED_KEY] || -1, maxId);
-
-        const saved = await saveOpenVaultData(targetChatId);
-        if (!saved && targetChatId) {
-            throw new Error('Chat changed during extraction');
+            // Final save — Phase 2 enrichment persisted
+            await saveOpenVaultData(targetChatId);
+        } catch (phase2Error) {
+            deps.console.error('[OpenVault] Phase 2 (reflection/community) error:', phase2Error);
+            log(`Phase 2 failed but Phase 1 data is safe: ${phase2Error.message}`);
+            // Do NOT re-throw. Phase 1 data is already saved.
         }
 
         if (events.length > 0) {

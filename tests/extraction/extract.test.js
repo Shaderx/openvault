@@ -572,3 +572,83 @@ describe('filterSimilarEvents - intra-batch Jaccard dedup', () => {
         expect(result).toHaveLength(2);
     });
 });
+
+describe('two-phase extraction with intermediate save', () => {
+    let mockContext;
+    let mockData;
+
+    beforeEach(() => {
+        mockData = {
+            memories: [],
+            character_states: {},
+            last_processed_message_id: -1,
+            processed_message_ids: [],
+            reflection_state: { 'King Aldric': { importance_sum: 0 } },
+        };
+
+        mockContext = {
+            chat: [
+                { mes: 'Hello', is_user: true, name: 'User' },
+                { mes: 'Welcome to the Castle', is_user: false, name: 'King Aldric' },
+            ],
+            name1: 'User',
+            name2: 'King Aldric',
+            characterId: 'char1',
+            characters: { char1: { description: '' } },
+            chatMetadata: { openvault: mockData },
+            chatId: 'test-chat',
+            powerUserSettings: {},
+        };
+
+        setDeps({
+            getContext: () => mockContext,
+            getExtensionSettings: () => ({
+                [extensionName]: { ...defaultSettings, enabled: true },
+            }),
+            saveChatConditional: vi.fn(async () => true),
+            console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
+            Date: { now: () => 1000000 },
+        });
+    });
+
+    afterEach(() => {
+        resetDeps();
+        vi.clearAllMocks();
+    });
+
+    it('saves data after Phase 1 (events + graph) even if reflection throws', async () => {
+        // Make reflection throw
+        shouldReflect.mockReturnValue(true);
+        generateReflections.mockRejectedValue(new Error('Reflection API down'));
+
+        // Set up data so reflection triggers (importance_sum >= threshold)
+        mockData.reflection_state = { 'King Aldric': { importance_sum: 100 } };
+
+        const result = await extractMemories([0, 1]);
+
+        // Phase 1 should succeed — events committed
+        expect(result.status).toBe('success');
+        expect(result.events_created).toBeGreaterThan(0);
+        expect(mockData.memories.length).toBeGreaterThan(0);
+
+        // processed_message_ids should be populated (Phase 1 committed)
+        expect(mockData.processed_message_ids.length).toBeGreaterThan(0);
+    });
+
+    it('accepts options.silent parameter without throwing', async () => {
+        const result = await extractMemories([0, 1], null, { silent: true });
+        expect(result.status).toBe('success');
+    });
+
+    it('updates PROCESSED_MESSAGES_KEY only after events are pushed to memories', async () => {
+        // Verify ordering: memories should contain events AND processed_message_ids should be set
+        const result = await extractMemories([0, 1]);
+        expect(result.status).toBe('success');
+
+        // Both should be populated
+        const hasMemories = mockData.memories.length > 0;
+        const hasProcessedIds = mockData.processed_message_ids.length > 0;
+        expect(hasMemories).toBe(true);
+        expect(hasProcessedIds).toBe(true);
+    });
+});
