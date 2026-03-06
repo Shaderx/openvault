@@ -8,6 +8,7 @@
 import { extensionName, QUERY_CONTEXT_DEFAULTS } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getOptimalChunkSize } from '../embeddings.js';
+import { isLikelyImperative } from '../utils/russian-imperatives.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
 import { tokenize } from './math.js';
 
@@ -35,7 +36,7 @@ function extractFromText(text) {
     for (const match of cyrillicMatches) {
         // Clean up the match (remove leading non-Cyrillic char)
         const cleaned = match.replace(/^[^А-ЯЁ]+/, '');
-        if (cleaned && !ALL_STOPWORDS.has(cleaned.toLowerCase())) {
+        if (cleaned && !ALL_STOPWORDS.has(cleaned.toLowerCase()) && !isLikelyImperative(cleaned)) {
             entities.push(cleaned);
         }
     }

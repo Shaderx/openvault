@@ -437,6 +437,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         const edgeCap = settings.edgeDescriptionCap ?? 5;
         if (validated.relationships) {
             for (const rel of validated.relationships) {
+                if (rel.source === 'Unknown' || rel.target === 'Unknown') continue;
                 upsertRelationship(data.graph, rel.source, rel.target, rel.description, edgeCap);
             }
         }

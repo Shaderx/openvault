@@ -7,6 +7,7 @@
  */
 
 import { eng, rus } from 'https://esm.sh/stopword';
+import { RUSSIAN_IMPERATIVES } from './russian-imperatives.js';
 
 // Core stopwords from package (EN + RU)
 const BASE_STOPWORDS = new Set([...eng, ...rus]);
@@ -153,6 +154,7 @@ export const ALL_STOPWORDS = new Set([
     ...[...BASE_STOPWORDS].map((w) => w.toLowerCase()),
     ...[...GRAPH_CUSTOM].map((w) => w.toLowerCase()),
     ...[...QUERY_STARTERS].map((w) => w.toLowerCase()),
+    ...[...RUSSIAN_IMPERATIVES].map((w) => w.toLowerCase()),
 ]);
 
 // Re-export utility function from package

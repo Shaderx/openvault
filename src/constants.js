@@ -51,8 +51,8 @@ export const defaultSettings = {
     // Deduplication settings
     // Cosine similarity threshold for filtering duplicate events (0-1).
     // With small embedding models (e5-small), same-domain content clusters tightly (0.85-0.93),
-    // so 0.92 filters true paraphrases while keeping narratively distinct events.
-    dedupSimilarityThreshold: 0.92,
+    // so 0.94 filters true paraphrases while keeping nuanced roleplay actions distinct.
+    dedupSimilarityThreshold: 0.94,
     dedupJaccardThreshold: 0.6, // Token-overlap (Jaccard index) threshold for near-duplicate filtering
     // Forgetfulness curve settings (scoring)
     forgetfulnessBaseLambda: 0.05, // Base decay rate for exponential curve
@@ -67,7 +67,7 @@ export const defaultSettings = {
     // Entity settings
     entityDescriptionCap: 3,
     edgeDescriptionCap: 5,
-    entityMergeSimilarityThreshold: 0.94,
+    entityMergeSimilarityThreshold: 0.95,
     // Reflection decay settings
     // Reflections older than this many messages get a linear penalty (down to 0.25x).
     // 750 gives medium-length chats (~700 msgs) breathing room before decay kicks in.

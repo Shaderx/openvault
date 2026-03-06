@@ -34,11 +34,13 @@ export const EntitySchema = z.object({
 
 /**
  * Schema for a relationship between two entities
+ * Uses .catch() fallbacks to salvage partial LLM output in large batches —
+ * invalid entries (source/target = "Unknown") are dropped downstream.
  */
 export const RelationshipSchema = z.object({
-    source: z.string().min(1).describe('Source entity name'),
-    target: z.string().min(1).describe('Target entity name'),
-    description: z.string().min(1).describe('Description of the relationship'),
+    source: z.string().min(1).catch('Unknown').describe('Source entity name'),
+    target: z.string().min(1).catch('Unknown').describe('Target entity name'),
+    description: z.string().min(1).catch('No description').describe('Description of the relationship'),
 });
 
 /**
