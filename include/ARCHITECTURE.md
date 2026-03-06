@@ -139,7 +139,13 @@ Runs the Louvain algorithm to detect densely connected entity clusters (e.g., "T
 * Summaries are embedded and queried via pure Vector search.
 * Injected into the prompt as a dynamic lorebook, providing high-level world state.
 
-### 3.4. Testing Architecture
+### 3.4. Embedding Strategy (`src/embeddings.js`)
+
+**Cache:** The embedding cache is a true **LRU** (not FIFO). JS `Map` preserves insertion order; on every cache hit, the entry is `delete()`d then `set()` again, moving it to the tail. Eviction removes the head (oldest-accessed). Both `getQueryEmbedding` and `getDocumentEmbedding` implement this correctly. Max 500 entries.
+
+**WebGPU Fallback:** The pipeline attempts WebGPU first, falling back to WASM if the adapter is unavailable. GPU context loss (`device.lost`) is **deliberately not monitored** — if `pipe()` fails, the catch block clears `#cachedPipeline` and `#loadingPromise`, so the next embedding call retries pipeline creation implicitly. If embeddings return `null`, retrieval degrades to BM25 keyword-only scoring automatically. This graceful degradation makes explicit `device.lost` monitoring and retry-with-backoff unnecessary complexity for the extension's use case.
+
+### 3.5. Testing Architecture
 
 The codebase separates into two testability tiers:
 
