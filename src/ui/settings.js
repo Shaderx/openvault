@@ -466,6 +466,16 @@ function bindUIElements() {
         saveSetting('extractionProfile', $(this).val());
     });
 
+    // Preamble language
+    $('#openvault_preamble_language').on('change', function () {
+        saveSetting('preambleLanguage', $(this).val());
+    });
+
+    // Prefill preset
+    $('#openvault_extraction_prefill').on('change', function () {
+        saveSetting('extractionPrefill', $(this).val());
+    });
+
     // Feature settings
     bindSetting('reflection_threshold', 'reflectionThreshold');
     bindSetting('max_insights', 'maxInsightsPerReflection');
@@ -609,6 +619,10 @@ export function updateUI() {
 
     // Populate profile selector
     populateProfileSelector();
+
+    // Preamble language and prefill preset
+    $('#openvault_preamble_language').val(settings.preambleLanguage || 'cn');
+    $('#openvault_extraction_prefill').val(settings.extractionPrefill || 'think_tag');
 
     // Feature settings
     $('#openvault_reflection_threshold').val(settings.reflectionThreshold);

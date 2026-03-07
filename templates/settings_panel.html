@@ -37,6 +37,27 @@
                         </select>
                         <small class="openvault-hint">LLM profile for memory extraction</small>
 
+                        <!-- Extraction Language -->
+                        <label for="openvault_preamble_language">Extraction System Language</label>
+                        <select id="openvault_preamble_language" class="text_pole">
+                            <option value="cn">Chinese (default)</option>
+                            <option value="en">English</option>
+                        </select>
+                        <small class="openvault-hint">Language of the anti-refusal system preamble. English reduces cognitive load for mid-tier models.</small>
+
+                        <!-- Prefill Preset -->
+                        <label for="openvault_extraction_prefill">Assistant Prefill</label>
+                        <select id="openvault_extraction_prefill" class="text_pole">
+                            <option value="think_tag">Think Tag (default)</option>
+                            <option value="pipeline">Pipeline (➛)</option>
+                            <option value="compliance">Compliance Lock</option>
+                            <option value="cold_start">Cold Start</option>
+                            <option value="standard">Standard Cushion</option>
+                            <option value="json_opener">JSON Opener ({)</option>
+                            <option value="none">None (empty)</option>
+                        </select>
+                        <small class="openvault-hint">Controls how the LLM response is primed for event extraction. Different models respond better to different strategies.</small>
+
                         <!-- Embedding Settings -->
                         <div style="margin-top: 15px;">
                             <div style="font-weight: bold; margin-bottom: 10px; color: var(--SmartThemeQuoteColor);">
