@@ -64,6 +64,30 @@ describe('text', () => {
                 '{"done": true}'
             );
         });
+
+        it('strips orphaned </think> closing tag from prefill continuation', () => {
+            const input = 'Step 1: analysis of events...\n</think>{"events": []}';
+            expect(stripThinkingTags(input)).toBe('{"events": []}');
+        });
+
+        it('strips orphaned </thinking> closing tag', () => {
+            const input = 'reasoning about the scene\n</thinking>\n[1,2,3]';
+            expect(stripThinkingTags(input)).toBe('[1,2,3]');
+        });
+
+        it('strips orphaned </thought> closing tag', () => {
+            const input = 'analysis\n</thought>{"ok": true}';
+            expect(stripThinkingTags(input)).toBe('{"ok": true}');
+        });
+
+        it('strips orphaned </reasoning> closing tag', () => {
+            const input = 'my reasoning here\n</reasoning>\n{"data": 1}';
+            expect(stripThinkingTags(input)).toBe('{"data": 1}');
+        });
+
+        it('does not strip content when no orphaned closing tag exists', () => {
+            expect(stripThinkingTags('{"pure": "json"}')).toBe('{"pure": "json"}');
+        });
     });
 
     describe('safeParseJSON', () => {

@@ -34,18 +34,25 @@ export function sliceToTokenBudget(memories, tokenBudget) {
  */
 export function stripThinkingTags(text) {
     if (typeof text !== 'string') return text;
-    return text
-        .replace(/<think>[\s\S]*?<\/think>/gi, '')
-        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
-        .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
-        .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
-        .replace(/<reflection>[\s\S]*?<\/reflection>/gi, '')
-        .replace(/\[THINK\][\s\S]*?\[\/THINK\]/gi, '')
-        .replace(/\[THOUGHT\][\s\S]*?\[\/THOUGHT\]/gi, '')
-        .replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '')
-        .replace(/\*thinks?:[\s\S]*?\*/gi, '')
-        .replace(/\(thinking:[\s\S]*?\)/gi, '')
-        .trim();
+    return (
+        text
+            .replace(/<think>[\s\S]*?<\/think>/gi, '')
+            .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+            .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+            .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+            .replace(/<reflection>[\s\S]*?<\/reflection>/gi, '')
+            .replace(/\[THINK\][\s\S]*?\[\/THINK\]/gi, '')
+            .replace(/\[THOUGHT\][\s\S]*?\[\/THOUGHT\]/gi, '')
+            .replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '')
+            .replace(/\*thinks?:[\s\S]*?\*/gi, '')
+            .replace(/\(thinking:[\s\S]*?\)/gi, '')
+            // Orphaned closing tags (opening tag was in assistant prefill)
+            .replace(/^[\s\S]*?<\/think>\s*/i, '')
+            .replace(/^[\s\S]*?<\/thinking>\s*/i, '')
+            .replace(/^[\s\S]*?<\/thought>\s*/i, '')
+            .replace(/^[\s\S]*?<\/reasoning>\s*/i, '')
+            .trim()
+    );
 }
 
 /**
