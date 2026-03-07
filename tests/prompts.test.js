@@ -351,3 +351,83 @@ describe('defaultSettings preamble/prefill keys', () => {
         expect(defaultSettings.extractionPrefill).toBe('think_tag');
     });
 });
+
+describe('buildMessages via buildEventExtractionPrompt', () => {
+    it('uses CN preamble by default', () => {
+        const result = buildEventExtractionPrompt({
+            messages: '[Alice]: Hello',
+            names: { char: 'Alice', user: 'Bob' },
+        });
+        expect(result[0].content).toContain('互动小说');
+    });
+
+    it('uses EN preamble when passed', () => {
+        const result = buildEventExtractionPrompt({
+            messages: '[Alice]: Hello',
+            names: { char: 'Alice', user: 'Bob' },
+            preamble: SYSTEM_PREAMBLE_EN,
+        });
+        expect(result[0].content).toContain('Interactive Fiction Archival Database');
+        expect(result[0].content).not.toContain('互动小说');
+    });
+
+    it('uses custom prefill when passed', () => {
+        const result = buildEventExtractionPrompt({
+            messages: '[Alice]: Hello',
+            names: { char: 'Alice', user: 'Bob' },
+            prefill: '{',
+        });
+        expect(result).toHaveLength(3);
+        expect(result[2].content).toBe('{');
+    });
+
+    it('returns 2-message array when prefill is empty string', () => {
+        const result = buildEventExtractionPrompt({
+            messages: '[Alice]: Hello',
+            names: { char: 'Alice', user: 'Bob' },
+            prefill: '',
+        });
+        expect(result).toHaveLength(2);
+        expect(result[0].role).toBe('system');
+        expect(result[1].role).toBe('user');
+    });
+
+    it('defaults to <think> prefill for event extraction', () => {
+        const result = buildEventExtractionPrompt({
+            messages: '[Alice]: Hello',
+            names: { char: 'Alice', user: 'Bob' },
+        });
+        expect(result).toHaveLength(3);
+        expect(result[2].content).toBe('<think>\n');
+    });
+});
+
+describe('buildMessages via non-event prompts', () => {
+    it('graph prompt uses custom preamble but keeps { prefill', () => {
+        const result = buildGraphExtractionPrompt({
+            messages: '[Alice]: Hello',
+            names: { char: 'Alice', user: 'Bob' },
+            preamble: SYSTEM_PREAMBLE_EN,
+        });
+        expect(result[0].content).toContain('Interactive Fiction Archival Database');
+        expect(result[2].content).toBe('{');
+    });
+
+    it('salient questions prompt uses custom preamble', () => {
+        const memories = [{ summary: 'test', importance: 3 }];
+        const result = buildSalientQuestionsPrompt('Alice', memories, SYSTEM_PREAMBLE_EN);
+        expect(result[0].content).toContain('Interactive Fiction Archival Database');
+        expect(result[2].content).toBe('{');
+    });
+
+    it('insight extraction prompt uses custom preamble', () => {
+        const memories = [{ id: 'ev_001', summary: 'test' }];
+        const result = buildInsightExtractionPrompt('Alice', 'question?', memories, SYSTEM_PREAMBLE_EN);
+        expect(result[0].content).toContain('Interactive Fiction Archival Database');
+    });
+
+    it('community summary prompt uses custom preamble', () => {
+        const result = buildCommunitySummaryPrompt(['- Node'], ['- Edge'], SYSTEM_PREAMBLE_EN);
+        expect(result[0].content).toContain('Interactive Fiction Archival Database');
+    });
+});

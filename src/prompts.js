@@ -72,18 +72,22 @@ export const PREFILL_PRESETS = {
 };
 
 /**
- * Wrap system prompt with CN preamble and build message array with assistant prefill.
+ * Wrap system prompt with preamble and build message array with assistant prefill.
  * @param {string} systemPrompt - The task-specific system prompt
  * @param {string} userPrompt - The user message
  * @param {string} [assistantPrefill='{'] - Assistant prefill to bias toward output mode
+ * @param {string} [preamble=SYSTEM_PREAMBLE_CN] - System preamble to prepend
  * @returns {Array<{role: string, content: string}>}
  */
-function buildMessages(systemPrompt, userPrompt, assistantPrefill = '{') {
-    return [
-        { role: 'system', content: `${SYSTEM_PREAMBLE_CN}\n\n${systemPrompt}` },
+function buildMessages(systemPrompt, userPrompt, assistantPrefill = '{', preamble = SYSTEM_PREAMBLE_CN) {
+    const msgs = [
+        { role: 'system', content: `${preamble}\n\n${systemPrompt}` },
         { role: 'user', content: userPrompt },
-        { role: 'assistant', content: assistantPrefill },
     ];
+    if (assistantPrefill) {
+        msgs.push({ role: 'assistant', content: assistantPrefill });
+    }
+    return msgs;
 }
 
 // =============================================================================
@@ -123,7 +127,7 @@ function formatCharacters(characterName, userName, characterDescription, persona
  * Extracts events only, not entities or relationships.
  * @returns {Array<{role: string, content: string}>} Array of message objects
  */
-export function buildEventExtractionPrompt({ messages, names, context = {} }) {
+export function buildEventExtractionPrompt({ messages, names, context = {}, preamble, prefill }) {
     const { char: characterName, user: userName } = names;
     const {
         memories: existingMemories = [],
@@ -290,7 +294,7 @@ Analyze the messages above. Extract events only.
 Use exact character names from <context> if provided.
 Write your analysis inside <think> tags FIRST, then output the JSON object with "events" key. No other text.`;
 
-    return buildMessages(systemPrompt, userPrompt, '<think>\n');
+    return buildMessages(systemPrompt, userPrompt, prefill ?? '<think>\n', preamble);
 }
 
 /**
@@ -298,7 +302,7 @@ Write your analysis inside <think> tags FIRST, then output the JSON object with 
  * Extracts entities and relationships based on extracted events.
  * @returns {Array<{role: string, content: string}>} Array of message objects
  */
-export function buildGraphExtractionPrompt({ messages, names, extractedEvents = [], context = {} }) {
+export function buildGraphExtractionPrompt({ messages, names, extractedEvents = [], context = {}, preamble }) {
     const { char: characterName, user: userName } = names;
     const { charDesc: characterDescription = '', personaDesc: personaDescription = '' } = context;
 
@@ -400,7 +404,7 @@ ${eventsSection}
 Based on the messages${extractedEvents.length > 0 ? ' and extracted events above' : ''}, extract named entities and relationships.
 Respond with a single JSON object containing 'entities' and 'relationships' keys. No other text.`;
 
-    return buildMessages(systemPrompt, userPrompt);
+    return buildMessages(systemPrompt, userPrompt, '{', preamble);
 }
 
 /**
@@ -409,7 +413,7 @@ Respond with a single JSON object containing 'entities' and 'relationships' keys
  * @param {Object[]} recentMemories - Recent memories (both events and reflections)
  * @returns {Array<{role: string, content: string}>}
  */
-export function buildSalientQuestionsPrompt(characterName, recentMemories) {
+export function buildSalientQuestionsPrompt(characterName, recentMemories, preamble) {
     const memoryList = recentMemories.map((m, i) => `${i + 1}. [${m.importance || 3} Star] ${m.summary}`).join('\n');
 
     const systemPrompt = `<role>
@@ -473,7 +477,7 @@ ${memoryList}
 Based on these memories, what are the 3 most important high-level questions about ${characterName}'s current psychological state, relationships, and goals?
 Respond with a single JSON object containing exactly 3 questions. No other text.`;
 
-    return buildMessages(systemPrompt, userPrompt);
+    return buildMessages(systemPrompt, userPrompt, '{', preamble);
 }
 
 /**
@@ -483,7 +487,7 @@ Respond with a single JSON object containing exactly 3 questions. No other text.
  * @param {Object[]} relevantMemories - Memories relevant to this question
  * @returns {Array<{role: string, content: string}>}
  */
-export function buildInsightExtractionPrompt(characterName, question, relevantMemories) {
+export function buildInsightExtractionPrompt(characterName, question, relevantMemories, preamble) {
     const memoryList = relevantMemories.map((m) => `${m.id}. ${m.summary}`).join('\n');
 
     const systemPrompt = `<role>
@@ -557,7 +561,7 @@ Based on these memories about ${characterName}, extract 1-3 insights that answer
 Cite specific memory IDs as evidence for each insight.
 Respond with a single JSON object. No other text.`;
 
-    return buildMessages(systemPrompt, userPrompt);
+    return buildMessages(systemPrompt, userPrompt, '{', preamble);
 }
 
 /**
@@ -566,7 +570,7 @@ Respond with a single JSON object. No other text.`;
  * @param {string[]} edgeLines - Formatted edge descriptions
  * @returns {Array<{role: string, content: string}>}
  */
-export function buildCommunitySummaryPrompt(nodeLines, edgeLines) {
+export function buildCommunitySummaryPrompt(nodeLines, edgeLines, preamble) {
     const systemPrompt = `<role>
 You are a knowledge graph analyst summarizing communities of related entities from a narrative.
 Your task: write a comprehensive report about a group of connected entities and their relationships.
@@ -645,5 +649,5 @@ ${edgeLines.join('\n')}
 Write a comprehensive report about this community of entities.
 Respond with a single JSON object containing title, summary, and 1-5 findings. No other text.`;
 
-    return buildMessages(systemPrompt, userPrompt);
+    return buildMessages(systemPrompt, userPrompt, '{', preamble);
 }
