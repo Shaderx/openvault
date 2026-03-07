@@ -17,10 +17,17 @@ All utilities live in `src/utils/` — there is no monolithic `src/utils.js`.
 - **Data mutations** (`updateMemory`, `deleteMemory`, etc.): Previously in a separate `src/data/actions.js`, now consolidated here. `updateMemory` invalidates embeddings when summary changes.
 - **Dependencies**: Imports `log` from `logging.js`, `showToast` from `dom.js`.
 
+## `tokens.js` — Token Counting (gpt-tokenizer)
+**Functions**: `countTokens(text)`, `getMessageTokenCount(chat, index, data)`, `getTokenSum(chat, indices, data)`, `snapToTurnBoundary(chat, messageIds)`
+- **`countTokens()`**: Wraps `gpt-tokenizer` (o200k_base). Accurate token counting for any text. Empty string returns 0.
+- **`getMessageTokenCount()`**: Counts tokens for a chat message with caching in `data.message_tokens`. Cache key is stringified index.
+- **`getTokenSum()`**: Sums token counts for multiple message indices. Uses cached values when available.
+- **`snapToTurnBoundary()`**: Trims message index list to valid turn boundary. Split is valid when next message is User, or at end-of-chat. Prevents orphaned User messages from being separated from Bot responses.
+- **Usage**: Extraction batching, auto-hide, retrieval formatting. Replaces old `estimateTokens()` heuristic.
+
 ## `text.js` — Text Processing & JSON Parsing
-**Functions**: `estimateTokens(text)`, `sliceToTokenBudget(memories, budget)`, `stripThinkingTags(text)`, `safeParseJSON(input)`, `sortMemoriesBySequence(memories, ascending?)`
-- **`estimateTokens()`**: Simple `length / 3.5` heuristic. No tokenizer dependency.
-- **`sliceToTokenBudget()`**: Greedy fill — iterates memories, accumulates token estimates, stops at budget. Used by both extraction (context window for LLM) and retrieval (final output budget).
+**Functions**: `sliceToTokenBudget(memories, budget)`, `stripThinkingTags(text)`, `safeParseJSON(input)`, `sortMemoriesBySequence(memories, ascending?)`
+- **`sliceToTokenBudget()`**: Greedy fill — iterates memories, accumulates token counts via `countTokens()` from `tokens.js`, stops at budget. Used by extraction (context window for LLM) and retrieval (final output budget).
 - **`stripThinkingTags()`**: Removes `<think>`, `<thinking>`, `<thought>`, `<reasoning>`, `<reflection>`, `[THINK]`, `[THOUGHT]`, `[REASONING]`, `*thinks:*`, `(thinking:)` patterns. Case-insensitive.
 - **`safeParseJSON()`**: Multi-layer recovery: strip thinking tags → extract markdown code blocks → bracket-balanced extraction (private `extractBalancedJSON`) → `jsonrepair` → parse. Array results get wrapped in `{ events, entities, relationships, reasoning }` recovery object.
 - **`sortMemoriesBySequence()`**: Non-mutating sort. Falls back to `created_at` when `sequence` is missing.
