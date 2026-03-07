@@ -329,7 +329,7 @@ function renderReflectionProgressSection() {
     const reflectionState = data?.reflection_state || {};
 
     const settings = getDeps().getExtensionSettings().openvault || {};
-    const threshold = settings.reflectionThreshold ?? 30;
+    const threshold = settings.reflectionThreshold;
 
     $container.html(renderReflectionProgress(reflectionState, threshold));
 }

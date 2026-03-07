@@ -119,7 +119,7 @@ async function runWorkerLoop() {
 
             if (!data || !settings?.enabled) break;
 
-            const tokenBudget = settings.extractionTokenBudget || 16000;
+            const tokenBudget = settings.extractionTokenBudget;
 
             // Get next batch
             const batch = getNextBatch(chat, data, tokenBudget);

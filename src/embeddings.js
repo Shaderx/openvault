@@ -300,13 +300,13 @@ class TransformersStrategy extends EmbeddingStrategy {
 
     async getQueryEmbedding(text) {
         const settings = getDeps().getExtensionSettings()[extensionName];
-        const prefix = settings?.embeddingQueryPrefix ?? 'query: ';
+        const prefix = settings.embeddingQueryPrefix;
         return this.#embed(text, prefix);
     }
 
     async getDocumentEmbedding(text) {
         const settings = getDeps().getExtensionSettings()[extensionName];
-        const prefix = settings?.embeddingDocPrefix ?? 'passage: ';
+        const prefix = settings.embeddingDocPrefix;
         return this.#embed(text, prefix);
     }
 
@@ -443,7 +443,7 @@ function setGlobalStatusCallback(callback) {
  */
 function getOptimalChunkSize() {
     const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings?.embeddingSource || 'multilingual-e5-small';
+    const source = settings.embeddingSource;
 
     // For Transformers models, get from model config
     if (TRANSFORMERS_MODELS[source]) {
@@ -477,7 +477,7 @@ export function setEmbeddingStatusCallback(callback) {
  */
 export function getEmbeddingStatus() {
     const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings?.embeddingSource || 'multilingual-e5-small';
+    const source = settings.embeddingSource;
     const strategy = getStrategy(source);
     return strategy.getStatus();
 }
@@ -488,7 +488,7 @@ export function getEmbeddingStatus() {
  */
 export function isEmbeddingsEnabled() {
     const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings?.embeddingSource || 'multilingual-e5-small';
+    const source = settings.embeddingSource;
     const strategy = getStrategy(source);
     return strategy.isEnabled();
 }
@@ -523,7 +523,7 @@ export async function getQueryEmbedding(text) {
     }
 
     const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings?.embeddingSource || 'multilingual-e5-small';
+    const source = settings.embeddingSource;
     const strategy = getStrategy(source);
     const result = await strategy.getQueryEmbedding(text);
 
@@ -552,7 +552,7 @@ export async function getDocumentEmbedding(summary) {
     }
 
     const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings?.embeddingSource || 'multilingual-e5-small';
+    const source = settings.embeddingSource;
     const strategy = getStrategy(source);
     const result = await strategy.getDocumentEmbedding(summary);
 
@@ -606,7 +606,7 @@ export async function generateEmbeddingsForMemories(memories) {
     }
 
     const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings?.embeddingSource || 'multilingual-e5-small';
+    const source = settings.embeddingSource;
     const strategy = getStrategy(source);
 
     const embeddings = await processInBatches(validMemories, 5, async (m) => {
@@ -643,7 +643,7 @@ export async function enrichEventsWithEmbeddings(events) {
     log(`Generating embeddings for ${validEvents.length} events`);
 
     const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings?.embeddingSource || 'multilingual-e5-small';
+    const source = settings.embeddingSource;
     const strategy = getStrategy(source);
 
     const embeddings = await processInBatches(validEvents, 5, async (e) => {

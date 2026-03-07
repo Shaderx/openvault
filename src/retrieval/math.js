@@ -187,8 +187,8 @@ export function calculateScore(memory, contextEmbedding, chatLength, constants, 
     const recencyPenalty = baseAfterFloor - base;
 
     // === Alpha-Blend Scoring ===
-    const alpha = settings.alpha ?? 0.7;
-    const boostWeight = settings.combinedBoostWeight ?? 15;
+    const alpha = settings.alpha;
+    const boostWeight = settings.combinedBoostWeight;
 
     // === Vector Similarity Bonus (alpha-blend) ===
     let vectorBonus = 0;
@@ -196,7 +196,7 @@ export function calculateScore(memory, contextEmbedding, chatLength, constants, 
 
     if (contextEmbedding && memory.embedding) {
         vectorSimilarity = cosineSimilarity(contextEmbedding, memory.embedding);
-        const threshold = settings.vectorSimilarityThreshold || 0.5;
+        const threshold = settings.vectorSimilarityThreshold;
 
         if (vectorSimilarity > threshold) {
             // Scale similarity above threshold to bonus points
@@ -216,8 +216,8 @@ export function calculateScore(memory, contextEmbedding, chatLength, constants, 
 
     // === Reflection Decay ===
     // Reflections lose additional score with distance beyond threshold
-    if (memory.type === 'reflection' && distance > (constants.reflectionDecayThreshold ?? 750)) {
-        const threshold = constants.reflectionDecayThreshold ?? 750;
+    if (memory.type === 'reflection' && distance > constants.reflectionDecayThreshold) {
+        const threshold = constants.reflectionDecayThreshold;
         const decayFactor = Math.max(0.25, 1 - (distance - threshold) / (2 * threshold));
         total *= decayFactor;
     }

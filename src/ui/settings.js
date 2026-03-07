@@ -13,7 +13,6 @@ import {
     extensionName,
     MEMORIES_KEY,
     PAYLOAD_CALC,
-    QUERY_CONTEXT_DEFAULTS,
     UI_DEFAULT_HINTS,
 } from '../constants.js';
 import { getDeps } from '../deps.js';
@@ -106,8 +105,8 @@ function updateReflectionDedupDisplay(rejectThreshold) {
  * Reads current slider values, adds PAYLOAD_CALC.OVERHEAD, sets emoji + color class.
  */
 function updatePayloadCalculator() {
-    const budget = Number($('#openvault_extraction_token_budget').val()) || 12000;
-    const rearview = Number($('#openvault_extraction_rearview').val()) || 8000;
+    const budget = Number($('#openvault_extraction_token_budget').val()) || defaultSettings.extractionTokenBudget;
+    const rearview = Number($('#openvault_extraction_rearview').val()) || defaultSettings.extractionRearviewTokens;
     const total = budget + rearview + PAYLOAD_CALC.OVERHEAD;
 
     $('#openvault_payload_total').text(total.toLocaleString());
@@ -538,16 +537,16 @@ export function updateUI() {
     $('#openvault_embedding_rounding').prop('checked', settings.embeddingRounding);
 
     // Extraction settings
-    $('#openvault_extraction_token_budget').val(settings.extractionTokenBudget ?? 12000);
-    $('#openvault_extraction_token_budget_value').text(settings.extractionTokenBudget ?? 12000);
+    $('#openvault_extraction_token_budget').val(settings.extractionTokenBudget);
+    $('#openvault_extraction_token_budget_value').text(settings.extractionTokenBudget);
 
     $('#openvault_extraction_rearview').val(settings.extractionRearviewTokens);
     $('#openvault_extraction_rearview_value').text(settings.extractionRearviewTokens);
     updateWordsDisplay(settings.extractionRearviewTokens, 'openvault_extraction_rearview_words');
 
     // Token budget settings
-    $('#openvault_visible_chat_budget').val(settings.visibleChatBudget ?? 16000);
-    $('#openvault_visible_chat_budget_value').text(settings.visibleChatBudget ?? 16000);
+    $('#openvault_visible_chat_budget').val(settings.visibleChatBudget);
+    $('#openvault_visible_chat_budget_value').text(settings.visibleChatBudget);
 
     // Retrieval pipeline settings
     $('#openvault_final_budget').val(settings.retrievalFinalTokens);
@@ -558,69 +557,69 @@ export function updateUI() {
     $('#openvault_auto_hide').prop('checked', settings.autoHideEnabled);
 
     // Scoring weights (alpha-blend)
-    $('#openvault_alpha').val(settings.alpha ?? defaultSettings.alpha);
-    $('#openvault_alpha_value').text(settings.alpha ?? defaultSettings.alpha);
+    $('#openvault_alpha').val(settings.alpha);
+    $('#openvault_alpha_value').text(settings.alpha);
 
-    $('#openvault_combined_weight').val(settings.combinedBoostWeight ?? defaultSettings.combinedBoostWeight);
-    $('#openvault_combined_weight_value').text(settings.combinedBoostWeight ?? defaultSettings.combinedBoostWeight);
+    $('#openvault_combined_weight').val(settings.combinedBoostWeight);
+    $('#openvault_combined_weight_value').text(settings.combinedBoostWeight);
 
-    $('#openvault_vector_threshold').val(settings.vectorSimilarityThreshold ?? 0.5);
-    $('#openvault_vector_threshold_value').text(settings.vectorSimilarityThreshold ?? 0.5);
+    $('#openvault_vector_threshold').val(settings.vectorSimilarityThreshold);
+    $('#openvault_vector_threshold_value').text(settings.vectorSimilarityThreshold);
 
-    $('#openvault_dedup_threshold').val(settings.dedupSimilarityThreshold ?? 0.92);
-    $('#openvault_dedup_threshold_value').text(settings.dedupSimilarityThreshold ?? 0.92);
+    $('#openvault_dedup_threshold').val(settings.dedupSimilarityThreshold);
+    $('#openvault_dedup_threshold_value').text(settings.dedupSimilarityThreshold);
 
-    $('#openvault_entity_merge_threshold').val(settings.entityMergeSimilarityThreshold ?? 0.94);
-    $('#openvault_entity_merge_threshold_value').text(settings.entityMergeSimilarityThreshold ?? 0.94);
+    $('#openvault_entity_merge_threshold').val(settings.entityMergeSimilarityThreshold);
+    $('#openvault_entity_merge_threshold_value').text(settings.entityMergeSimilarityThreshold);
 
-    $('#openvault_edge_description_cap').val(settings.edgeDescriptionCap ?? 5);
-    $('#openvault_edge_description_cap_value').text(settings.edgeDescriptionCap ?? 5);
+    $('#openvault_edge_description_cap').val(settings.edgeDescriptionCap);
+    $('#openvault_edge_description_cap_value').text(settings.edgeDescriptionCap);
 
     // Query context enhancement settings
-    $('#openvault_entity_window').val(settings.entityWindowSize ?? 10);
-    $('#openvault_entity_window_value').text(settings.entityWindowSize ?? 10);
+    $('#openvault_entity_window').val(settings.entityWindowSize);
+    $('#openvault_entity_window_value').text(settings.entityWindowSize);
 
-    $('#openvault_embedding_window').val(settings.embeddingWindowSize ?? 5);
-    $('#openvault_embedding_window_value').text(settings.embeddingWindowSize ?? 5);
+    $('#openvault_embedding_window').val(settings.embeddingWindowSize);
+    $('#openvault_embedding_window_value').text(settings.embeddingWindowSize);
 
-    $('#openvault_top_entities').val(settings.topEntitiesCount ?? 5);
-    $('#openvault_top_entities_value').text(settings.topEntitiesCount ?? 5);
+    $('#openvault_top_entities').val(settings.topEntitiesCount);
+    $('#openvault_top_entities_value').text(settings.topEntitiesCount);
 
-    $('#openvault_entity_boost').val(settings.entityBoostWeight ?? QUERY_CONTEXT_DEFAULTS.entityBoostWeight);
-    $('#openvault_entity_boost_value').text(settings.entityBoostWeight ?? QUERY_CONTEXT_DEFAULTS.entityBoostWeight);
+    $('#openvault_entity_boost').val(settings.entityBoostWeight);
+    $('#openvault_entity_boost_value').text(settings.entityBoostWeight);
 
     // Backfill settings
     $('#openvault_backfill_rpm').val(settings.backfillMaxRPM);
 
     // Embedding settings
-    $('#openvault_embedding_source').val(settings.embeddingSource || 'multilingual-e5-small');
+    $('#openvault_embedding_source').val(settings.embeddingSource);
     $('#openvault_ollama_settings').toggle(settings.embeddingSource === 'ollama');
-    $('#openvault_ollama_url').val(settings.ollamaUrl || '');
-    $('#openvault_embedding_model').val(settings.embeddingModel || '');
-    $('#openvault_embedding_query_prefix').val(settings.embeddingQueryPrefix ?? defaultSettings.embeddingQueryPrefix);
-    $('#openvault_embedding_doc_prefix').val(settings.embeddingDocPrefix ?? defaultSettings.embeddingDocPrefix);
+    $('#openvault_ollama_url').val(settings.ollamaUrl);
+    $('#openvault_embedding_model').val(settings.embeddingModel);
+    $('#openvault_embedding_query_prefix').val(settings.embeddingQueryPrefix);
+    $('#openvault_embedding_doc_prefix').val(settings.embeddingDocPrefix);
     updateEmbeddingStatusDisplay(getEmbeddingStatus());
 
     // Populate profile selector
     populateProfileSelector();
 
     // Feature settings
-    $('#openvault_reflection_threshold').val(settings.reflectionThreshold ?? 30);
-    $('#openvault_reflection_threshold_value').text(settings.reflectionThreshold ?? 30);
+    $('#openvault_reflection_threshold').val(settings.reflectionThreshold);
+    $('#openvault_reflection_threshold_value').text(settings.reflectionThreshold);
 
-    $('#openvault_max_insights').val(settings.maxInsightsPerReflection ?? 3);
-    $('#openvault_max_insights_value').text(settings.maxInsightsPerReflection ?? 3);
+    $('#openvault_max_insights').val(settings.maxInsightsPerReflection);
+    $('#openvault_max_insights_value').text(settings.maxInsightsPerReflection);
 
-    $('#openvault_reflection_dedup_threshold').val(settings.reflectionDedupThreshold ?? 0.9);
-    $('#openvault_reflection_dedup_threshold_value').text(settings.reflectionDedupThreshold ?? 0.9);
-    updateReflectionDedupDisplay(settings.reflectionDedupThreshold ?? 0.9);
+    $('#openvault_reflection_dedup_threshold').val(settings.reflectionDedupThreshold);
+    $('#openvault_reflection_dedup_threshold_value').text(settings.reflectionDedupThreshold);
+    updateReflectionDedupDisplay(settings.reflectionDedupThreshold);
 
-    $('#openvault_world_context_budget').val(settings.worldContextBudget ?? 2000);
-    $('#openvault_world_context_budget_value').text(settings.worldContextBudget ?? 2000);
-    updateWordsDisplay(settings.worldContextBudget ?? 2000, 'openvault_world_context_budget_words');
+    $('#openvault_world_context_budget').val(settings.worldContextBudget);
+    $('#openvault_world_context_budget_value').text(settings.worldContextBudget);
+    updateWordsDisplay(settings.worldContextBudget, 'openvault_world_context_budget_words');
 
-    $('#openvault_community_interval').val(settings.communityDetectionInterval ?? 50);
-    $('#openvault_community_interval_value').text(settings.communityDetectionInterval ?? 50);
+    $('#openvault_community_interval').val(settings.communityDetectionInterval);
+    $('#openvault_community_interval_value').text(settings.communityDetectionInterval);
 
     // =========================================================================
     // NEW: Sync 7 previously-unbound settings to their HTML elements.
@@ -629,32 +628,32 @@ export function updateUI() {
     // =========================================================================
 
     // Forgetfulness base lambda — exponential decay rate
-    $('#openvault_forgetfulness_lambda').val(settings.forgetfulnessBaseLambda ?? 0.05);
-    $('#openvault_forgetfulness_lambda_value').text(settings.forgetfulnessBaseLambda ?? 0.05);
+    $('#openvault_forgetfulness_lambda').val(settings.forgetfulnessBaseLambda);
+    $('#openvault_forgetfulness_lambda_value').text(settings.forgetfulnessBaseLambda);
 
     // Importance-5 floor — minimum score for max-importance memories
-    $('#openvault_importance5_floor').val(settings.forgetfulnessImportance5Floor ?? 5);
-    $('#openvault_importance5_floor_value').text(settings.forgetfulnessImportance5Floor ?? 5);
+    $('#openvault_importance5_floor').val(settings.forgetfulnessImportance5Floor);
+    $('#openvault_importance5_floor_value').text(settings.forgetfulnessImportance5Floor);
 
     // Reflection decay threshold — messages before reflections start decaying
-    $('#openvault_reflection_decay_threshold').val(settings.reflectionDecayThreshold ?? 750);
-    $('#openvault_reflection_decay_threshold_value').text(settings.reflectionDecayThreshold ?? 750);
+    $('#openvault_reflection_decay_threshold').val(settings.reflectionDecayThreshold);
+    $('#openvault_reflection_decay_threshold_value').text(settings.reflectionDecayThreshold);
 
     // Entity description cap — max description segments per entity
-    $('#openvault_entity_description_cap').val(settings.entityDescriptionCap ?? 3);
-    $('#openvault_entity_description_cap_value').text(settings.entityDescriptionCap ?? 3);
+    $('#openvault_entity_description_cap').val(settings.entityDescriptionCap);
+    $('#openvault_entity_description_cap_value').text(settings.entityDescriptionCap);
 
     // Max reflections per character — prevents reflection memory bloat
-    $('#openvault_max_reflections').val(settings.maxReflectionsPerCharacter ?? 50);
-    $('#openvault_max_reflections_value').text(settings.maxReflectionsPerCharacter ?? 50);
+    $('#openvault_max_reflections').val(settings.maxReflectionsPerCharacter);
+    $('#openvault_max_reflections_value').text(settings.maxReflectionsPerCharacter);
 
     // Community staleness threshold — messages before re-summarization
-    $('#openvault_community_staleness').val(settings.communityStalenessThreshold ?? 100);
-    $('#openvault_community_staleness_value').text(settings.communityStalenessThreshold ?? 100);
+    $('#openvault_community_staleness').val(settings.communityStalenessThreshold);
+    $('#openvault_community_staleness_value').text(settings.communityStalenessThreshold);
 
     // Jaccard dedup threshold — token-overlap filter for near-duplicates
-    $('#openvault_dedup_jaccard').val(settings.dedupJaccardThreshold ?? 0.6);
-    $('#openvault_dedup_jaccard_value').text(settings.dedupJaccardThreshold ?? 0.6);
+    $('#openvault_dedup_jaccard').val(settings.dedupJaccardThreshold);
+    $('#openvault_dedup_jaccard_value').text(settings.dedupJaccardThreshold);
 
     // Payload calculator — must run after sliders are synced
     updatePayloadCalculator();
@@ -684,7 +683,7 @@ export function updateBudgetIndicators() {
     }
 
     // Extraction indicator
-    const extractionBudget = settings.extractionTokenBudget || 16000;
+    const extractionBudget = settings.extractionTokenBudget;
     const extractedIds = getExtractedMessageIds(data);
     const unextractedIds = getUnextractedMessageIds(chat, extractedIds, 0);
     const unextractedTokens = getTokenSum(chat, unextractedIds, data);
@@ -697,7 +696,7 @@ export function updateBudgetIndicators() {
     updateBudgetColor('openvault_extraction_budget_fill', extractionPct);
 
     // Visible chat indicator
-    const visibleBudget = settings.visibleChatBudget || 16000;
+    const visibleBudget = settings.visibleChatBudget;
     const visibleIndices = [];
     for (let i = 0; i < chat.length; i++) {
         if (!chat[i].is_system) visibleIndices.push(i);

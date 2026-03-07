@@ -5,7 +5,7 @@
  * Uses graph-anchored stem matching to detect known entities.
  */
 
-import { extensionName, QUERY_CONTEXT_DEFAULTS } from '../constants.js';
+import { extensionName } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getOptimalChunkSize } from '../embeddings.js';
 import { stemName, stemWord } from '../utils/stemmer.js';
@@ -18,11 +18,11 @@ import { tokenize } from './math.js';
 function getQueryContextSettings() {
     const settings = getDeps().getExtensionSettings()[extensionName];
     return {
-        entityWindowSize: settings?.entityWindowSize ?? QUERY_CONTEXT_DEFAULTS.entityWindowSize,
-        embeddingWindowSize: settings?.embeddingWindowSize ?? QUERY_CONTEXT_DEFAULTS.embeddingWindowSize,
-        recencyDecayFactor: settings?.recencyDecayFactor ?? QUERY_CONTEXT_DEFAULTS.recencyDecayFactor,
-        topEntitiesCount: settings?.topEntitiesCount ?? QUERY_CONTEXT_DEFAULTS.topEntitiesCount,
-        entityBoostWeight: settings?.entityBoostWeight ?? QUERY_CONTEXT_DEFAULTS.entityBoostWeight,
+        entityWindowSize: settings.entityWindowSize,
+        embeddingWindowSize: settings.embeddingWindowSize,
+        recencyDecayFactor: settings.recencyDecayFactor,
+        topEntitiesCount: settings.topEntitiesCount,
+        entityBoostWeight: settings.entityBoostWeight,
     };
 }
 

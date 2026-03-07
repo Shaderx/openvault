@@ -189,7 +189,7 @@ export function shouldSkipReflectionGeneration(recentMemories, existingReflectio
 export async function generateReflections(characterName, allMemories, characterStates) {
     const deps = getDeps();
     const settings = deps.getExtensionSettings()?.[extensionName] || {};
-    const maxReflections = settings.maxReflectionsPerCharacter ?? 50;
+    const maxReflections = settings.maxReflectionsPerCharacter;
 
     // Archive old reflections if cap is reached
     const characterReflections = allMemories.filter(
@@ -261,7 +261,7 @@ export async function generateReflections(characterName, allMemories, characterS
         const insightResponse = await callLLM(insightPrompt, LLM_CONFIGS.reflection_insights, { structured: true });
         const parsed = parseInsightExtractionResponse(insightResponse);
         // Cap insights per question
-        const maxInsights = settings.maxInsightsPerReflection ?? 3;
+        const maxInsights = settings.maxInsightsPerReflection;
         parsed.insights = parsed.insights.slice(0, maxInsights);
         return parsed;
     });
@@ -298,7 +298,7 @@ export async function generateReflections(characterName, allMemories, characterS
     await enrichEventsWithEmbeddings(reflections);
 
     // Dedup: 3-tier filter (reject/replace/add) reflections based on similarity
-    const reflectionDedupThreshold = settings.reflectionDedupThreshold ?? 0.9;
+    const reflectionDedupThreshold = settings.reflectionDedupThreshold;
     const replaceThreshold = reflectionDedupThreshold - 0.1; // 0.80 when default is 0.90
     const { toAdd, toArchiveIds } = filterDuplicateReflections(
         reflections,

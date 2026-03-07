@@ -45,7 +45,7 @@ export async function autoHideOldMessages() {
 
     const context = deps.getContext();
     const chat = context.chat || [];
-    const visibleChatBudget = settings.visibleChatBudget || 16000;
+    const visibleChatBudget = settings.visibleChatBudget;
 
     const data = getOpenVaultData();
     const extractedMessageIds = getExtractedMessageIds(data);

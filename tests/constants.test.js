@@ -28,3 +28,21 @@ describe('defaultSettings updated defaults', () => {
         expect(defaultSettings.extractionRearviewTokens).toBe(8000);
     });
 });
+
+describe('defaultSettings includes query-context keys', () => {
+    it('entityWindowSize is 10', () => {
+        expect(defaultSettings.entityWindowSize).toBe(10);
+    });
+    it('embeddingWindowSize is 5', () => {
+        expect(defaultSettings.embeddingWindowSize).toBe(5);
+    });
+    it('recencyDecayFactor is 0.09', () => {
+        expect(defaultSettings.recencyDecayFactor).toBe(0.09);
+    });
+    it('topEntitiesCount is 5', () => {
+        expect(defaultSettings.topEntitiesCount).toBe(5);
+    });
+    it('entityBoostWeight is 5.0', () => {
+        expect(defaultSettings.entityBoostWeight).toBe(5.0);
+    });
+});

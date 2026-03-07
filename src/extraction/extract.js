@@ -33,7 +33,7 @@ let lastApiCallTime = 0;
  * @param {string} [label='Rate limit'] - Log label
  */
 async function rpmDelay(settings, label = 'Rate limit') {
-    const rpm = settings.backfillMaxRPM || 30;
+    const rpm = settings.backfillMaxRPM;
     const delayMs = Math.ceil(60000 / rpm);
     const now = Date.now();
     const timeSinceLastCall = now - lastApiCallTime;
@@ -185,7 +185,7 @@ export function cleanupCharacterStates(data, validCharNames = []) {
  */
 function selectMemoriesForExtraction(data, settings) {
     const allMemories = data[MEMORIES_KEY] || [];
-    const totalBudget = settings.extractionRearviewTokens || 12000;
+    const totalBudget = settings.extractionRearviewTokens;
     const recencyBudget = Math.floor(totalBudget * 0.25);
     const importanceBudget = totalBudget - recencyBudget;
 
@@ -326,7 +326,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
     } else {
         // Incremental mode: Extract last few unprocessed messages using token budget
         const lastProcessedId = data[LAST_PROCESSED_KEY] || -1;
-        const tokenBudget = settings.extractionTokenBudget || 16000;
+        const tokenBudget = settings.extractionTokenBudget;
         const candidates = chat
             .map((m, idx) => ({ id: idx, ...m }))
             .filter((m) => !m.is_system && m.id > lastProcessedId);
@@ -441,8 +441,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         if (events.length > 0) {
             await enrichEventsWithEmbeddings(events);
 
-            const dedupThreshold = settings.dedupSimilarityThreshold ?? 0.92;
-            const jaccardThreshold = settings.dedupJaccardThreshold ?? 0.6;
+            const dedupThreshold = settings.dedupSimilarityThreshold;
+            const jaccardThreshold = settings.dedupJaccardThreshold;
             const existingMemoriesList = data.memories || [];
             events = await filterSimilarEvents(events, existingMemoriesList, dedupThreshold, jaccardThreshold);
 
@@ -453,7 +453,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
         // Stage 4.5: Graph Update — upsert entities and relationships
         initGraphState(data);
-        const entityCap = settings.entityDescriptionCap ?? 3;
+        const entityCap = settings.entityDescriptionCap;
         if (validated.entities) {
             for (const entity of validated.entities) {
                 await mergeOrInsertEntity(
@@ -466,7 +466,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                 );
             }
         }
-        const edgeCap = settings.edgeDescriptionCap ?? 5;
+        const edgeCap = settings.edgeDescriptionCap;
         if (validated.relationships) {
             for (const rel of validated.relationships) {
                 if (rel.source === 'Unknown' || rel.target === 'Unknown') continue;
@@ -513,7 +513,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                 }
 
                 // Check each character for reflection trigger
-                const reflectionThreshold = settings.reflectionThreshold ?? 30;
+                const reflectionThreshold = settings.reflectionThreshold;
                 for (const characterName of characters) {
                     if (shouldReflect(data.reflection_state, characterName, reflectionThreshold)) {
                         try {
@@ -535,7 +535,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             }
 
             // Stage 4.7: Community detection
-            const communityInterval = settings.communityDetectionInterval ?? 50;
+            const communityInterval = settings.communityDetectionInterval;
             const prevCount = (data.graph_message_count || 0) - messages.length;
             const currCount = data.graph_message_count || 0;
             // Check if we crossed a message boundary for community detection
@@ -547,7 +547,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                     const communityResult = detectCommunities(data.graph, mainCharacterKeys);
                     if (communityResult) {
                         const groups = buildCommunityGroups(data.graph, communityResult.communities);
-                        const stalenessThreshold = settings.communityStalenessThreshold ?? 100;
+                        const stalenessThreshold = settings.communityStalenessThreshold;
                         const isSingleCommunity = communityResult.count === 1;
                         data.communities = await updateCommunitySummaries(
                             data.graph,
@@ -604,7 +604,7 @@ export async function extractAllMessages(updateEventListenersFn) {
     }
 
     const settings = getDeps().getExtensionSettings()[extensionName];
-    const tokenBudget = settings.extractionTokenBudget || 16000;
+    const tokenBudget = settings.extractionTokenBudget;
     const data = getOpenVaultData();
     if (!data) {
         showToast('warning', 'No chat context available');

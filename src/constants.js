@@ -68,6 +68,12 @@ export const defaultSettings = {
     entityDescriptionCap: 3,
     edgeDescriptionCap: 5,
     entityMergeSimilarityThreshold: 0.95,
+    // Query context settings (previously only in QUERY_CONTEXT_DEFAULTS)
+    entityWindowSize: 10, // messages to scan for entities
+    embeddingWindowSize: 5, // messages for embedding query
+    recencyDecayFactor: 0.09, // weight reduction per position
+    topEntitiesCount: 5, // max entities to inject
+    entityBoostWeight: 5.0, // BM25 boost for extracted entities
     // Reflection decay settings
     // Reflections older than this many messages get a linear penalty (down to 0.25x).
     // 750 gives medium-length chats (~700 msgs) breathing room before decay kicks in.

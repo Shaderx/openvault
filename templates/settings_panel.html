@@ -287,7 +287,7 @@
                             Extraction Token Budget: <span id="openvault_extraction_token_budget_value">12000</span> tokens
                             <small class="openvault-default-hint" data-default-key="extractionTokenBudget"></small>
                         </label>
-                        <input type="range" id="openvault_extraction_token_budget" min="4000" max="64000" step="1000" value="12000" />
+                        <input type="range" id="openvault_extraction_token_budget" min="4000" max="64000" step="1000" />
                         <small class="openvault-hint">Token threshold for extraction batches. When unextracted messages accumulate past this budget, a batch is processed. Larger = fewer LLM calls, smaller = more frequent extraction.</small>
 
                         <div class="openvault-budget-indicator">
@@ -305,7 +305,7 @@
                             <small class="openvault-default-hint" data-default-key="contextWindowSize"></small>
                             <small class="openvault-words-hint">~<span id="openvault_extraction_rearview_words">6000</span> words</small>
                         </label>
-                        <input type="range" id="openvault_extraction_rearview" min="1000" max="32000" step="1000" value="8000" />
+                        <input type="range" id="openvault_extraction_rearview" min="1000" max="32000" step="1000" />
                         <small class="openvault-hint">How much past memories the LLM sees when writing new memories</small>
 
                         <!-- Payload Calculator (NEW) -->
@@ -330,7 +330,7 @@
                             Reflection Threshold: <span id="openvault_reflection_threshold_value">30</span>
                             <small class="openvault-default-hint" data-default-key="reflectionThreshold"></small>
                         </label>
-                        <input type="range" id="openvault_reflection_threshold" min="10" max="100" step="5" value="30" />
+                        <input type="range" id="openvault_reflection_threshold" min="10" max="100" step="5" />
                         <small class="openvault-hint">Importance sum to trigger character reflection. Lower = more frequent.</small>
 
                         <div style="height: 8px;"></div>
@@ -339,7 +339,7 @@
                             Max Insights per Reflection: <span id="openvault_max_insights_value">3</span>
                             <small class="openvault-default-hint" data-default-key="maxInsightsPerReflection"></small>
                         </label>
-                        <input type="range" id="openvault_max_insights" min="1" max="5" step="1" value="3" />
+                        <input type="range" id="openvault_max_insights" min="1" max="5" step="1" />
                         <small class="openvault-hint">Maximum insights generated per reflection question.</small>
 
                         <div style="height: 8px;"></div>
@@ -354,7 +354,7 @@
                                 Reject Threshold: <span id="openvault_reflection_dedup_threshold_value">0.90</span>
                                 <small class="openvault-default-hint" data-default-key="reflectionDedupThreshold"></small>
                             </label>
-                            <input type="range" id="openvault_reflection_dedup_threshold" min="0.5" max="1" step="0.01" value="0.90" style="margin-bottom: 4px;" />
+                            <input type="range" id="openvault_reflection_dedup_threshold" min="0.5" max="1" step="0.01" style="margin-bottom: 4px;" />
 
                             <div style="font-size: 0.75em; color: #888; line-height: 1.4;">
                                 <span style="color: #f44;">≥<span id="openvault_reflection_reject_display">0.90</span> → Reject</span> ·
@@ -370,7 +370,7 @@
                             Max Reflections per Character: <span id="openvault_max_reflections_value">50</span>
                             <small class="openvault-default-hint" data-default-key="maxReflectionsPerCharacter"></small>
                         </label>
-                        <input type="range" id="openvault_max_reflections" min="10" max="200" step="10" value="50" />
+                        <input type="range" id="openvault_max_reflections" min="10" max="200" step="10" />
                         <small class="openvault-hint">Caps total reflection memories per character. Prevents bloat in long chats.</small>
 
                         <div style="height: 8px;"></div>
@@ -380,7 +380,7 @@
                             Reflection Decay Threshold: <span id="openvault_reflection_decay_threshold_value">750</span>
                             <small class="openvault-default-hint" data-default-key="reflectionDecayThreshold"></small>
                         </label>
-                        <input type="range" id="openvault_reflection_decay_threshold" min="100" max="2000" step="50" value="750" />
+                        <input type="range" id="openvault_reflection_decay_threshold" min="100" max="2000" step="50" />
                         <small class="openvault-hint">Messages before reflections start losing priority. Higher = reflections stay relevant longer.</small>
                     </div>
                 </details>
@@ -394,7 +394,7 @@
                             Entity Description Cap: <span id="openvault_entity_description_cap_value">3</span>
                             <small class="openvault-default-hint" data-default-key="entityDescriptionCap"></small>
                         </label>
-                        <input type="range" id="openvault_entity_description_cap" min="1" max="10" step="1" value="3" />
+                        <input type="range" id="openvault_entity_description_cap" min="1" max="10" step="1" />
                         <small class="openvault-hint">Max description segments per entity. Older segments are evicted (FIFO).</small>
 
                         <div style="height: 8px;"></div>
@@ -403,7 +403,7 @@
                             Edge Description Cap: <span id="openvault_edge_description_cap_value">5</span>
                             <small class="openvault-default-hint" data-default-key="edgeDescriptionCap"></small>
                         </label>
-                        <input type="range" id="openvault_edge_description_cap" min="1" max="20" step="1" value="5" />
+                        <input type="range" id="openvault_edge_description_cap" min="1" max="20" step="1" />
                         <small class="openvault-hint">Max description segments per edge (FIFO eviction).</small>
 
                         <div style="height: 8px;"></div>
@@ -412,7 +412,7 @@
                             Community Detection Interval: <span id="openvault_community_interval_value">50</span> messages
                             <small class="openvault-default-hint" data-default-key="communityDetectionInterval"></small>
                         </label>
-                        <input type="range" id="openvault_community_interval" min="10" max="200" step="10" value="50" />
+                        <input type="range" id="openvault_community_interval" min="10" max="200" step="10" />
                         <small class="openvault-hint">How often Louvain runs. Lower = fresher communities, more LLM calls.</small>
 
                         <div style="height: 8px;"></div>
@@ -422,7 +422,7 @@
                             Community Staleness Threshold: <span id="openvault_community_staleness_value">100</span>
                             <small class="openvault-default-hint" data-default-key="communityStalenessThreshold"></small>
                         </label>
-                        <input type="range" id="openvault_community_staleness" min="20" max="500" step="10" value="100" />
+                        <input type="range" id="openvault_community_staleness" min="20" max="500" step="10" />
                         <small class="openvault-hint">Messages before community summaries are considered stale.</small>
                     </div>
                 </details>
@@ -435,7 +435,7 @@
                             Backfill Rate Limit (RPM)
                             <small class="openvault-default-hint" data-default-key="backfillRateLimit"></small>
                         </label>
-                        <input type="number" id="openvault_backfill_rpm" class="text_pole" min="1" max="600" value="30" />
+                        <input type="number" id="openvault_backfill_rpm" class="text_pole" min="1" max="600" />
                     </div>
                 </details>
             </div>
@@ -494,7 +494,7 @@
                             <small class="openvault-default-hint" data-default-key="retrievalFinalTokens"></small>
                             <small class="openvault-words-hint">~<span id="openvault_final_budget_words">9000</span> words</small>
                         </label>
-                        <input type="range" id="openvault_final_budget" min="1000" max="32000" step="1000" value="12000" />
+                        <input type="range" id="openvault_final_budget" min="1000" max="32000" step="1000" />
                         <small class="openvault-hint">Memory budget injected into chat context</small>
 
                         <div style="height: 8px;"></div>
@@ -504,7 +504,7 @@
                             <small class="openvault-default-hint" data-default-key="worldContextBudget"></small>
                             <small class="openvault-words-hint">~<span id="openvault_world_context_budget_words">1500</span> words</small>
                         </label>
-                        <input type="range" id="openvault_world_context_budget" min="500" max="5000" step="250" value="2000" />
+                        <input type="range" id="openvault_world_context_budget" min="500" max="5000" step="250" />
                         <small class="openvault-hint">Token budget for community summaries injected as world context.</small>
 
                         <div style="height: 8px;"></div>
@@ -513,7 +513,7 @@
                             Visible Chat Budget: <span id="openvault_visible_chat_budget_value">16000</span> tokens
                             <small class="openvault-default-hint" data-default-key="visibleChatBudget"></small>
                         </label>
-                        <input type="range" id="openvault_visible_chat_budget" min="4000" max="64000" step="1000" value="16000" />
+                        <input type="range" id="openvault_visible_chat_budget" min="4000" max="64000" step="1000" />
                         <small class="openvault-hint">Maximum tokens visible in chat history. Oldest already-extracted messages are auto-hidden when exceeded. Acts as a minimum guarantee — chat may temporarily exceed this until extraction catches up.</small>
 
                         <div class="openvault-budget-indicator">
@@ -534,7 +534,7 @@
                             Entity Window: <span id="openvault_entity_window_value">10</span> messages
                             <small class="openvault-default-hint" data-default-key="entityWindowSize"></small>
                         </label>
-                        <input type="range" id="openvault_entity_window" min="3" max="20" step="1" value="10" />
+                        <input type="range" id="openvault_entity_window" min="3" max="20" step="1" />
                         <small class="openvault-hint">Messages to scan for names/places</small>
 
                         <div style="height: 8px;"></div>
@@ -543,7 +543,7 @@
                             Embedding Window: <span id="openvault_embedding_window_value">5</span> messages
                             <small class="openvault-default-hint" data-default-key="embeddingWindowSize"></small>
                         </label>
-                        <input type="range" id="openvault_embedding_window" min="2" max="10" step="1" value="5" />
+                        <input type="range" id="openvault_embedding_window" min="2" max="10" step="1" />
                         <small class="openvault-hint">Messages to include in semantic query</small>
 
                         <div style="height: 8px;"></div>
@@ -552,7 +552,7 @@
                             Top Entities: <span id="openvault_top_entities_value">5</span>
                             <small class="openvault-default-hint" data-default-key="topEntitiesCount"></small>
                         </label>
-                        <input type="range" id="openvault_top_entities" min="1" max="10" step="1" value="5" />
+                        <input type="range" id="openvault_top_entities" min="1" max="10" step="1" />
                         <small class="openvault-hint">Max entities to inject into query</small>
 
                         <div style="height: 8px;"></div>
@@ -561,7 +561,7 @@
                             Entity Boost: <span id="openvault_entity_boost_value">5.0</span>x
                             <small class="openvault-default-hint" data-default-key="entityBoostWeight"></small>
                         </label>
-                        <input type="range" id="openvault_entity_boost" min="0.5" max="15" step="0.5" value="5.0" />
+                        <input type="range" id="openvault_entity_boost" min="0.5" max="15" step="0.5" />
                         <small class="openvault-hint">BM25 weight multiplier for entities</small>
                     </div>
                 </details>
@@ -614,7 +614,7 @@
                             Vector vs Keyword Balance: <span id="openvault_alpha_value">0.7</span>
                             <small class="openvault-default-hint" data-default-key="alpha"></small>
                         </label>
-                        <input type="range" id="openvault_alpha" min="0" max="1" step="0.01" value="0.7" />
+                        <input type="range" id="openvault_alpha" min="0" max="1" step="0.01" />
                         <small class="openvault-hint">1.0 = semantic vibes only · 0.5 = balanced · 0.0 = keywords only</small>
 
                         <div style="height: 8px;"></div>
@@ -623,7 +623,7 @@
                             Retrieval Boost Strength: <span id="openvault_combined_weight_value">15</span>
                             <small class="openvault-default-hint" data-default-key="combinedBoostWeight"></small>
                         </label>
-                        <input type="range" id="openvault_combined_weight" min="1" max="30" step="1" value="15" />
+                        <input type="range" id="openvault_combined_weight" min="1" max="30" step="1" />
                         <small class="openvault-hint">Maximum boost points for semantic+keyword matching</small>
                     </div>
                 </details>
@@ -636,7 +636,7 @@
                             Decay Rate (Lambda): <span id="openvault_forgetfulness_lambda_value">0.05</span>
                             <small class="openvault-default-hint" data-default-key="forgetfulnessBaseLambda"></small>
                         </label>
-                        <input type="range" id="openvault_forgetfulness_lambda" min="0.01" max="0.20" step="0.01" value="0.05" />
+                        <input type="range" id="openvault_forgetfulness_lambda" min="0.01" max="0.20" step="0.01" />
                         <small class="openvault-hint">How fast memories fade. Lower = memories last longer. 0.05 = moderate, 0.01 = near-permanent.</small>
 
                         <div style="height: 8px;"></div>
@@ -645,7 +645,7 @@
                             Importance-5 Floor: <span id="openvault_importance5_floor_value">5</span>
                             <small class="openvault-default-hint" data-default-key="forgetfulnessImportance5Floor"></small>
                         </label>
-                        <input type="range" id="openvault_importance5_floor" min="1" max="20" step="1" value="5" />
+                        <input type="range" id="openvault_importance5_floor" min="1" max="20" step="1" />
                         <small class="openvault-hint">Minimum score for max-importance memories. Higher = critical memories stay relevant.</small>
                     </div>
                 </details>
@@ -658,7 +658,7 @@
                             Semantic Threshold: <span id="openvault_vector_threshold_value">0.5</span>
                             <small class="openvault-default-hint" data-default-key="vectorSimilarityThreshold"></small>
                         </label>
-                        <input type="range" id="openvault_vector_threshold" min="0" max="1" step="0.01" value="0.5" />
+                        <input type="range" id="openvault_vector_threshold" min="0" max="1" step="0.01" />
                         <small class="openvault-hint">Noise filter. 0.7+ = strict (only close matches), 0.3- = loose</small>
 
                         <div style="height: 8px;"></div>
@@ -667,7 +667,7 @@
                             Cosine Dedup Threshold: <span id="openvault_dedup_threshold_value">0.92</span>
                             <small class="openvault-default-hint" data-default-key="dedupSimilarityThreshold"></small>
                         </label>
-                        <input type="range" id="openvault_dedup_threshold" min="0.80" max="0.98" step="0.01" value="0.92" />
+                        <input type="range" id="openvault_dedup_threshold" min="0.80" max="0.98" step="0.01" />
                         <small class="openvault-hint">0.85 = permissive (keeps more) · 0.92 = default · 0.96 = strict (only exact paraphrases)</small>
 
                         <div style="height: 8px;"></div>
@@ -676,7 +676,7 @@
                             Jaccard Dedup Threshold: <span id="openvault_dedup_jaccard_value">0.60</span>
                             <small class="openvault-default-hint" data-default-key="dedupJaccardThreshold"></small>
                         </label>
-                        <input type="range" id="openvault_dedup_jaccard" min="0.30" max="0.90" step="0.01" value="0.60" />
+                        <input type="range" id="openvault_dedup_jaccard" min="0.30" max="0.90" step="0.01" />
                         <small class="openvault-hint">Token-overlap filter for near-duplicates. Lower = more aggressive dedup.</small>
 
                         <div style="height: 8px;"></div>
@@ -685,7 +685,7 @@
                             Entity Merge Threshold: <span id="openvault_entity_merge_threshold_value">0.80</span>
                             <small class="openvault-default-hint" data-default-key="entityMergeSimilarityThreshold"></small>
                         </label>
-                        <input type="range" id="openvault_entity_merge_threshold" min="0.5" max="1" step="0.01" value="0.80" />
+                        <input type="range" id="openvault_entity_merge_threshold" min="0.5" max="1" step="0.01" />
                         <small class="openvault-hint">Semantic similarity to merge entities. Higher = fewer merges.</small>
                     </div>
                 </details>

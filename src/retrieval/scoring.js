@@ -22,14 +22,14 @@ export function getScoringParams() {
     const settings = getDeps().getExtensionSettings()[extensionName];
     return {
         constants: {
-            BASE_LAMBDA: settings.forgetfulnessBaseLambda ?? 0.05,
-            IMPORTANCE_5_FLOOR: settings.forgetfulnessImportance5Floor ?? 5,
-            reflectionDecayThreshold: settings.reflectionDecayThreshold ?? 750,
+            BASE_LAMBDA: settings.forgetfulnessBaseLambda,
+            IMPORTANCE_5_FLOOR: settings.forgetfulnessImportance5Floor,
+            reflectionDecayThreshold: settings.reflectionDecayThreshold,
         },
         settings: {
             vectorSimilarityThreshold: settings.vectorSimilarityThreshold,
-            alpha: settings.alpha ?? 0.7,
-            combinedBoostWeight: settings.combinedBoostWeight ?? 15,
+            alpha: settings.alpha,
+            combinedBoostWeight: settings.combinedBoostWeight,
         },
     };
 }

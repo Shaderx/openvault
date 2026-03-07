@@ -109,8 +109,8 @@ export function buildRetrievalContext(opts = {}) {
         primaryCharacter,
         activeCharacters: getActiveCharacters(),
         headerName: isGroupChat ? povCharacters[0] : 'Scene',
-        finalTokens: settings.retrievalFinalTokens || 12000,
-        worldContextBudget: settings.worldContextBudget || 2000,
+        finalTokens: settings.retrievalFinalTokens,
+        worldContextBudget: settings.worldContextBudget,
         graphNodes: data?.graph?.nodes || {},
     };
 }
