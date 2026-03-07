@@ -283,11 +283,20 @@
                 <details class="openvault-details" style="margin-top: 15px;">
                     <summary><i class="fa-solid fa-gears"></i> Extraction & Graph Rules</summary>
                     <div class="openvault-settings-group">
-                        <label for="openvault_messages_per_extraction">
-                            Messages per Extraction: <span id="openvault_messages_per_extraction_value">10</span>
-                            <small class="openvault-default-hint" data-default-key="messagesPerExtraction"></small>
+                        <label for="openvault_extraction_token_budget">
+                            Extraction Token Budget: <span id="openvault_extraction_token_budget_value">16000</span> tokens
+                            <small class="openvault-default-hint" data-default-key="extractionTokenBudget"></small>
                         </label>
-                        <input type="range" id="openvault_messages_per_extraction" min="10" max="50" step="5" value="10" />
+                        <input type="range" id="openvault_extraction_token_budget" min="4000" max="64000" step="1000" value="16000" />
+                        <small class="openvault-hint">Token threshold for extraction batches. When unextracted messages accumulate past this budget, a batch is processed. Larger = fewer LLM calls, smaller = more frequent extraction.</small>
+
+                        <div class="openvault-budget-indicator">
+                            <span class="openvault-budget-label">Unextracted:</span>
+                            <div class="openvault-budget-bar">
+                                <div class="openvault-budget-fill" id="openvault_extraction_budget_fill"></div>
+                            </div>
+                            <span class="openvault-budget-text" id="openvault_extraction_budget_text">0 / 16k</span>
+                        </div>
 
                         <div style="height: 8px;"></div>
 
@@ -476,11 +485,20 @@
 
                         <div style="height: 8px;"></div>
 
-                        <label for="openvault_auto_hide_threshold">
-                            Messages to keep visible: <span id="openvault_auto_hide_threshold_value">50</span>
-                            <small class="openvault-default-hint" data-default-key="autoHideThreshold"></small>
+                        <label for="openvault_visible_chat_budget">
+                            Visible Chat Budget: <span id="openvault_visible_chat_budget_value">16000</span> tokens
+                            <small class="openvault-default-hint" data-default-key="visibleChatBudget"></small>
                         </label>
-                        <input type="range" id="openvault_auto_hide_threshold" min="10" max="200" step="2" value="50" />
+                        <input type="range" id="openvault_visible_chat_budget" min="4000" max="64000" step="1000" value="16000" />
+                        <small class="openvault-hint">Maximum tokens visible in chat history. Oldest already-extracted messages are auto-hidden when exceeded. Acts as a minimum guarantee — chat may temporarily exceed this until extraction catches up.</small>
+
+                        <div class="openvault-budget-indicator">
+                            <span class="openvault-budget-label">Visible:</span>
+                            <div class="openvault-budget-bar">
+                                <div class="openvault-budget-fill" id="openvault_visible_budget_fill"></div>
+                            </div>
+                            <span class="openvault-budget-text" id="openvault_visible_budget_text">0 / 16k</span>
+                        </div>
 
                         <div style="height: 8px;"></div>
 
