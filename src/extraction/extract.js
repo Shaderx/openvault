@@ -78,126 +78,6 @@ import { countTokens, getMessageTokenCount } from '../utils/tokens.js';
 import { getBackfillMessageIds, getExtractedMessageIds, getNextBatch } from './scheduler.js';
 import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
 
-// ============================================================================
-// CHARACTER NAME NORMALIZATION
-// Generic substitution detection — no transliteration tables, no hardcoding.
-// When the LLM transliterates a known character name (e.g., "Suzy" → "Сузи"),
-// we detect it by elimination: unknown names that fill the "slot" of a missing
-// known character are assumed to be transliterations and get replaced.
-// ============================================================================
-
-/**
- * Detect character name substitutions across all events.
- * @param {Array} events - Extracted events with characters_involved
- * @param {string[]} knownNames - Canonical character names from the character card
- * @returns {Map<string, string>} Map of transliterated → canonical name
- */
-export function detectCharNameSubstitutions(events, knownNames) {
-    const substitutions = new Map();
-    if (!knownNames?.length || !events?.length) return substitutions;
-
-    const knownLower = new Map(knownNames.map((n) => [n.toLowerCase(), n]));
-
-    // Collect all unknown names and track which known names appear
-    const allUnknowns = new Set();
-    const allMatched = new Set();
-
-    for (const event of events) {
-        for (const name of event.characters_involved || []) {
-            if (knownLower.has(name.toLowerCase())) {
-                allMatched.add(name.toLowerCase());
-            } else {
-                allUnknowns.add(name);
-            }
-        }
-    }
-
-    if (allUnknowns.size === 0) return substitutions;
-
-    const missing = knownNames.filter((n) => !allMatched.has(n.toLowerCase()));
-
-    if (allUnknowns.size === missing.length && missing.length > 0) {
-        // N:N match — pair each unknown with a missing known character
-        // For 1:1 this is unambiguous; for N:N we pair by array order (best-effort)
-        const unknownArr = [...allUnknowns];
-        for (let i = 0; i < unknownArr.length; i++) {
-            substitutions.set(unknownArr[i], missing[i]);
-            log(`Character name normalized: "${unknownArr[i]}" → "${missing[i]}"`);
-        }
-    } else if (allUnknowns.size > 0 && missing.length > 0 && allUnknowns.size !== missing.length) {
-        log(
-            `Character name normalization: ${allUnknowns.size} unknown names, ${missing.length} missing known — count mismatch, skipping`
-        );
-    }
-
-    return substitutions;
-}
-
-/**
- * Replace transliterated character names in extracted events.
- */
-export function applyCharNameSubstitutions(events, substitutions) {
-    if (!substitutions.size) return events;
-
-    return events.map((event) => {
-        const modified = { ...event };
-        for (const [oldName, newName] of substitutions) {
-            if (modified.characters_involved) {
-                modified.characters_involved = modified.characters_involved.map((n) => (n === oldName ? newName : n));
-            }
-            if (modified.summary) {
-                modified.summary = modified.summary.replaceAll(oldName, newName);
-            }
-            if (modified.witnesses) {
-                modified.witnesses = modified.witnesses.map((n) => (n === oldName ? newName : n));
-            }
-            if (modified.emotional_impact?.[oldName]) {
-                modified.emotional_impact = { ...modified.emotional_impact };
-                modified.emotional_impact[newName] = modified.emotional_impact[oldName];
-                delete modified.emotional_impact[oldName];
-            }
-            if (modified.relationship_impact?.[oldName]) {
-                modified.relationship_impact = { ...modified.relationship_impact };
-                modified.relationship_impact[newName] = modified.relationship_impact[oldName];
-                delete modified.relationship_impact[oldName];
-            }
-        }
-        return modified;
-    });
-}
-
-/**
- * Replace transliterated character names in graph entities and relationships.
- */
-export function applyCharNameSubstitutionsToGraph(graphResult, substitutions) {
-    if (!substitutions.size) return graphResult;
-
-    const entities = (graphResult.entities || []).map((e) => {
-        const modified = { ...e };
-        for (const [oldName, newName] of substitutions) {
-            if (modified.name === oldName) modified.name = newName;
-            if (modified.description) {
-                modified.description = modified.description.replaceAll(oldName, newName);
-            }
-        }
-        return modified;
-    });
-
-    const relationships = (graphResult.relationships || []).map((r) => {
-        const modified = { ...r };
-        for (const [oldName, newName] of substitutions) {
-            if (modified.source === oldName) modified.source = newName;
-            if (modified.target === oldName) modified.target = newName;
-            if (modified.description) {
-                modified.description = modified.description.replaceAll(oldName, newName);
-            }
-        }
-        return modified;
-    });
-
-    return { ...graphResult, entities, relationships };
-}
-
 /**
  * Update character states based on extracted events
  * @param {Array} events - Extracted events
@@ -531,13 +411,6 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         const eventResult = parseEventExtractionResponse(eventJson);
         let events = eventResult.events;
 
-        // Normalize transliterated character names back to canonical form
-        const knownCharNames = [characterName, userName];
-        const charSubstitutions = detectCharNameSubstitutions(events, knownCharNames);
-        if (charSubstitutions.size) {
-            events = applyCharNameSubstitutions(events, charSubstitutions);
-        }
-
         // Stage 3B: Graph Extraction (LLM Call 2) — skip if no events
         let graphResult = { entities: [], relationships: [] };
         if (events.length > 0) {
@@ -557,11 +430,6 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
             const graphJson = await callLLM(graphPrompt, LLM_CONFIGS.extraction_graph, { structured: true });
             graphResult = parseGraphExtractionResponse(graphJson);
-
-            // Apply same character name normalization to graph entities/relationships
-            if (charSubstitutions.size) {
-                graphResult = applyCharNameSubstitutionsToGraph(graphResult, charSubstitutions);
-            }
         }
 
         // Merge into unified validated object for downstream stages
