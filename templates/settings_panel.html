@@ -279,15 +279,15 @@
                     </div>
                 </div>
 
-                <!-- Extraction & Graph Rules (collapsed) -->
+                <!-- Background LLM Payload -->
                 <details class="openvault-details" style="margin-top: 15px;">
-                    <summary><i class="fa-solid fa-gears"></i> Extraction & Graph Rules</summary>
+                    <summary><i class="fa-solid fa-microchip"></i> Background LLM Payload</summary>
                     <div class="openvault-settings-group">
                         <label for="openvault_extraction_token_budget">
-                            Extraction Token Budget: <span id="openvault_extraction_token_budget_value">16000</span> tokens
+                            Extraction Token Budget: <span id="openvault_extraction_token_budget_value">12000</span> tokens
                             <small class="openvault-default-hint" data-default-key="extractionTokenBudget"></small>
                         </label>
-                        <input type="range" id="openvault_extraction_token_budget" min="4000" max="64000" step="1000" value="16000" />
+                        <input type="range" id="openvault_extraction_token_budget" min="4000" max="64000" step="1000" value="12000" />
                         <small class="openvault-hint">Token threshold for extraction batches. When unextracted messages accumulate past this budget, a batch is processed. Larger = fewer LLM calls, smaller = more frequent extraction.</small>
 
                         <div class="openvault-budget-indicator">
@@ -295,40 +295,37 @@
                             <div class="openvault-budget-bar">
                                 <div class="openvault-budget-fill" id="openvault_extraction_budget_fill"></div>
                             </div>
-                            <span class="openvault-budget-text" id="openvault_extraction_budget_text">0 / 16k</span>
+                            <span class="openvault-budget-text" id="openvault_extraction_budget_text">0 / 12k</span>
                         </div>
 
                         <div style="height: 8px;"></div>
 
                         <label for="openvault_extraction_rearview">
-                            Context Window Size: <span id="openvault_extraction_rearview_value">12000</span> tokens
+                            Context Window Size: <span id="openvault_extraction_rearview_value">8000</span> tokens
                             <small class="openvault-default-hint" data-default-key="contextWindowSize"></small>
-                            <small class="openvault-words-hint">~<span id="openvault_extraction_rearview_words">9000</span> words</small>
+                            <small class="openvault-words-hint">~<span id="openvault_extraction_rearview_words">6000</span> words</small>
                         </label>
-                        <input type="range" id="openvault_extraction_rearview" min="1000" max="32000" step="1000" value="12000" />
+                        <input type="range" id="openvault_extraction_rearview" min="1000" max="32000" step="1000" value="8000" />
                         <small class="openvault-hint">How much past memories the LLM sees when writing new memories</small>
 
-                        <div style="height: 8px;"></div>
+                        <!-- Payload Calculator (NEW) -->
+                        <div id="openvault_payload_calculator" class="openvault-payload-calc">
+                            <span id="openvault_payload_emoji">✅</span>
+                            Estimated total: ~<span id="openvault_payload_total">32,000</span> tokens
+                            <div class="openvault-payload-breakdown" id="openvault_payload_breakdown">
+                                (12k batch + 8k rearview + 12k overhead)
+                            </div>
+                            <div class="openvault-payload-hint">
+                                Ensure your Extraction Profile supports this context size.
+                            </div>
+                        </div>
+                    </div>
+                </details>
 
-                        <!-- Entity Description Cap (NEW) -->
-                        <label for="openvault_entity_description_cap">
-                            Entity Description Cap: <span id="openvault_entity_description_cap_value">3</span>
-                            <small class="openvault-default-hint" data-default-key="entityDescriptionCap"></small>
-                        </label>
-                        <input type="range" id="openvault_entity_description_cap" min="1" max="10" step="1" value="3" />
-                        <small class="openvault-hint">Max description segments per entity. Older segments are evicted (FIFO).</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_edge_description_cap">
-                            Edge Description Cap: <span id="openvault_edge_description_cap_value">5</span>
-                            <small class="openvault-default-hint" data-default-key="edgeDescriptionCap"></small>
-                        </label>
-                        <input type="range" id="openvault_edge_description_cap" min="1" max="20" step="1" value="5" />
-                        <small class="openvault-hint">Max description segments per edge (FIFO eviction).</small>
-
-                        <div style="height: 8px;"></div>
-
+                <!-- Reflection Engine -->
+                <details class="openvault-details" style="margin-top: 10px;">
+                    <summary><i class="fa-solid fa-lightbulb"></i> Reflection Engine</summary>
+                    <div class="openvault-settings-group">
                         <label for="openvault_reflection_threshold">
                             Reflection Threshold: <span id="openvault_reflection_threshold_value">30</span>
                             <small class="openvault-default-hint" data-default-key="reflectionThreshold"></small>
@@ -385,6 +382,29 @@
                         </label>
                         <input type="range" id="openvault_reflection_decay_threshold" min="100" max="2000" step="50" value="750" />
                         <small class="openvault-hint">Messages before reflections start losing priority. Higher = reflections stay relevant longer.</small>
+                    </div>
+                </details>
+
+                <!-- Graph & Communities -->
+                <details class="openvault-details" style="margin-top: 10px;">
+                    <summary><i class="fa-solid fa-diagram-project"></i> Graph & Communities</summary>
+                    <div class="openvault-settings-group">
+                        <!-- Entity Description Cap (NEW) -->
+                        <label for="openvault_entity_description_cap">
+                            Entity Description Cap: <span id="openvault_entity_description_cap_value">3</span>
+                            <small class="openvault-default-hint" data-default-key="entityDescriptionCap"></small>
+                        </label>
+                        <input type="range" id="openvault_entity_description_cap" min="1" max="10" step="1" value="3" />
+                        <small class="openvault-hint">Max description segments per entity. Older segments are evicted (FIFO).</small>
+
+                        <div style="height: 8px;"></div>
+
+                        <label for="openvault_edge_description_cap">
+                            Edge Description Cap: <span id="openvault_edge_description_cap_value">5</span>
+                            <small class="openvault-default-hint" data-default-key="edgeDescriptionCap"></small>
+                        </label>
+                        <input type="range" id="openvault_edge_description_cap" min="1" max="20" step="1" value="5" />
+                        <small class="openvault-hint">Max description segments per edge (FIFO eviction).</small>
 
                         <div style="height: 8px;"></div>
 
@@ -404,9 +424,13 @@
                         </label>
                         <input type="range" id="openvault_community_staleness" min="20" max="500" step="10" value="100" />
                         <small class="openvault-hint">Messages before community summaries are considered stale.</small>
+                    </div>
+                </details>
 
-                        <div style="height: 8px;"></div>
-
+                <!-- System Limits -->
+                <details class="openvault-details" style="margin-top: 10px;">
+                    <summary><i class="fa-solid fa-gauge"></i> System Limits</summary>
+                    <div class="openvault-settings-group">
                         <label for="openvault_backfill_rpm">
                             Backfill Rate Limit (RPM)
                             <small class="openvault-default-hint" data-default-key="backfillRateLimit"></small>
