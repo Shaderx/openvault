@@ -23,6 +23,8 @@ import {
     setEmbeddingStatusCallback,
 } from '../embeddings.js';
 import { updateEventListeners } from '../events.js';
+import { getExtractedMessageIds, getUnextractedMessageIds } from '../extraction/scheduler.js';
+import { getTokenSum } from '../utils/tokens.js';
 import { exportToClipboard } from './export-debug.js';
 import { validateRPM } from './helpers.js';
 import { initBrowser, nextPage, prevPage, refreshAllUI, resetAndRender } from './render.js';
@@ -331,10 +333,13 @@ function bindUIElements() {
     bindSetting('embedding_rounding', 'embeddingRounding', 'bool');
 
     // Extraction settings
-    bindSetting('messages_per_extraction', 'messagesPerExtraction');
+    bindSetting('extraction_token_budget', 'extractionTokenBudget');
     bindSetting('extraction_rearview', 'extractionRearviewTokens', 'int', (v) =>
         updateWordsDisplay(v, 'openvault_extraction_rearview_words')
     );
+
+    // Token budget settings
+    bindSetting('visible_chat_budget', 'visibleChatBudget');
 
     // Retrieval pipeline settings
     bindSetting('final_budget', 'retrievalFinalTokens', 'int', (v) =>
@@ -343,7 +348,6 @@ function bindUIElements() {
 
     // Auto-hide settings
     bindSetting('auto_hide', 'autoHideEnabled', 'bool');
-    bindSetting('auto_hide_threshold', 'autoHideThreshold');
 
     // Scoring weights (alpha-blend)
     bindSetting('alpha', 'alpha', 'float');
@@ -392,7 +396,7 @@ function bindUIElements() {
         const oldSource = currentSettings?.[extensionName]?.embeddingSource;
 
         if (oldSource && oldSource !== value) {
-            const { getStrategy } = await import('../embeddings/strategies.js');
+            const { getStrategy } = await import('../embeddings.js');
             const oldStrategy = getStrategy(oldSource);
             if (oldStrategy && typeof oldStrategy.reset === 'function') {
                 await oldStrategy.reset();
@@ -494,12 +498,16 @@ export function updateUI() {
     $('#openvault_embedding_rounding').prop('checked', settings.embeddingRounding);
 
     // Extraction settings
-    $('#openvault_messages_per_extraction').val(settings.messagesPerExtraction);
-    $('#openvault_messages_per_extraction_value').text(settings.messagesPerExtraction);
+    $('#openvault_extraction_token_budget').val(settings.extractionTokenBudget ?? 16000);
+    $('#openvault_extraction_token_budget_value').text(settings.extractionTokenBudget ?? 16000);
 
     $('#openvault_extraction_rearview').val(settings.extractionRearviewTokens);
     $('#openvault_extraction_rearview_value').text(settings.extractionRearviewTokens);
     updateWordsDisplay(settings.extractionRearviewTokens, 'openvault_extraction_rearview_words');
+
+    // Token budget settings
+    $('#openvault_visible_chat_budget').val(settings.visibleChatBudget ?? 16000);
+    $('#openvault_visible_chat_budget_value').text(settings.visibleChatBudget ?? 16000);
 
     // Retrieval pipeline settings
     $('#openvault_final_budget').val(settings.retrievalFinalTokens);
@@ -508,8 +516,6 @@ export function updateUI() {
 
     // Auto-hide settings
     $('#openvault_auto_hide').prop('checked', settings.autoHideEnabled);
-    $('#openvault_auto_hide_threshold').val(settings.autoHideThreshold);
-    $('#openvault_auto_hide_threshold_value').text(settings.autoHideThreshold);
 
     // Scoring weights (alpha-blend)
     $('#openvault_alpha').val(settings.alpha ?? defaultSettings.alpha);
@@ -612,6 +618,63 @@ export function updateUI() {
 
     // Refresh all UI components
     refreshAllUI();
+}
+
+// =============================================================================
+// Budget Indicators
+// =============================================================================
+
+/**
+ * Update budget fill indicators with color coding.
+ * Called from refreshAllUI.
+ */
+export function updateBudgetIndicators() {
+    const data = getOpenVaultData();
+    const context = getDeps().getContext?.();
+    const chat = context?.chat || [];
+    const settings = getSettings();
+
+    if (!data || chat.length === 0) {
+        $('#openvault_extraction_budget_text').text('No chat');
+        $('#openvault_visible_budget_text').text('No chat');
+        return;
+    }
+
+    // Extraction indicator
+    const extractionBudget = settings.extractionTokenBudget || 16000;
+    const extractedIds = getExtractedMessageIds(data);
+    const unextractedIds = getUnextractedMessageIds(chat, extractedIds, 0);
+    const unextractedTokens = getTokenSum(chat, unextractedIds, data);
+    const extractionPct = Math.min((unextractedTokens / extractionBudget) * 100, 100);
+
+    $('#openvault_extraction_budget_fill').css('width', `${extractionPct}%`);
+    $('#openvault_extraction_budget_text').text(
+        `${(unextractedTokens / 1000).toFixed(1)}k / ${(extractionBudget / 1000).toFixed(0)}k`
+    );
+    updateBudgetColor('openvault_extraction_budget_fill', extractionPct);
+
+    // Visible chat indicator
+    const visibleBudget = settings.visibleChatBudget || 16000;
+    const visibleIndices = [];
+    for (let i = 0; i < chat.length; i++) {
+        if (!chat[i].is_system) visibleIndices.push(i);
+    }
+    const visibleTokens = getTokenSum(chat, visibleIndices, data);
+    const visiblePct = Math.min((visibleTokens / visibleBudget) * 100, 100);
+
+    $('#openvault_visible_budget_fill').css('width', `${visiblePct}%`);
+    $('#openvault_visible_budget_text').text(
+        `${(visibleTokens / 1000).toFixed(1)}k / ${(visibleBudget / 1000).toFixed(0)}k`
+    );
+    updateBudgetColor('openvault_visible_budget_fill', visiblePct);
+}
+
+function updateBudgetColor(elementId, pct) {
+    const el = $(`#${elementId}`);
+    el.removeClass('budget-low budget-mid budget-high');
+    if (pct < 50) el.addClass('budget-low');
+    else if (pct < 80) el.addClass('budget-mid');
+    else el.addClass('budget-high');
 }
 
 // =============================================================================

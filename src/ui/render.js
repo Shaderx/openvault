@@ -22,6 +22,7 @@ import {
     getPaginationInfo,
     sortMemoriesByDate,
 } from './helpers.js';
+import { updateBudgetIndicators } from './settings.js';
 import { refreshStats } from './status.js';
 import {
     renderCharacterState,
@@ -415,6 +416,7 @@ export function refreshAllUI() {
     renderCharacterStates();
     renderReflectionProgressSection();
     renderWorldTab();
+    updateBudgetIndicators();
 }
 
 export { prevPage as browserPrevPage, nextPage as browserNextPage, resetAndRender as browserResetAndRender };
