@@ -72,6 +72,25 @@ export const PREFILL_PRESETS = {
 };
 
 /**
+ * Resolve the preamble string based on user settings.
+ * @param {Object} settings - Extension settings
+ * @returns {string} The preamble string
+ */
+export function resolveExtractionPreamble(settings) {
+    return settings?.preambleLanguage === 'en' ? SYSTEM_PREAMBLE_EN : SYSTEM_PREAMBLE_CN;
+}
+
+/**
+ * Resolve the assistant prefill string based on user settings.
+ * @param {Object} settings - Extension settings
+ * @returns {string} The prefill string
+ */
+export function resolveExtractionPrefill(settings) {
+    const key = settings?.extractionPrefill || 'think_tag';
+    return PREFILL_PRESETS[key]?.value ?? '<think>\n';
+}
+
+/**
  * Wrap system prompt with preamble and build message array with assistant prefill.
  * @param {string} systemPrompt - The task-specific system prompt
  * @param {string} userPrompt - The user message

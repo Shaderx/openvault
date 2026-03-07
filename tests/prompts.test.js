@@ -7,6 +7,8 @@ import {
     buildInsightExtractionPrompt,
     buildSalientQuestionsPrompt,
     PREFILL_PRESETS,
+    resolveExtractionPreamble,
+    resolveExtractionPrefill,
     SYSTEM_PREAMBLE_CN,
     SYSTEM_PREAMBLE_EN,
 } from '../src/prompts.js';
@@ -429,5 +431,53 @@ describe('buildMessages via non-event prompts', () => {
     it('community summary prompt uses custom preamble', () => {
         const result = buildCommunitySummaryPrompt(['- Node'], ['- Edge'], SYSTEM_PREAMBLE_EN);
         expect(result[0].content).toContain('Interactive Fiction Archival Database');
+    });
+});
+
+describe('resolveExtractionPreamble', () => {
+    it('returns CN preamble by default', () => {
+        expect(resolveExtractionPreamble({})).toBe(SYSTEM_PREAMBLE_CN);
+    });
+
+    it('returns CN preamble when preambleLanguage is cn', () => {
+        expect(resolveExtractionPreamble({ preambleLanguage: 'cn' })).toBe(SYSTEM_PREAMBLE_CN);
+    });
+
+    it('returns EN preamble when preambleLanguage is en', () => {
+        expect(resolveExtractionPreamble({ preambleLanguage: 'en' })).toBe(SYSTEM_PREAMBLE_EN);
+    });
+
+    it('returns CN preamble for null settings', () => {
+        expect(resolveExtractionPreamble(null)).toBe(SYSTEM_PREAMBLE_CN);
+    });
+});
+
+describe('resolveExtractionPrefill', () => {
+    it('returns <think> by default', () => {
+        expect(resolveExtractionPrefill({})).toBe('<think>\n');
+    });
+
+    it('returns correct value for think_tag key', () => {
+        expect(resolveExtractionPrefill({ extractionPrefill: 'think_tag' })).toBe('<think>\n');
+    });
+
+    it('returns correct value for pipeline key', () => {
+        expect(resolveExtractionPrefill({ extractionPrefill: 'pipeline' })).toContain('Pipeline engaged');
+    });
+
+    it('returns empty string for none key', () => {
+        expect(resolveExtractionPrefill({ extractionPrefill: 'none' })).toBe('');
+    });
+
+    it('returns { for json_opener key', () => {
+        expect(resolveExtractionPrefill({ extractionPrefill: 'json_opener' })).toBe('{');
+    });
+
+    it('falls back to <think> for unknown key', () => {
+        expect(resolveExtractionPrefill({ extractionPrefill: 'nonexistent' })).toBe('<think>\n');
+    });
+
+    it('falls back to <think> for null settings', () => {
+        expect(resolveExtractionPrefill(null)).toBe('<think>\n');
     });
 });
