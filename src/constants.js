@@ -52,7 +52,7 @@ export const defaultSettings = {
     // Cosine similarity threshold for filtering duplicate events (0-1).
     // With small embedding models (e5-small), same-domain content clusters tightly (0.85-0.93),
     // so 0.94 filters true paraphrases while keeping nuanced roleplay actions distinct.
-    dedupSimilarityThreshold: 0.94,
+    dedupSimilarityThreshold: 0.95,
     dedupJaccardThreshold: 0.6, // Token-overlap (Jaccard index) threshold for near-duplicate filtering
     // Forgetfulness curve settings (scoring)
     forgetfulnessBaseLambda: 0.05, // Base decay rate for exponential curve
