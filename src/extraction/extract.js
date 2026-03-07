@@ -68,7 +68,8 @@ import { showToast } from '../utils/dom.js';
 import { log } from '../utils/logging.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
 import { estimateTokens, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
-import { getBackfillMessageIds, getExtractedMessageIds } from './scheduler.js';
+import { getMessageTokenCount } from '../utils/tokens.js';
+import { getBackfillMessageIds, getExtractedMessageIds, getNextBatch } from './scheduler.js';
 import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
 
 /**
@@ -323,14 +324,23 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Targeted mode: When specific IDs are provided (e.g., backfill)
         messagesToExtract = messageIds.map((id) => ({ id, ...chat[id] })).filter((m) => m != null);
     } else {
-        // Incremental mode: Extract last few unprocessed messages
+        // Incremental mode: Extract last few unprocessed messages using token budget
         const lastProcessedId = data[LAST_PROCESSED_KEY] || -1;
-        const messageCount = settings.messagesPerExtraction || 5;
-
-        messagesToExtract = chat
+        const tokenBudget = settings.extractionTokenBudget || 16000;
+        const candidates = chat
             .map((m, idx) => ({ id: idx, ...m }))
-            .filter((m) => !m.is_system && m.id > lastProcessedId)
-            .slice(-messageCount);
+            .filter((m) => !m.is_system && m.id > lastProcessedId);
+
+        // Take from the end (newest), accumulate until budget
+        let accumulated = 0;
+        let startIdx = candidates.length;
+        for (let i = candidates.length - 1; i >= 0; i--) {
+            const tokens = getMessageTokenCount(chat, candidates[i].id, data);
+            if (accumulated + tokens > tokenBudget && startIdx < candidates.length) break;
+            accumulated += tokens;
+            startIdx = i;
+        }
+        messagesToExtract = candidates.slice(startIdx);
     }
 
     if (messagesToExtract.length === 0) {
@@ -594,7 +604,7 @@ export async function extractAllMessages(updateEventListenersFn) {
     }
 
     const settings = getDeps().getExtensionSettings()[extensionName];
-    const messageCount = settings.messagesPerExtraction || 5;
+    const tokenBudget = settings.extractionTokenBudget || 16000;
     const data = getOpenVaultData();
     if (!data) {
         showToast('warning', 'No chat context available');
@@ -605,7 +615,7 @@ export async function extractAllMessages(updateEventListenersFn) {
     const { messageIds: initialMessageIds, batchCount: initialBatchCount } = getBackfillMessageIds(
         chat,
         data,
-        messageCount
+        tokenBudget
     );
     const alreadyExtractedIds = getExtractedMessageIds(data);
 
@@ -620,7 +630,7 @@ export async function extractAllMessages(updateEventListenersFn) {
                 `All eligible messages already extracted (${alreadyExtractedIds.size} messages have memories)`
             );
         } else {
-            showToast('warning', `Not enough messages for a complete batch (need ${messageCount})`);
+            showToast('warning', `Not enough messages for a complete batch (need token budget met)`);
         }
         return;
     }
@@ -642,6 +652,7 @@ export async function extractAllMessages(updateEventListenersFn) {
     // Process in batches - re-fetch indices each iteration to handle chat mutations
     let totalEvents = 0;
     let batchesProcessed = 0;
+    let messagesProcessed = 0;
     let currentBatch = null;
     let retryCount = 0;
     let cumulativeBackoffMs = 0;
@@ -667,21 +678,19 @@ export async function extractAllMessages(updateEventListenersFn) {
             const { messageIds: freshIds, batchCount: remainingBatches } = getBackfillMessageIds(
                 freshChat,
                 freshData,
-                messageCount
+                tokenBudget
             );
 
             log(
                 `Backfill check: ${freshIds.length} unextracted messages available, ${remainingBatches} complete batches remaining`
             );
 
-            // No more complete batches available
-            if (freshIds.length < messageCount) {
-                log(`Backfill: No more complete batches available (need ${messageCount}, have ${freshIds.length})`);
+            // Get next batch using token budget
+            currentBatch = getNextBatch(freshChat, freshData, tokenBudget);
+            if (!currentBatch) {
+                log('Backfill: No more complete batches available');
                 break;
             }
-
-            // Take first batch from fresh list (oldest unextracted messages)
-            currentBatch = freshIds.slice(0, messageCount);
         }
 
         // Update progress toast (use initial estimate for display consistency)
@@ -698,6 +707,7 @@ export async function extractAllMessages(updateEventListenersFn) {
             log(`Processing batch ${batchesProcessed + 1}/${initialBatchCount}${retryText}...`);
             const result = await extractMemories(currentBatch, targetChatId);
             totalEvents += result?.events_created || 0;
+            messagesProcessed += currentBatch?.length || 0;
 
             // Success - clear current batch and reset retry count
             currentBatch = null;
@@ -769,7 +779,7 @@ export async function extractAllMessages(updateEventListenersFn) {
         updateEventListenersFn(true);
     }
 
-    showToast('success', `Extracted ${totalEvents} events from ${batchesProcessed * messageCount} messages`);
+    showToast('success', `Extracted ${totalEvents} events from ${messagesProcessed} messages`);
     refreshAllUI();
     setStatus('ready');
     log('Backfill complete');
