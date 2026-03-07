@@ -81,14 +81,22 @@ describe('pov', () => {
             expect(result).toHaveLength(2);
         });
 
-        it('includes non-secret memories where POV character is involved', () => {
+        it('includes memories where POV character is involved regardless of is_secret', () => {
             const memories = [
                 { id: '1', characters_involved: ['Alice', 'Bob'], is_secret: false, witnesses: [] },
                 { id: '2', characters_involved: ['Alice'], is_secret: true, witnesses: [] },
             ];
             const result = filterMemoriesByPOV(memories, ['Alice'], { [CHARACTERS_KEY]: {} });
-            expect(result).toHaveLength(1);
-            expect(result[0].id).toBe('1');
+            expect(result).toHaveLength(2);
+        });
+
+        it('excludes secret memories from characters not involved', () => {
+            const memories = [
+                { id: '1', characters_involved: ['Alice', 'Bob'], is_secret: true, witnesses: [] },
+                { id: '2', characters_involved: ['Alice'], is_secret: false, witnesses: [] },
+            ];
+            const result = filterMemoriesByPOV(memories, ['Charlie'], { [CHARACTERS_KEY]: {} });
+            expect(result).toHaveLength(0);
         });
 
         it('includes memories in POV character known_events', () => {

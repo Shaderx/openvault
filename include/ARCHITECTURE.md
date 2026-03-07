@@ -12,7 +12,7 @@ Decoupled two-path architecture operating entirely within SillyTavern's `chatMet
 Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `wakeGeneration` every 500ms), fast-fails on chat switch, and uses exponential backoff.
 
 **Phase 1: Critical (Gates Auto-hide)**
-- **Stage A (Events)**: LLM extracts events using configurable assistant prefill (default: `<think>` tag) and preamble language (CN/EN) -> JSON. Mirror Language Rule auto-detects input language and mirrors it in output values. Bilingual few-shot examples (EN/RU) calibrate model compliance.
+- **Stage A (Events)**: LLM extracts events using configurable assistant prefill (default: `<think>` tag) and preamble language (CN/EN) -> JSON. Mirror Language Rule auto-detects input language and mirrors it in output values. Bilingual few-shot examples (EN/RU) calibrate model compliance. Non-Latin script detection adds user-message reinforcement to prevent English default.
 - **Stage B (Graph)**: LLM extracts entities/relationships using Stage A output.
 - **Graph Update**: Upsert nodes/edges. Semantic Merge (Cosine >0.94 + Token Overlap guard filtering stopwords).
 - **INTERMEDIATE SAVE**: Events, graph, and `processed_message_ids` persisted.
@@ -49,11 +49,15 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 
 **Entity Semantic Merging**: Prevents duplicates ("The King" vs "King Aldric").
 - *Guard 1*: Embeddings (type + name + description) cosine sim >= `0.94`.
-- *Guard 2*: Token Overlap >= 50% (prevents "Burgundy panties" merging with "Burgundy candle"). Old names saved to `aliases`.
+- *Guard 2*: Token Overlap >= 50% (prevents "Burgundy panties" merging with "Burgundy candle"). Old names saved to `aliases`. Does NOT bridge script boundaries (Latin↔Cyrillic) — prompt rules enforce name preservation instead.
 - *Guard 3 (LCS)*: Longest Common Substring ratio >= 60% for keys longer than 2 chars (lowered from 3 to catch short names like "Кай"/"Каю").
 - *Guard 4 (Stems)*: `stemWord()`-based token overlap catches Russian morphological variants (e.g., "ошейник"/"ошейником").
 
-**Reflection Lifecycle (3-Tier)**:
+**POV Filtering**: `filterMemoriesByPOV()` controls what each character "knows":
+- Witnesses see any event (including secrets).
+- Characters in `characters_involved` see the event regardless of `is_secret` (participants know their own secrets).
+- `is_secret` only hides events from characters who are neither involved nor witnesses.
+- Explicit `known_events` tracking for additional access.
 - *Pre-flight*: Aborts if recent events >85% similar to existing insights.
 - *Tier 1 (Reject >=90%)*: Duplicate, discard.
 - *Tier 2 (Replace 80-89%)*: Same theme. Old set to `archived: true`, new added.
@@ -67,11 +71,16 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 
 **Multilingual Prompt Architecture**:
 - *Mirror Language Rule*: All prompts auto-detect input language and mirror it in output string values. JSON keys remain English.
+- *User-Message Reinforcement*: `buildLanguageReminder()` detects non-Latin script in input and injects an explicit "do NOT translate to English" reminder into the user message of all 5 prompts. Fires only for non-English content.
 - *Bilingual Examples*: Every prompt includes paired EN/RU few-shot examples (events: 10, graph: 8, questions: 6, insights: 6, communities: 6).
 - *SFW→Kink Gradient*: Examples progress from safe to explicit content, calibrating model compliance.
-- *Graph Normalization*: Entity names extracted in nominative/base form to prevent morphological duplicates.
+- *Graph Normalization*: Entity names extracted in nominative/base form to prevent morphological duplicates. Names preserved in original script (Suzy stays Latin, Саша stays Cyrillic).
 - *Stem-Augmented Overlap*: `hasSufficientTokenOverlap()` uses `stemWord()` to catch Russian inflected variants (Check 4).
 - *Prompt Modules*: `src/prompts/` contains `rules.js` (shared language rules), `roles.js` (role definitions), `examples/` (bilingual few-shots), `examples/format.js` (XML formatter).
+
+**Event Dedup**: Two-phase filtering in `filterSimilarEvents()`:
+- *Phase 1 (Cross-batch)*: Cosine similarity >= threshold AND Jaccard token overlap >= half the Jaccard threshold. Dual-gate prevents false positives where semantically similar but lexically different events share structure (e.g., same actors, different acts).
+- *Phase 2 (Intra-batch)*: Jaccard token overlap >= threshold between events in the same extraction batch.
 
 **Testing Tiers**:
 - *Tier 1*: Pure transforms (`math.js`, `helpers.js`). Unit tested.

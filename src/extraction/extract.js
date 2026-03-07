@@ -241,7 +241,7 @@ function selectMemoriesForExtraction(data, settings) {
  * @param {number} jaccardThreshold - Jaccard token similarity threshold for intra-batch dedup
  */
 export async function filterSimilarEvents(newEvents, existingMemories, cosineThreshold = 0.92, jaccardThreshold = 0.6) {
-    // Phase 1: Filter against existing memories (cosine)
+    // Phase 1: Filter against existing memories (cosine + Jaccard cross-check)
     let filtered = newEvents;
     if (existingMemories?.length) {
         const results = [];
@@ -258,6 +258,21 @@ export async function filterSimilarEvents(newEvents, existingMemories, cosineThr
                 if (!memory.embedding) continue;
                 const similarity = cosineSimilarity(event.embedding, memory.embedding);
                 if (similarity >= cosineThreshold) {
+                    // Cross-check: require lexical overlap to prevent false positives
+                    // (events with same actors + similar structure but different actions)
+                    const eventTokens = new Set(tokenize(event.summary || ''));
+                    const memoryTokens = new Set(tokenize(memory.summary || ''));
+                    const intersection = [...eventTokens].filter((t) => memoryTokens.has(t)).length;
+                    const union = new Set([...eventTokens, ...memoryTokens]).size;
+                    const jaccard = union > 0 ? intersection / union : 0;
+
+                    if (jaccard < jaccardThreshold * 0.5) {
+                        log(
+                            `Dedup: Cosine ${(similarity * 100).toFixed(1)}% but Jaccard ${(jaccard * 100).toFixed(1)}% too low — keeping:\n  "${event.summary}"\n  vs existing: "${memory.summary}"`
+                        );
+                        continue;
+                    }
+
                     log(
                         `Dedup: Skipping new event:\n  "${event.summary}"\n  (${(similarity * 100).toFixed(1)}% similar to existing memory:\n  "${memory.summary}")`
                     );

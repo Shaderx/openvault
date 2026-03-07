@@ -122,6 +122,23 @@ function buildMessages(systemPrompt, userPrompt, assistantPrefill = '{', preambl
 // PRIVATE FORMATTERS
 // =============================================================================
 
+/**
+ * Detect non-Latin script in text and return a language reinforcement reminder.
+ * Fires only when the narrative is not primarily English — avoids unnecessary noise for English chats.
+ * @param {string} text - The messages/content text to analyze
+ * @returns {string} Reminder string if non-Latin detected, empty string otherwise
+ */
+function buildLanguageReminder(text) {
+    if (!text) return '';
+    const sample = text.slice(0, 2000);
+    const nonAsciiLetters = (sample.match(/[^\x00-\x7F\s\d.,!?;:'"()\-—–…[\]{}<>/@#$%^&*+=|\\~`]/g) || []).length;
+    const latinLetters = (sample.match(/[a-zA-Z]/g) || []).length;
+    if (nonAsciiLetters > latinLetters * 0.5) {
+        return '\nIMPORTANT — LANGUAGE: The text above is NOT in English. Per Language Rules, ALL output string values (summaries, descriptions, emotions, relationship impacts) MUST be in the SAME language as the narrative text. Do NOT translate to English. JSON keys stay English.\n';
+    }
+    return '';
+}
+
 function formatEstablishedMemories(existingMemories) {
     if (!existingMemories?.length) return '';
     const memorySummaries = sortMemoriesBySequence(existingMemories, true)
@@ -270,7 +287,7 @@ ${formatExamples(EVENT_EXAMPLES)}
 <messages>
 ${messages}
 </messages>
-
+${buildLanguageReminder(messages)}
 Analyze the messages above. Extract events only.
 Use exact character names from <context> if provided.
 Write your analysis inside <think> tags FIRST, then output the JSON object with "events" key. No other text.`;
@@ -351,7 +368,7 @@ ${formatExamples(GRAPH_EXAMPLES)}
 ${messages}
 </messages>
 
-${eventsSection}
+${eventsSection}${buildLanguageReminder(messages)}
 Based on the messages${extractedEvents.length > 0 ? ' and extracted events above' : ''}, extract named entities and relationships.
 Respond with a single JSON object containing 'entities' and 'relationships' keys. No other text.`;
 
@@ -404,7 +421,7 @@ ${formatExamples(QUESTION_EXAMPLES)}
 <recent_memories>
 ${memoryList}
 </recent_memories>
-
+${buildLanguageReminder(memoryList)}
 Based on these memories, what are the 3 most important high-level questions about ${characterName}'s current psychological state, relationships, and goals?
 Respond with a single JSON object containing exactly 3 questions. No other text.`;
 
@@ -467,7 +484,7 @@ ${formatExamples(INSIGHT_EXAMPLES)}
 <memories>
 ${memoryList}
 </memories>
-
+${buildLanguageReminder(memoryList)}
 Based on these memories about ${characterName}, extract 1-3 insights that answer the question above.
 Cite specific memory IDs as evidence for each insight.
 Respond with a single JSON object. No other text.`;
@@ -518,14 +535,15 @@ CRITICAL FORMAT RULES:
 ${formatExamples(COMMUNITY_EXAMPLES)}
 </examples>`;
 
+    const entityText = nodeLines.join('\n');
     const userPrompt = `<community_entities>
-${nodeLines.join('\n')}
+${entityText}
 </community_entities>
 
 <community_relationships>
 ${edgeLines.join('\n')}
 </community_relationships>
-
+${buildLanguageReminder(entityText)}
 Write a comprehensive report about this community of entities.
 Respond with a single JSON object containing title, summary, and 1-5 findings. No other text.`;
 

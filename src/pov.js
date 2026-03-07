@@ -37,9 +37,8 @@ export function filterMemoriesByPOV(memories, povCharacters, data) {
     return memories.filter((m) => {
         // Any POV character was a witness (case-insensitive)
         if (m.witnesses?.some((w) => povCharactersLower.includes(w.toLowerCase()))) return true;
-        // Non-secret events that any POV character is involved in
-        if (!m.is_secret && m.characters_involved?.some((c) => povCharactersLower.includes(c.toLowerCase())))
-            return true;
+        // Events that any POV character is involved in (participants know their own secrets)
+        if (m.characters_involved?.some((c) => povCharactersLower.includes(c.toLowerCase()))) return true;
         // Explicitly in any POV character's known events
         if (knownEventIds.has(m.id)) return true;
         return false;

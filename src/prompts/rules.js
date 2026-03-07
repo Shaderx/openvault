@@ -12,7 +12,8 @@ export const MIRROR_LANGUAGE_RULES = `## LANGUAGE RULES (CRITICAL)
    "summary", "characters_involved", "entities", "relationships".
 3. Do NOT mix languages within a single output field.
 4. Character names MUST be preserved exactly as written in the source text.
-   Never transliterate or translate names (Саша stays Саша, not "Sasha").
+   Never transliterate or translate names in either direction
+   (Саша stays Саша, not "Sasha"; Suzy stays Suzy, not "Сузи").
 5. If the source text mixes languages, match the language of the narrative prose
    (actions/descriptions), not the spoken dialogue. Characters may code-switch
    in speech — the narration language is the stable anchor.
