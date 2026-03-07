@@ -254,7 +254,7 @@ export async function filterSimilarEvents(newEvents, existingMemories, cosineThr
                 const similarity = cosineSimilarity(event.embedding, memory.embedding);
                 if (similarity >= cosineThreshold) {
                     log(
-                        `Dedup: Skipping "${event.summary}..." (${(similarity * 100).toFixed(1)}% similar to existing)`
+                        `Dedup: Skipping new event:\n  "${event.summary}"\n  (${(similarity * 100).toFixed(1)}% similar to existing memory:\n  "${memory.summary}")`
                     );
                     isDuplicate = true;
                     break;
@@ -279,7 +279,7 @@ export async function filterSimilarEvents(newEvents, existingMemories, cosineThr
             const jaccard = union > 0 ? intersection / union : 0;
             if (jaccard >= jaccardThreshold) {
                 log(
-                    `Dedup: Skipping "${event.summary.slice(0, 60)}..." (Jaccard ${(jaccard * 100).toFixed(1)}% with "${keptEvent.summary.slice(0, 60)}...")`
+                    `Dedup: Skipping new event:\n  "${event.summary}"\n  (Jaccard ${(jaccard * 100).toFixed(1)}% with kept event:\n  "${keptEvent.summary}")`
                 );
                 isDuplicate = true;
                 break;
