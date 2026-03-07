@@ -12,6 +12,36 @@ We use standard jQuery (provided by SillyTavern), but enforce a strict separatio
 
 ## PATTERNS
 
+### Drawer Sections (`.openvault-details`)
+Collapsible `<details>` elements with accent-stripe styling:
+- Blue left border (`--SmartThemeQuoteColor`)
+- Tinted background via `color-mix()`
+- Rotating `›` chevron (CSS `::after` with `transform: rotate(90deg)`)
+- Summary: `<summary><i class="fa-solid fa-icon"></i> Title</summary>`
+- Content: wrapped in `.openvault-settings-group` div for padding
+- No browser disclosure triangle (hidden via `::-webkit-details-marker`)
+
+### Payload Calculator (`PAYLOAD_CALC`)
+Real-time readout of total LLM context size:
+- Location: `src/constants.js` — single source of truth for all magic numbers
+- Usage: `import { PAYLOAD_CALC } from '../constants.js'` in `settings.js`
+- Formula: `total = budget + rearview + OVERHEAD` (where OVERHEAD = 8000 + 2000 + 2000)
+- Thresholds: GREEN 32k, YELLOW 48k, ORANGE 64k, RED above
+- DOM update via `updatePayloadCalculator()` — reads slider vals, updates emoji/breakdown/color class
+- CSS classes: `.payload-safe`, `.payload-caution`, `.payload-warning`, `.payload-danger`
+
+### Tab 2 (Memories) Drawer Groups
+4 collapsible sections (all collapsed by default):
+1. **Background LLM Payload** — extraction sliders + payload calculator
+2. **Reflection Engine** — threshold, max insights, dedup system, decay
+3. **Graph & Communities** — entity/edge caps, detection interval, staleness
+4. **System Limits** — backfill RPM
+
+### Tab 3 (World) Drawer Groups
+2 collapsible sections:
+1. **Prompt Injection Budgets** — final/world/visible context sliders
+2. **Entity Detection Rules** — entity/embedding windows, top N, boost
+
 ### Slider/Range Input Binding
 Use the `bindSetting` helper for standard int/float/bool settings:
 ```javascript

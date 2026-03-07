@@ -29,11 +29,12 @@ Detailed instructions are lazily loaded when you visit these directories:
 - `/src/retrieval/CLAUDE.md` - Alpha-Blend (BM25 + Vector) scoring, world context.
 - `/src/graph/CLAUDE.md` - Entity graph storage, GraphRAG communities.
 - `/src/reflection/CLAUDE.md` - Per-character reflection pipeline (Smallville).
-- `/src/ui/CLAUDE.md` - UI rendering, jQuery conventions, and template logic.
+- `/src/ui/CLAUDE.md` - UI rendering, jQuery conventions, drawer patterns, payload calculator.
 - `/src/utils/CLAUDE.md` - Shared utilities (stemmer, stopwords, imperatives).
 - `/tests/CLAUDE.md` - Vitest conventions, stubs, and mock injection.
 
 ## GOTCHAS
 - **Always strip `<think>` tags**: Models often return reasoning tags before JSON. Use `stripThinkingTags()` from `src/utils.js` before parsing any LLM output.
+- **`PAYLOAD_CALC` constants**: Single source of truth for LLM context overhead in settings UI. Import from `src/constants.js`. Do NOT hardcode 12k overhead values elsewhere.
 - **`yieldToMain()` polyfill**: Uses `scheduler.yield()` with fallback to `setTimeout(resolve, 0)` for browsers lacking the Scheduler API. Never call `scheduler.yield()` directly.
 - **State Locks**: `operationState.extractionInProgress` in `src/state.js` is used ONLY by manual backfill (`extractAllMessages`). The background worker uses its own `isRunning` flag in `src/extraction/worker.js`. These two systems have mutual exclusion: worker yields if manual backfill starts, manual backfill button rejects if worker is running.
