@@ -16,7 +16,7 @@
 - **Turn-Boundary Snapping** (`snapToTurnBoundary`): Trims message index arrays backward until it finds a valid `Bot -> User` transition or End-of-Chat. **CRITICAL**: Prevents auto-hide or batching from splitting a User message from its Bot response.
 
 ### `text.js`
-- `stripThinkingTags()`: Strips `<think>`, `<reasoning>`, etc. (Case insensitive).
+- `stripThinkingTags()`: Strips `<think>`, `<reasoning>`, etc. (Case insensitive). Also handles orphaned closing tags (e.g., `</think>` without opening) from assistant prefill continuations — strips everything before and including the orphaned tag.
 - `safeParseJSON()`: Multi-layer recovery. Extracts markdown codeblocks -> uses bracket-balancing to isolate JSON -> applies `jsonrepair`. Wraps bare arrays in an `{ events: [] }` object if the LLM forgot the root key.
 
 ### `st-helpers.js`

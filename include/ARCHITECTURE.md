@@ -12,7 +12,7 @@ Decoupled two-path architecture operating entirely within SillyTavern's `chatMet
 Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `wakeGeneration` every 500ms), fast-fails on chat switch, and uses exponential backoff.
 
 **Phase 1: Critical (Gates Auto-hide)**
-- **Stage A (Events)**: LLM extracts events via `<think>` tags -> JSON.
+- **Stage A (Events)**: LLM extracts events using configurable assistant prefill (default: `<think>` tag) and preamble language (CN/EN) -> JSON.
 - **Stage B (Graph)**: LLM extracts entities/relationships using Stage A output.
 - **Graph Update**: Upsert nodes/edges. Semantic Merge (Cosine >0.94 + Token Overlap guard filtering stopwords).
 - **INTERMEDIATE SAVE**: Events, graph, and `processed_message_ids` persisted.

@@ -4,7 +4,7 @@
 Agentic memory extension for SillyTavern providing POV-aware memory, witness tracking, relationships, and emotional continuity. 
 - **Zero External DBs**: All state lives strictly in `context.chatMetadata.openvault`.
 - **Local RAG**: Transformers.js (WebGPU/WASM) or Ollama.
-- **LLM Agnostic**: Optimized for structured output (Zod schemas) using `<think>` tags.
+- **LLM Agnostic**: Optimized for structured output (Zod schemas). Configurable preamble language (CN/EN) and assistant prefill presets.
 
 ## CRITICAL RULES (HOW)
 - **ESM & No Bundler**: Runs directly in-browser. NO bare specifiers (`import { z } from 'zod'`).
@@ -15,7 +15,7 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **Pre-commit**: Biome lints/formats automatically. DO NOT format manually. `npm run test` uses Vitest + JSDOM.
 
 ## GOTCHAS & DEBUG SAUCE
-- **`<think>` Tags**: LLMs often return reasoning before JSON. ALWAYS pass output through `stripThinkingTags()` (`src/utils.js`) before parsing.
+- **`<think>` Tags**: LLMs often return reasoning before JSON. ALWAYS pass output through `stripThinkingTags()` (`src/utils/text.js`) before parsing. Handles both paired tags and orphaned closing tags (from prefill continuations).
 - **Payload Calculator**: `PAYLOAD_CALC` in `src/constants.js` is the single source of truth for LLM context overhead (12k tokens). Don't hardcode it elsewhere.
 - **Thread Yielding**: Use `yieldToMain()` (`src/utils/st-helpers.js`). It polyfills `scheduler.yield()` with `setTimeout(0)` fallback.
 - **State Locks**: `operationState.extractionInProgress` (`src/state.js`) is for MANUAL backfill only. Background worker uses `isRunning` (`worker.js`). They mutually exclude.
