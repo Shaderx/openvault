@@ -12,7 +12,7 @@ Decoupled two-path architecture operating entirely within SillyTavern's `chatMet
 Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `wakeGeneration` every 500ms), fast-fails on chat switch, and uses exponential backoff.
 
 **Phase 1: Critical (Gates Auto-hide)**
-- **Stage A (Events)**: LLM extracts events using configurable assistant prefill (default: `<think>` tag) and preamble language (CN/EN) -> JSON.
+- **Stage A (Events)**: LLM extracts events using configurable assistant prefill (default: `<think>` tag) and preamble language (CN/EN) -> JSON. Mirror Language Rule auto-detects input language and mirrors it in output values. Bilingual few-shot examples (EN/RU) calibrate model compliance.
 - **Stage B (Graph)**: LLM extracts entities/relationships using Stage A output.
 - **Graph Update**: Upsert nodes/edges. Semantic Merge (Cosine >0.94 + Token Overlap guard filtering stopwords).
 - **INTERMEDIATE SAVE**: Events, graph, and `processed_message_ids` persisted.
@@ -50,6 +50,8 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 **Entity Semantic Merging**: Prevents duplicates ("The King" vs "King Aldric").
 - *Guard 1*: Embeddings (type + name + description) cosine sim >= `0.94`.
 - *Guard 2*: Token Overlap >= 50% (prevents "Burgundy panties" merging with "Burgundy candle"). Old names saved to `aliases`.
+- *Guard 3 (LCS)*: Longest Common Substring ratio >= 60% for keys longer than 2 chars (lowered from 3 to catch short names like "Кай"/"Каю").
+- *Guard 4 (Stems)*: `stemWord()`-based token overlap catches Russian morphological variants (e.g., "ошейник"/"ошейником").
 
 **Reflection Lifecycle (3-Tier)**:
 - *Pre-flight*: Aborts if recent events >85% similar to existing insights.
@@ -62,6 +64,14 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 - *Injection*: Pure vector search injected into `openvault_world` slot.
 
 **Embeddings**: True LRU cache (max 500). WebGPU attempts first -> falls back to WASM. `device.lost` not monitored (implicitly retries pipeline on next call). Failures degrade gracefully to BM25.
+
+**Multilingual Prompt Architecture**:
+- *Mirror Language Rule*: All prompts auto-detect input language and mirror it in output string values. JSON keys remain English.
+- *Bilingual Examples*: Every prompt includes paired EN/RU few-shot examples (events: 10, graph: 8, questions: 6, insights: 6, communities: 6).
+- *SFW→Kink Gradient*: Examples progress from safe to explicit content, calibrating model compliance.
+- *Graph Normalization*: Entity names extracted in nominative/base form to prevent morphological duplicates.
+- *Stem-Augmented Overlap*: `hasSufficientTokenOverlap()` uses `stemWord()` to catch Russian inflected variants (Check 4).
+- *Prompt Modules*: `src/prompts/` contains `rules.js` (shared language rules), `roles.js` (role definitions), `examples/` (bilingual few-shots), `examples/format.js` (XML formatter).
 
 **Testing Tiers**:
 - *Tier 1*: Pure transforms (`math.js`, `helpers.js`). Unit tested.
