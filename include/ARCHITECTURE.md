@@ -168,6 +168,12 @@ Modules that coordinate I/O through `getDeps()`. Tests provide mock boundaries a
 - `src/extraction/worker.js` — infinite async loop with interruptible sleep; mock complexity exceeds value
 - `src/main.js` (event wiring) — wiring ST events to handlers; testing implementation details
 
+### 3.6. Message Visibility Invariant
+
+**Messages must be extracted BEFORE they can be hidden.** Auto-hide (`events.js`) only marks messages as `is_system = true` if they appear in `processed_message_ids`. Hiding an unextracted message would create a permanent gap in the narrative — the extraction pipeline would never see that message, and any memories it would have produced are permanently lost.
+
+Both extraction batching and auto-hide use **turn-boundary snapping** (`snapToTurnBoundary` in `src/utils/tokens.js`): splits only occur where the next message in chat is a User message, or at end-of-chat. This prevents orphaned User messages from being separated from their Bot responses.
+
 ---
 
 ## 4. Retrieval & Scoring Mathematics (`src/retrieval/math.js`)
