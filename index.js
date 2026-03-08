@@ -11,8 +11,6 @@
 import { extensionName, MEMORIES_KEY } from './src/constants.js';
 import { getDeps } from './src/deps.js';
 import { updateEventListeners } from './src/events.js';
-import { extractMemories } from './src/extraction/extract.js';
-import { retrieveAndInjectContext } from './src/retrieval/retrieve.js';
 import { setChatLoadingCooldown } from './src/state.js';
 import { refreshAllUI } from './src/ui/render.js';
 import { loadSettings } from './src/ui/settings.js';
@@ -37,6 +35,7 @@ function registerCommands() {
         command.fromProps({
             name: 'openvault-extract',
             callback: async () => {
+                const { extractMemories } = await import('./src/extraction/extract.js');
                 setStatus('extracting');
                 try {
                     const result = await extractMemories();
@@ -68,6 +67,7 @@ function registerCommands() {
         command.fromProps({
             name: 'openvault-retrieve',
             callback: async () => {
+                const { retrieveAndInjectContext } = await import('./src/retrieval/retrieve.js');
                 setStatus('retrieving');
                 try {
                     const result = await retrieveAndInjectContext();
