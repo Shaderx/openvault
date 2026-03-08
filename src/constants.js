@@ -91,9 +91,12 @@ export const defaultSettings = {
 // When user switches model, prefixes auto-populate from this table.
 // User can still override manually.
 export const embeddingModelPrefixes = {
-    'multilingual-e5-small': { queryPrefix: '', docPrefix: '' },
+    'multilingual-e5-small': { queryPrefix: 'query: ', docPrefix: 'passage: ' },
     'bge-small-en-v1.5': { queryPrefix: 'Represent this sentence for searching relevant passages: ', docPrefix: '' },
-    'embeddinggemma-300m': { queryPrefix: 'search for similar scenes: ', docPrefix: '' },
+    'embeddinggemma-300m': {
+        queryPrefix: 'task: sentence similarity | query: ',
+        docPrefix: 'task: sentence similarity | query: ',
+    },
     _default: { queryPrefix: 'query: ', docPrefix: 'passage: ' },
 };
 

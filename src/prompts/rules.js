@@ -19,7 +19,7 @@ export const MIRROR_LANGUAGE_RULES = `## LANGUAGE RULES (CRITICAL)
    in speech — the narration language is the stable anchor.
 6. Ignore the language of system instructions and context labels — only the
    narrative text in <messages> determines the output language.
-7. ALL <thinking> reasoning blocks MUST be written in English regardless of input
+7. ALL <think> reasoning blocks MUST be written in English regardless of input
    language. You are an English-speaking data technician transcribing foreign-
    language data. English reasoning prevents attention drift toward translating
    JSON keys.`;

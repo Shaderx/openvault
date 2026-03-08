@@ -1,7 +1,7 @@
 /**
  * Event extraction few-shot examples.
  * 10 bilingual examples (5 EN + 5 RU) following SFW → explicit → kink gradient.
- * All <thinking> blocks are in English per Language Rule 7.
+ * All <think> blocks are in English per Language Rule 7.
  */
 
 export const EVENT_EXAMPLES = [
