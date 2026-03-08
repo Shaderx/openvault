@@ -28,7 +28,7 @@
 
 /* Chevron — rotates 90 on open */
 .openvault-details summary::after {
-    content: '\203A';
+    content: "\203A";
     font-size: 1.2em;
     font-weight: bold;
     transition: transform 0.2s ease;
@@ -50,7 +50,7 @@
 .openvault-details summary::-webkit-details-marker,
 .openvault-details summary::marker {
     display: none;
-    content: '';
+    content: "";
 }
 
 /* Keyboard focus indicator for accessibility */

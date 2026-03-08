@@ -12,7 +12,8 @@
         "test": "node scripts/test.js",
         "sync-version": "node scripts/sync-version.js",
         "repomix": "npm run repomix:source && npm run repomix:tests",
-        "repomix:source": "npx repomix --style markdown --output repomix-source.md --include \"README.md,CLAUDE.md,index.js,style.css,manifest.json,package.json,biome.json,vitest.config.js,src/**,include/**,scripts/**,templates/**\"",
+        "check-css": "node scripts/check-css.js",
+        "repomix:source": "npx repomix --style markdown --output repomix-source.md --include \"README.md,CLAUDE.md,index.js,style.css,css/**,manifest.json,package.json,biome.json,vitest.config.js,src/**,include/**,scripts/**,templates/**\"",
         "repomix:tests": "npx repomix --style markdown --output repomix-tests.md --include \"tests/**\""
     },
     "devDependencies": {

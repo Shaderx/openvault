@@ -25,7 +25,7 @@
 }
 
 .openvault-prefill-trigger::after {
-    content: '\25BE';
+    content: "\25BE";
     position: absolute;
     right: 10px;
     top: 50%;
@@ -82,7 +82,7 @@
 }
 
 .openvault-prefill-option.selected::before {
-    content: '\2713\a0';
+    content: "\2713 \a0";
 }
 
 .openvault-prefill-preview {
@@ -112,7 +112,7 @@
     overflow-y: auto;
     min-height: 20px;
     line-height: 1.4;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: "Consolas", "Monaco", "Courier New", monospace;
 }
 
 .openvault-prefill-preview-empty {

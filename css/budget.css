@@ -26,7 +26,9 @@
 .openvault-budget-fill {
     height: 100%;
     border-radius: 4px;
-    transition: width 0.3s ease, background-color 0.3s ease;
+    transition:
+        width 0.3s ease,
+        background-color 0.3s ease;
     width: 0%;
 }
 
@@ -70,7 +72,16 @@
     font-style: italic;
 }
 
-.payload-safe { color: #5cb85c; }
-.payload-caution { color: #f0ad4e; }
-.payload-warning { color: #e87d2a; }
-.payload-danger { color: #d9534f; font-weight: bold; }
+.payload-safe {
+    color: #5cb85c;
+}
+.payload-caution {
+    color: #f0ad4e;
+}
+.payload-warning {
+    color: #e87d2a;
+}
+.payload-danger {
+    color: #d9534f;
+    font-weight: bold;
+}
