@@ -11,13 +11,18 @@ fi
 # Filter for files Biome can handle (js,ts,jsx,tsx,json,jsonc)
 BIOME_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|ts|jsx|tsx|json|jsonc)$' || true)
 
-if [ -z "$BIOME_FILES" ]; then
-    exit 0
+if [ -n "$BIOME_FILES" ]; then
+    # Run Biome check with unsafe fixes
+    echo "Running Biome unsafe fixes..."
+    npx @biomejs/biome check --write --unsafe $BIOME_FILES
+
+    # Add any modified files back to staging
+    git add $BIOME_FILES
 fi
 
-# Run Biome check with unsafe fixes
-echo "Running Biome unsafe fixes..."
-npx @biomejs/biome check --write --unsafe $BIOME_FILES
-
-# Add any modified files back to staging
-git add $BIOME_FILES
+# Check for dead CSS (only if CSS files were staged)
+CSS_FILES=$(echo "$STAGED_FILES" | grep -E '\.css$' || true)
+if [ -n "$CSS_FILES" ]; then
+    echo "Checking for unused CSS classes..."
+    node scripts/check-css.js
+fi
