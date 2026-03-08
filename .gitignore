@@ -20,3 +20,6 @@
 
 # Git worktrees
 /.worktrees/
+
+# OTHER
+*.stackdump
