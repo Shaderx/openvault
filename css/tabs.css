@@ -1,0 +1,46 @@
+/* OpenVault — Tab navigation */
+
+.openvault-tab-nav {
+    display: flex;
+    border-bottom: 2px solid var(--SmartThemeBorderColor, #333);
+    margin-bottom: 15px;
+    gap: 2px;
+}
+
+.openvault-tab-btn {
+    flex: 1;
+    padding: 10px 8px;
+    text-align: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: all 0.2s ease;
+    font-size: 0.85em;
+    color: var(--SmartThemeBodyColor, #ccc);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+}
+
+.openvault-tab-btn:hover {
+    opacity: 0.85;
+    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.1));
+}
+
+.openvault-tab-btn.active {
+    opacity: 1;
+    border-bottom-color: var(--SmartThemeEmColor, #48c);
+    font-weight: bold;
+}
+
+.openvault-tab-btn i {
+    margin-right: 4px;
+}
+
+.openvault-tab-content {
+    display: none;
+}
+
+.openvault-tab-content.active {
+    display: block;
+}

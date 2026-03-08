@@ -1,0 +1,180 @@
+/* OpenVault — Communities, entities, characters, emotions */
+
+/* Characters */
+.openvault-character-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.openvault-character-item {
+    padding: 10px;
+    margin-bottom: 8px;
+    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.2));
+    border-radius: 4px;
+}
+
+.openvault-character-name {
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+/* Emotions */
+.openvault-emotion {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.openvault-emotion-label {
+    font-size: 0.85em;
+}
+
+.openvault-emotion-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--SmartThemeBorderColor, #333);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.openvault-emotion-fill {
+    height: 100%;
+    background: var(--SmartThemeEmColor, #48c);
+    transition: width 0.3s;
+}
+
+/* Reflections */
+.openvault-reflection-counters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding: 8px 0;
+}
+
+.openvault-reflection-counter {
+    font-size: 0.85em;
+    color: var(--SmartThemeEmColor, #888);
+    white-space: nowrap;
+}
+
+/* Communities */
+.openvault-community-item {
+    border: 1px solid var(--SmartThemeBorderColor, #333);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.openvault-community-item summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.openvault-community-title {
+    flex: 1;
+}
+
+.openvault-community-badge {
+    font-size: 0.8em;
+    color: var(--SmartThemeEmColor, #888);
+    margin-left: 8px;
+}
+
+.openvault-community-content {
+    padding: 0 12px 12px;
+    font-size: 0.9em;
+}
+
+.openvault-community-content p {
+    margin: 0 0 8px;
+}
+
+.openvault-community-findings {
+    margin: 4px 0 8px;
+    padding-left: 20px;
+}
+
+.openvault-community-findings li {
+    margin-bottom: 4px;
+}
+
+.openvault-community-members {
+    color: var(--SmartThemeEmColor, #888);
+}
+
+/* Entities */
+.openvault-entity-card {
+    border: 1px solid var(--SmartThemeBorderColor, #333);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+}
+
+.openvault-entity-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.openvault-entity-name {
+    font-weight: 500;
+}
+
+.openvault-entity-type-badge {
+    font-size: 0.75em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.openvault-entity-type-badge.person {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+}
+
+.openvault-entity-type-badge.place {
+    background: rgba(33, 150, 243, 0.15);
+    color: #2196f3;
+}
+
+.openvault-entity-type-badge.organization {
+    background: rgba(255, 152, 0, 0.15);
+    color: #ff9800;
+}
+
+.openvault-entity-type-badge.object {
+    background: rgba(156, 39, 176, 0.15);
+    color: #9c27b0;
+}
+
+.openvault-entity-type-badge.concept {
+    background: rgba(233, 30, 99, 0.15);
+    color: #e91e63;
+}
+
+.openvault-entity-description {
+    font-size: 0.9em;
+    color: var(--SmartThemeEmColor, #888);
+    margin-bottom: 4px;
+}
+
+.openvault-entity-mentions {
+    color: var(--SmartThemeQuoteColor, #666);
+}
+
+.openvault-entity-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Danger zone */
+.openvault-danger .inline-drawer-header span {
+    color: var(--error-color, #c44);
+}

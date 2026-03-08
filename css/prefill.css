@@ -1,0 +1,122 @@
+/* OpenVault — Custom prefill dropdown with preview */
+
+.openvault-prefill-selector {
+    position: relative;
+    margin-bottom: 5px;
+}
+
+.openvault-prefill-trigger {
+    width: 100%;
+    padding: 8px 30px 8px 10px;
+    border: 1px solid var(--SmartThemeBorderColor, #333);
+    border-radius: 4px;
+    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.2));
+    color: var(--SmartThemeBodyColor, #ccc);
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.9em;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.openvault-prefill-trigger:focus-visible {
+    outline: 2px solid var(--SmartThemeEmColor, #48c);
+    outline-offset: -2px;
+}
+
+.openvault-prefill-trigger::after {
+    content: '\25BE';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--SmartThemeEmColor, #888);
+    pointer-events: none;
+    transition: transform 0.2s;
+}
+
+.openvault-prefill-selector.open .openvault-prefill-trigger::after {
+    transform: translateY(-50%) rotate(180deg);
+}
+
+.openvault-prefill-selector.open .openvault-prefill-trigger {
+    border-bottom-color: transparent;
+    border-radius: 4px 4px 0 0;
+}
+
+.openvault-prefill-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    border: 1px solid var(--SmartThemeBorderColor, #333);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 97%, black);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.openvault-prefill-selector.open .openvault-prefill-dropdown {
+    display: block;
+}
+
+.openvault-prefill-option {
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 0.88em;
+    transition: background 0.1s;
+    color: var(--SmartThemeBodyColor, #ccc);
+}
+
+.openvault-prefill-option:hover {
+    background: rgba(72, 136, 204, 0.2);
+}
+
+.openvault-prefill-option.selected {
+    color: var(--SmartThemeEmColor, #48c);
+    font-weight: 600;
+}
+
+.openvault-prefill-option.selected::before {
+    content: '\2713\a0';
+}
+
+.openvault-prefill-preview {
+    border-top: 1px solid var(--SmartThemeBorderColor, #333);
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.openvault-prefill-preview-label {
+    font-size: 0.72em;
+    color: var(--SmartThemeEmColor, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.openvault-prefill-preview pre {
+    margin: 0;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 4px;
+    font-size: 0.82em;
+    color: var(--SmartThemeBodyColor, #ccc);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 100px;
+    overflow-y: auto;
+    min-height: 20px;
+    line-height: 1.4;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.openvault-prefill-preview-empty {
+    color: var(--SmartThemeEmColor, #666);
+    font-style: italic;
+    font-family: inherit;
+}

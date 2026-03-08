@@ -1,0 +1,90 @@
+/* OpenVault — Search, settings groups, checkboxes, filters */
+
+/* Search */
+.openvault-search-container {
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.openvault-search-container i {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--SmartThemeEmColor, #888);
+}
+
+.openvault-search-input {
+    width: 100%;
+    padding: 8px 10px 8px 32px;
+    border: 1px solid var(--SmartThemeBorderColor, #333);
+    border-radius: 6px;
+    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.2));
+    color: var(--SmartThemeBodyColor, #ccc);
+}
+
+.openvault-search-input:focus {
+    outline: none;
+    border-color: var(--SmartThemeEmColor, #48c);
+}
+
+/* Settings groups */
+.openvault-settings-group {
+    margin-bottom: 15px;
+}
+
+.openvault-settings-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, #333);
+}
+
+.openvault-settings-group-header i {
+    color: var(--SmartThemeEmColor, #48c);
+}
+
+.openvault-settings-group-header span {
+    font-weight: bold;
+    font-size: 0.95em;
+}
+
+/* Form elements */
+#openvault_settings .checkbox_label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+#openvault_settings .checkbox_label input[type="checkbox"] {
+    margin-top: 3px;
+}
+
+#openvault_settings .checkbox_label small {
+    margin-left: 24px;
+}
+
+#openvault_settings input[type="range"] {
+    width: 100%;
+    margin: 5px 0;
+}
+
+#openvault_settings select.text_pole {
+    width: 100%;
+    margin-bottom: 5px;
+}
+
+/* Filters */
+.openvault-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.openvault-filters select {
+    flex: 1;
+}
