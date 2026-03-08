@@ -24,7 +24,7 @@ import {
     buildSalientQuestionsPrompt,
     resolveExtractionPreamble,
     resolveOutputLanguage,
-} from '../prompts.js';
+} from '../prompts/index.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { generateId } from '../utils/data.js';
 import { log } from '../utils/logging.js';

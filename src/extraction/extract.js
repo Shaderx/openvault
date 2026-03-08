@@ -63,7 +63,7 @@ import {
     resolveExtractionPreamble,
     resolveExtractionPrefill,
     resolveOutputLanguage,
-} from '../prompts.js';
+} from '../prompts/index.js';
 import { accumulateImportance, generateReflections, shouldReflect } from '../reflection/reflect.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { clearAllLocks } from '../state.js';

@@ -1,60 +1,72 @@
 /**
  * Shared formatters for prompt construction.
  *
- * Language resolution, message assembly, context formatting.
+ * Language resolution, system prompt assembly, message building, context formatting.
  */
 
 import { sortMemoriesBySequence } from '../utils/text.js';
+import { formatExamples } from './examples/format.js';
 import { SYSTEM_PREAMBLE_CN } from './preambles.js';
+import { MIRROR_LANGUAGE_RULES } from './rules.js';
 
 // =============================================================================
 // LANGUAGE RESOLUTION
 // =============================================================================
 
+const LANG_INSTRUCTION_RU =
+    '\nIMPORTANT — LANGUAGE: Write ALL output string values (summaries, descriptions, emotions, relationship impacts) in Russian. JSON keys stay English. EXCEPTION: Character names MUST stay in their original script exactly as written — do NOT transliterate.\n';
+
+const LANG_INSTRUCTION_EN =
+    '\nIMPORTANT — LANGUAGE: Write ALL output string values (summaries, descriptions, emotions, relationship impacts) in English. JSON keys stay English. EXCEPTION: Character names MUST stay in their original script exactly as written — do NOT transliterate.\n';
+
+const LANG_INSTRUCTION_MIRROR =
+    '\nIMPORTANT — LANGUAGE: The text above is NOT in English. Per Language Rules, ALL output string values (summaries, descriptions, emotions, relationship impacts) MUST be in the SAME language as the narrative text. Do NOT translate to English. JSON keys stay English. EXCEPTION: Character names MUST stay in their original script exactly as written — do NOT transliterate.\n';
+
 /**
- * Detect non-Latin script in text and return a language reinforcement reminder.
- * Fires only when the narrative is not primarily English — avoids unnecessary noise for English chats.
- * @param {string} text - The messages/content text to analyze
- * @returns {string} Reminder string if non-Latin detected, empty string otherwise
+ * Resolve the language instruction for a prompt's user message.
+ * In forced mode ('en'/'ru'), returns a deterministic instruction.
+ * In 'auto' mode, uses heuristic detection on the text to add a reminder for non-Latin scripts.
+ * @param {string} text - The text to analyze (used only in 'auto' mode)
+ * @param {'auto'|'en'|'ru'} outputLanguage - The output language setting
+ * @returns {string} Language instruction string (may be empty)
  */
-function buildLanguageReminder(text) {
+export function resolveLanguageInstruction(text, outputLanguage) {
+    if (outputLanguage === 'ru') return LANG_INSTRUCTION_RU;
+    if (outputLanguage === 'en') return LANG_INSTRUCTION_EN;
+
+    // 'auto' mode — heuristic detection for non-Latin scripts
     if (!text) return '';
     const sample = text.slice(0, 2000);
     const allLetters = sample.match(/\p{L}/gu) || [];
     const latinLetters = allLetters.filter((c) => /[a-zA-Z]/.test(c)).length;
     const nonLatinLetters = allLetters.length - latinLetters;
     if (nonLatinLetters > latinLetters * 0.5) {
-        return '\nIMPORTANT — LANGUAGE: The text above is NOT in English. Per Language Rules, ALL output string values (summaries, descriptions, emotions, relationship impacts) MUST be in the SAME language as the narrative text. Do NOT translate to English. JSON keys stay English. EXCEPTION: Character names MUST stay in their original script exactly as written — do NOT transliterate.\n';
+        return LANG_INSTRUCTION_MIRROR;
     }
     return '';
 }
 
-/**
- * Build a deterministic output language instruction for forced RU/EN mode.
- * Returns empty string for 'auto' (caller should use buildLanguageReminder instead).
- * @param {'auto'|'en'|'ru'} language
- * @returns {string}
- */
-function buildOutputLanguageInstruction(language) {
-    if (language === 'ru') {
-        return '\nIMPORTANT — LANGUAGE: Write ALL output string values (summaries, descriptions, emotions, relationship impacts) in Russian. JSON keys stay English. EXCEPTION: Character names MUST stay in their original script exactly as written — do NOT transliterate.\n';
-    }
-    if (language === 'en') {
-        return '\nIMPORTANT — LANGUAGE: Write ALL output string values (summaries, descriptions, emotions, relationship impacts) in English. JSON keys stay English. EXCEPTION: Character names MUST stay in their original script exactly as written — do NOT transliterate.\n';
-    }
-    return '';
-}
+// =============================================================================
+// SYSTEM PROMPT ASSEMBLY
+// =============================================================================
 
 /**
- * Resolve the language instruction for a prompt's user message.
- * In 'auto' mode, uses heuristic detection on the text to add a reminder for non-Latin scripts.
- * In forced mode ('en'/'ru'), returns a deterministic instruction.
- * @param {string} text - The text to analyze (used only in 'auto' mode)
- * @param {'auto'|'en'|'ru'} outputLanguage - The output language setting
- * @returns {string} Language instruction string (may be empty)
+ * Assemble a system prompt with consistent section order:
+ * <role> → <language_rules> → <output_schema> → <rules> → <examples>
+ *
+ * @param {Object} opts
+ * @param {string} opts.role - Role definition text
+ * @param {string} opts.schema - Output schema text
+ * @param {string} [opts.rules] - Task-specific rules (may contain sub-tags for complex prompts)
+ * @param {Array} opts.examples - Few-shot example objects
+ * @param {'auto'|'en'|'ru'} [opts.outputLanguage='auto'] - Language filter for examples
+ * @returns {string} Complete system prompt
  */
-export function resolveLanguageInstruction(text, outputLanguage) {
-    return outputLanguage === 'auto' ? buildLanguageReminder(text) : buildOutputLanguageInstruction(outputLanguage);
+export function assembleSystemPrompt({ role, schema, rules, examples, outputLanguage = 'auto' }) {
+    const parts = [`<role>\n${role}\n</role>`, MIRROR_LANGUAGE_RULES, `<output_schema>\n${schema}\n</output_schema>`];
+    if (rules) parts.push(`<rules>\n${rules}\n</rules>`);
+    parts.push(`<examples>\n${formatExamples(examples, outputLanguage)}\n</examples>`);
+    return parts.join('\n\n');
 }
 
 // =============================================================================

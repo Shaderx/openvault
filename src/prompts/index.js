@@ -1,28 +1,28 @@
 /**
- * OpenVault Prompts
+ * OpenVault Prompts — Public API
  *
- * All LLM prompts centralized.
+ * All LLM prompt builders centralized in src/prompts/.
  * Designed for mid-tier non-reasoning LLMs with clear, explicit structure.
- * Uses modular prompt architecture with bilingual examples and mirror language rules.
- * English instructions, explicit JSON schemas, and consistent XML layout.
- * Preserves character names exactly as written in any language.
+ *
+ * Universal prompt format (all builders):
+ *   <role> → <language_rules> → <output_schema> → <rules> → <examples>
  *
  * Anti-refusal design: mechanical/pipeline framing, positive accuracy language,
  * no jailbreak-signature phrases, safe examples before harder ones.
  */
 
-import { COMMUNITY_EXAMPLES } from './prompts/examples/communities.js';
-import { EVENT_EXAMPLES } from './prompts/examples/events.js';
-import { formatExamples } from './prompts/examples/format.js';
-import { GRAPH_EXAMPLES } from './prompts/examples/graph.js';
-import { INSIGHT_EXAMPLES } from './prompts/examples/insights.js';
-import { QUESTION_EXAMPLES } from './prompts/examples/questions.js';
+import { COMMUNITY_EXAMPLES } from './examples/communities.js';
+import { EVENT_EXAMPLES } from './examples/events.js';
+import { GRAPH_EXAMPLES } from './examples/graph.js';
+import { INSIGHT_EXAMPLES } from './examples/insights.js';
+import { QUESTION_EXAMPLES } from './examples/questions.js';
 import {
+    assembleSystemPrompt,
     buildMessages,
     formatCharacters,
     formatEstablishedMemories,
     resolveLanguageInstruction,
-} from './prompts/formatters.js';
+} from './formatters.js';
 import {
     PREFILL_PRESETS,
     resolveExtractionPreamble,
@@ -30,9 +30,8 @@ import {
     resolveOutputLanguage,
     SYSTEM_PREAMBLE_CN,
     SYSTEM_PREAMBLE_EN,
-} from './prompts/preambles.js';
-import { COMMUNITIES_ROLE, EVENT_ROLE, GRAPH_ROLE, INSIGHTS_ROLE, QUESTIONS_ROLE } from './prompts/roles.js';
-import { MIRROR_LANGUAGE_RULES } from './prompts/rules.js';
+} from './preambles.js';
+import { COMMUNITIES_ROLE, EVENT_ROLE, GRAPH_ROLE, INSIGHTS_ROLE, QUESTIONS_ROLE } from './roles.js';
 
 // Re-export public API from submodules
 export {
@@ -45,37 +44,10 @@ export {
 };
 
 // =============================================================================
-// PUBLIC API
+// SCHEMAS (per-prompt JSON output definitions)
 // =============================================================================
 
-/**
- * Build the event extraction prompt (Stage 1).
- * Extracts events only, not entities or relationships.
- * @returns {Array<{role: string, content: string}>} Array of message objects
- */
-export function buildEventExtractionPrompt({
-    messages,
-    names,
-    context = {},
-    preamble,
-    prefill,
-    outputLanguage = 'auto',
-}) {
-    const { char: characterName, user: userName } = names;
-    const {
-        memories: existingMemories = [],
-        charDesc: characterDescription = '',
-        personaDesc: personaDescription = '',
-    } = context;
-
-    const systemPrompt = `<role>
-${EVENT_ROLE}
-</role>
-
-${MIRROR_LANGUAGE_RULES}
-
-<output_schema>
-You MUST respond with your analysis FIRST inside <think> tags, THEN EXACTLY ONE JSON object.
+const EVENT_SCHEMA = `You MUST respond with your analysis FIRST inside <think> tags, THEN EXACTLY ONE JSON object.
 
 First, output your analysis inside <think> tags.
 THEN, output EXACTLY ONE JSON object with this structure:
@@ -99,13 +71,97 @@ CRITICAL FORMAT RULES — violating ANY of these will cause a system error:
 1. The top level MUST be a JSON object { }, NEVER a bare array [ ]. NEVER wrap your entire response in [ ].
 2. The key "events" MUST always be present.
 3. If nothing was found, use empty array: "events": [].
-4. Do NOT wrap output in markdown code blocks (no \`\`\`json).
+4. Do NOT wrap output in markdown code blocks (no \\\`\\\`\\\`json).
 5. Do NOT include ANY text outside the <think> tags and the JSON object.
 6. Keep character names exactly as they appear in the input.
-7. Start your response with { after the </think> close tag. No other wrapping.
-</output_schema>
+7. Start your response with { after the </think> close tag. No other wrapping.`;
 
-<precision_rules>
+const GRAPH_SCHEMA = `You MUST respond with EXACTLY ONE JSON object. Nothing else — no markdown fences, no commentary, no text before or after.
+
+The JSON object MUST have this EXACT structure with BOTH top-level keys present:
+
+{
+  "entities": [
+    {
+      "name": "Entity Name",
+      "type": "PERSON",
+      "description": "Brief description of this entity based on what is known"
+    }
+  ],
+  "relationships": [
+    {
+      "source": "Entity A",
+      "target": "Entity B",
+      "description": "How A relates to B"
+    }
+  ]
+}
+
+CRITICAL FORMAT RULES — violating ANY of these will cause a system error:
+1. The top level MUST be a JSON object { }, NEVER a bare array [ ]. NEVER wrap your entire response in [ ].
+2. BOTH keys ("entities", "relationships") MUST always be present.
+3. If nothing was found, use empty arrays: "entities": [], "relationships": [].
+4. Do NOT wrap output in markdown code blocks (no \\\`\\\`\\\`json).
+5. Do NOT include ANY text outside the JSON object.
+6. "type" for entities MUST be one of: PERSON, PLACE, ORGANIZATION, OBJECT, CONCEPT.`;
+
+const QUESTIONS_SCHEMA = `You MUST respond with EXACTLY ONE JSON object. No other text, no markdown fences, no commentary.
+
+The JSON object MUST have this EXACT structure:
+
+{
+  "questions": ["question 1", "question 2", "question 3"]
+}
+
+CRITICAL FORMAT RULES:
+1. The top level MUST be a JSON object { }, NEVER a bare array [ ].
+2. The "questions" array MUST contain EXACTLY 3 strings.
+3. Do NOT wrap output in markdown code blocks.
+4. Do NOT include ANY text outside the JSON object.`;
+
+const INSIGHTS_SCHEMA = `You MUST respond with EXACTLY ONE JSON object. No other text, no markdown fences, no commentary.
+
+The JSON object MUST have this EXACT structure:
+
+{
+  "insights": [
+    {
+      "insight": "A concise high-level statement about the character",
+      "evidence_ids": ["memory_id_1", "memory_id_2"]
+    }
+  ]
+}
+
+CRITICAL FORMAT RULES:
+1. The top level MUST be a JSON object { }, NEVER a bare array [ ].
+2. The "insights" array MUST contain 1 to 3 insight objects.
+3. Each insight MUST have both "insight" (string) and "evidence_ids" (array of strings).
+4. Do NOT wrap output in markdown code blocks.
+5. Do NOT include ANY text outside the JSON object.`;
+
+const COMMUNITY_SCHEMA = `You MUST respond with EXACTLY ONE JSON object. No other text, no markdown fences, no commentary.
+
+The JSON object MUST have this EXACT structure:
+
+{
+  "title": "Short name for this community (2-5 words)",
+  "summary": "Executive summary of the community's structure, key entities, and dynamics",
+  "findings": ["finding 1", "finding 2"]
+}
+
+CRITICAL FORMAT RULES:
+1. The top level MUST be a JSON object { }, NEVER a bare array [ ].
+2. "title" must be a short, specific name (2-5 words).
+3. "summary" must be a comprehensive paragraph.
+4. "findings" must be an array of 1-5 strings, each a key insight about the community.
+5. Do NOT wrap output in markdown code blocks.
+6. Do NOT include ANY text outside the JSON object.`;
+
+// =============================================================================
+// RULES (per-prompt task-specific rules)
+// =============================================================================
+
+const EVENT_RULES = `<precision>
 Event summaries MUST be complete, highly descriptive sentences (minimum 6 words, 30 characters).
 Do not extract fragmented thoughts or micro-actions like "Character breathed" or "She nodded."
 
@@ -121,9 +177,9 @@ An incorrect extraction loses detail through generalization.
 
 These are all WRONG — information destroyed by vagueness:
 ✗ "they got intimate" ✗ "combat occurred" ✗ "feelings were expressed" ✗ "a secret was shared" ✗ "things escalated"
-</precision_rules>
+</precision>
 
-<dedup_rules>
+<dedup>
 This is the MOST IMPORTANT rule. Duplicating memories already in established_memories is the worst error.
 
 BEFORE creating ANY event, you MUST check the <established_memories> section in the user message.
@@ -139,7 +195,7 @@ If NONE of those conditions apply, the current messages are continuing an existi
 In that case, you MUST set "events" to an empty array [].
 
 When in doubt, output fewer events rather than duplicate existing memories.
-</dedup_rules>
+</dedup>
 
 <importance_scale>
 Rate each event from 1 (trivial) to 5 (critical):
@@ -157,14 +213,67 @@ Follow these steps IN ORDER. Write your work inside <think> tags BEFORE outputti
 
 Step 1: List the specific actions, emotions, and facts in the new messages.
 Step 2: Check <established_memories>. Is any of this already recorded?
-Step 3: Apply dedup_rules. If this is a continuation with no escalation, plan to output "events": [].
+Step 3: Apply dedup rules. If this is a continuation with no escalation, plan to output "events": [].
 Step 4: For genuinely NEW events, assign importance (1-5) and write a specific factual summary.
 Step 5: Output the final JSON object with the "events" key.
-</thinking_process>
+</thinking_process>`;
 
-<examples>
-${formatExamples(EVENT_EXAMPLES, outputLanguage)}
-</examples>`;
+const GRAPH_RULES = `Extract ALL named entities mentioned or clearly implied in the messages:
+- PERSON: Named characters, NPCs, people mentioned by name
+- PLACE: Named locations, buildings, rooms, cities, regions
+- ORGANIZATION: Named groups, factions, guilds, companies
+- OBJECT: Highly significant unique items, weapons, or plot devices. Do NOT extract mundane furniture, clothing, or food unless they are critical to the scene's dynamic
+- CONCEPT: Named abilities, spells, diseases, prophecies
+
+Also extract relationships between pairs of entities when the connection is stated or clearly implied.
+
+IMPORTANT: Extract entities and relationships even when no events are extracted. Entity data builds world knowledge over time and is always valuable.`;
+
+const QUESTIONS_RULES = `1. Questions should be answerable from the provided memory stream.
+2. Focus on patterns, changes, and emotional arcs — not individual events.
+3. Good questions ask about: psychological state, evolving relationships, shifting goals, recurring fears, unresolved conflicts.`;
+
+const INSIGHTS_RULES = `1. Each insight must be a concise, high-level statement — not a restatement of a single memory.
+2. Each insight must cite specific memory IDs as evidence.
+3. Insights should reveal patterns, emotional arcs, or relationship dynamics.
+4. Synthesize across multiple memories when possible.`;
+
+const COMMUNITY_RULES = `1. Be specific — reference entity names and relationships from the provided data.
+2. Capture the narrative significance of the group.
+3. Describe power dynamics, alliances, conflicts, and dependencies.
+4. Use EXACT entity names from the input data — do NOT transliterate, abbreviate, or translate entity names. If the input shows "Vova", use "Vova" — not "Во", "Вова", or any other variant.`;
+
+// =============================================================================
+// PUBLIC API — PROMPT BUILDERS
+// =============================================================================
+
+/**
+ * Build the event extraction prompt (Stage 1).
+ * Extracts events only, not entities or relationships.
+ * @returns {Array<{role: string, content: string}>} Array of message objects
+ */
+export function buildEventExtractionPrompt({
+    messages,
+    names,
+    context = {},
+    preamble,
+    prefill,
+    outputLanguage = 'auto',
+}) {
+    const { char: characterName, user: userName } = names;
+    const {
+        memories: existingMemories = [],
+        charDesc: characterDescription = '',
+        personaDesc: personaDescription = '',
+    } = context;
+
+    const systemPrompt = assembleSystemPrompt({
+        role: EVENT_ROLE,
+        schema: EVENT_SCHEMA,
+        rules: EVENT_RULES,
+        examples: EVENT_EXAMPLES,
+        outputLanguage,
+    });
 
     const memoriesSection = formatEstablishedMemories(existingMemories);
     const charactersSection = formatCharacters(characterName, userName, characterDescription, personaDescription);
@@ -200,59 +309,13 @@ export function buildGraphExtractionPrompt({
     const { char: characterName, user: userName } = names;
     const { charDesc: characterDescription = '', personaDesc: personaDescription = '' } = context;
 
-    const systemPrompt = `<role>
-${GRAPH_ROLE}
-</role>
-
-${MIRROR_LANGUAGE_RULES}
-
-<output_schema>
-You MUST respond with EXACTLY ONE JSON object. Nothing else — no markdown fences, no commentary, no text before or after.
-
-The JSON object MUST have this EXACT structure with BOTH top-level keys present:
-
-{
-  "entities": [
-    {
-      "name": "Entity Name",
-      "type": "PERSON",
-      "description": "Brief description of this entity based on what is known"
-    }
-  ],
-  "relationships": [
-    {
-      "source": "Entity A",
-      "target": "Entity B",
-      "description": "How A relates to B"
-    }
-  ]
-}
-
-CRITICAL FORMAT RULES — violating ANY of these will cause a system error:
-1. The top level MUST be a JSON object { }, NEVER a bare array [ ]. NEVER wrap your entire response in [ ].
-2. BOTH keys ("entities", "relationships") MUST always be present.
-3. If nothing was found, use empty arrays: "entities": [], "relationships": [].
-4. Do NOT wrap output in markdown code blocks (no \`\`\`json).
-5. Do NOT include ANY text outside the JSON object.
-6. "type" for entities MUST be one of: PERSON, PLACE, ORGANIZATION, OBJECT, CONCEPT.
-</output_schema>
-
-<entity_rules>
-Extract ALL named entities mentioned or clearly implied in the messages:
-- PERSON: Named characters, NPCs, people mentioned by name
-- PLACE: Named locations, buildings, rooms, cities, regions
-- ORGANIZATION: Named groups, factions, guilds, companies
-- OBJECT: Highly significant unique items, weapons, or plot devices. Do NOT extract mundane furniture, clothing, or food unless they are critical to the scene's dynamic
-- CONCEPT: Named abilities, spells, diseases, prophecies
-
-Also extract relationships between pairs of entities when the connection is stated or clearly implied.
-
-IMPORTANT: Extract entities and relationships even when no events are extracted. Entity data builds world knowledge over time and is always valuable.
-</entity_rules>
-
-<examples>
-${formatExamples(GRAPH_EXAMPLES, outputLanguage)}
-</examples>`;
+    const systemPrompt = assembleSystemPrompt({
+        role: GRAPH_ROLE,
+        schema: GRAPH_SCHEMA,
+        rules: GRAPH_RULES,
+        examples: GRAPH_EXAMPLES,
+        outputLanguage,
+    });
 
     const charactersSection = formatCharacters(characterName, userName, characterDescription, personaDescription);
     const contextSection = charactersSection ? `<context>\n${charactersSection}\n</context>\n` : '';
@@ -282,37 +345,13 @@ Respond with a single JSON object containing 'entities' and 'relationships' keys
 export function buildSalientQuestionsPrompt(characterName, recentMemories, preamble, outputLanguage = 'auto') {
     const memoryList = recentMemories.map((m, i) => `${i + 1}. [${m.importance || 3} Star] ${m.summary}`).join('\n');
 
-    const systemPrompt = `<role>
-${QUESTIONS_ROLE}
-</role>
-
-${MIRROR_LANGUAGE_RULES}
-
-<output_schema>
-You MUST respond with EXACTLY ONE JSON object. No other text, no markdown fences, no commentary.
-
-The JSON object MUST have this EXACT structure:
-
-{
-  "questions": ["question 1", "question 2", "question 3"]
-}
-
-CRITICAL FORMAT RULES:
-1. The top level MUST be a JSON object { }, NEVER a bare array [ ].
-2. The "questions" array MUST contain EXACTLY 3 strings.
-3. Do NOT wrap output in markdown code blocks.
-4. Do NOT include ANY text outside the JSON object.
-</output_schema>
-
-<rules>
-1. Questions should be answerable from the provided memory stream.
-2. Focus on patterns, changes, and emotional arcs — not individual events.
-3. Good questions ask about: psychological state, evolving relationships, shifting goals, recurring fears, unresolved conflicts.
-</rules>
-
-<examples>
-${formatExamples(QUESTION_EXAMPLES, outputLanguage)}
-</examples>`;
+    const systemPrompt = assembleSystemPrompt({
+        role: QUESTIONS_ROLE,
+        schema: QUESTIONS_SCHEMA,
+        rules: QUESTIONS_RULES,
+        examples: QUESTION_EXAMPLES,
+        outputLanguage,
+    });
 
     const languageInstruction = resolveLanguageInstruction(memoryList, outputLanguage);
     const userPrompt = `<character>${characterName}</character>
@@ -343,44 +382,13 @@ export function buildInsightExtractionPrompt(
 ) {
     const memoryList = relevantMemories.map((m) => `${m.id}. ${m.summary}`).join('\n');
 
-    const systemPrompt = `<role>
-${INSIGHTS_ROLE}
-</role>
-
-${MIRROR_LANGUAGE_RULES}
-
-<output_schema>
-You MUST respond with EXACTLY ONE JSON object. No other text, no markdown fences, no commentary.
-
-The JSON object MUST have this EXACT structure:
-
-{
-  "insights": [
-    {
-      "insight": "A concise high-level statement about the character",
-      "evidence_ids": ["memory_id_1", "memory_id_2"]
-    }
-  ]
-}
-
-CRITICAL FORMAT RULES:
-1. The top level MUST be a JSON object { }, NEVER a bare array [ ].
-2. The "insights" array MUST contain 1 to 3 insight objects.
-3. Each insight MUST have both "insight" (string) and "evidence_ids" (array of strings).
-4. Do NOT wrap output in markdown code blocks.
-5. Do NOT include ANY text outside the JSON object.
-</output_schema>
-
-<rules>
-1. Each insight must be a concise, high-level statement — not a restatement of a single memory.
-2. Each insight must cite specific memory IDs as evidence.
-3. Insights should reveal patterns, emotional arcs, or relationship dynamics.
-4. Synthesize across multiple memories when possible.
-</rules>
-
-<examples>
-${formatExamples(INSIGHT_EXAMPLES, outputLanguage)}
-</examples>`;
+    const systemPrompt = assembleSystemPrompt({
+        role: INSIGHTS_ROLE,
+        schema: INSIGHTS_SCHEMA,
+        rules: INSIGHTS_RULES,
+        examples: INSIGHT_EXAMPLES,
+        outputLanguage,
+    });
 
     const languageInstruction = resolveLanguageInstruction(memoryList, outputLanguage);
     const userPrompt = `<character>${characterName}</character>
@@ -405,42 +413,13 @@ Respond with a single JSON object. No other text.`;
  * @returns {Array<{role: string, content: string}>}
  */
 export function buildCommunitySummaryPrompt(nodeLines, edgeLines, preamble, outputLanguage = 'auto') {
-    const systemPrompt = `<role>
-${COMMUNITIES_ROLE}
-</role>
-
-${MIRROR_LANGUAGE_RULES}
-
-<output_schema>
-You MUST respond with EXACTLY ONE JSON object. No other text, no markdown fences, no commentary.
-
-The JSON object MUST have this EXACT structure:
-
-{
-  "title": "Short name for this community (2-5 words)",
-  "summary": "Executive summary of the community's structure, key entities, and dynamics",
-  "findings": ["finding 1", "finding 2"]
-}
-
-CRITICAL FORMAT RULES:
-1. The top level MUST be a JSON object { }, NEVER a bare array [ ].
-2. "title" must be a short, specific name (2-5 words).
-3. "summary" must be a comprehensive paragraph.
-4. "findings" must be an array of 1-5 strings, each a key insight about the community.
-5. Do NOT wrap output in markdown code blocks.
-6. Do NOT include ANY text outside the JSON object.
-</output_schema>
-
-<rules>
-1. Be specific — reference entity names and relationships from the provided data.
-2. Capture the narrative significance of the group.
-3. Describe power dynamics, alliances, conflicts, and dependencies.
-4. Use EXACT entity names from the input data — do NOT transliterate, abbreviate, or translate entity names. If the input shows "Vova", use "Vova" — not "Во", "Вова", or any other variant.
-</rules>
-
-<examples>
-${formatExamples(COMMUNITY_EXAMPLES, outputLanguage)}
-</examples>`;
+    const systemPrompt = assembleSystemPrompt({
+        role: COMMUNITIES_ROLE,
+        schema: COMMUNITY_SCHEMA,
+        rules: COMMUNITY_RULES,
+        examples: COMMUNITY_EXAMPLES,
+        outputLanguage,
+    });
 
     const entityText = nodeLines.join('\n');
     const languageInstruction = resolveLanguageInstruction(entityText, outputLanguage);

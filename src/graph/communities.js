@@ -12,7 +12,7 @@ import { getDeps } from '../deps.js';
 import { getQueryEmbedding, maybeRoundEmbedding } from '../embeddings.js';
 import { parseCommunitySummaryResponse } from '../extraction/structured.js';
 import { callLLM, LLM_CONFIGS } from '../llm.js';
-import { buildCommunitySummaryPrompt, resolveExtractionPreamble, resolveOutputLanguage } from '../prompts.js';
+import { buildCommunitySummaryPrompt, resolveExtractionPreamble, resolveOutputLanguage } from '../prompts/index.js';
 import { log } from '../utils/logging.js';
 import { yieldToMain } from '../utils/st-helpers.js';
 

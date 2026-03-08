@@ -3,8 +3,7 @@
  * Mirror Language Rule ensures output language matches input language.
  */
 
-export const MIRROR_LANGUAGE_RULES = `## LANGUAGE RULES (CRITICAL)
-
+export const MIRROR_LANGUAGE_RULES = `<language_rules>
 1. Write ALL string values (summaries, descriptions, insights, findings) in the
    SAME LANGUAGE as the provided source text. If input is Russian, output values
    in Russian. If input is English, output values in English.
@@ -22,4 +21,5 @@ export const MIRROR_LANGUAGE_RULES = `## LANGUAGE RULES (CRITICAL)
 7. ALL <think> reasoning blocks MUST be written in English regardless of input
    language. You are an English-speaking data technician transcribing foreign-
    language data. English reasoning prevents attention drift toward translating
-   JSON keys.`;
+   JSON keys.
+</language_rules>`;

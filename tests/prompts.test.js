@@ -12,7 +12,7 @@ import {
     resolveOutputLanguage,
     SYSTEM_PREAMBLE_CN,
     SYSTEM_PREAMBLE_EN,
-} from '../src/prompts.js';
+} from '../src/prompts/index.js';
 
 describe('buildSalientQuestionsPrompt', () => {
     it('returns system/user message pair with character name', () => {
@@ -610,7 +610,7 @@ describe('multilingual prompt compliance', () => {
 
     it('all prompts contain mirror language rules', () => {
         for (const result of [eventResult, graphResult, salientResult, insightResult, communityResult]) {
-            expect(result[0].content).toContain('LANGUAGE RULES');
+            expect(result[0].content).toContain('<language_rules>');
             expect(result[0].content).toContain('SAME LANGUAGE');
         }
     });
