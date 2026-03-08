@@ -6,10 +6,8 @@
 
 import { CHARACTERS_KEY, defaultSettings, extensionName, MEMORIES_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
-import { getExtractedMessageIds, getUnextractedMessageIds } from '../extraction/scheduler.js';
 import { getOpenVaultData } from '../utils/data.js';
 import { log } from '../utils/logging.js';
-import { getTokenSum } from '../utils/tokens.js';
 import { getStatusText } from './helpers.js';
 
 // Status icon mapping
@@ -89,7 +87,7 @@ export function updateEmbeddingStatusDisplay(statusText) {
 /**
  * Refresh statistics display
  */
-export function refreshStats() {
+export async function refreshStats() {
     const data = getOpenVaultData();
     if (!data) {
         // Update stat cards
@@ -104,6 +102,9 @@ export function refreshStats() {
         $('#openvault_batch_progress_label').text('No chat');
         return;
     }
+
+    const { getTokenSum } = await import('../utils/tokens.js');
+    const { getExtractedMessageIds, getUnextractedMessageIds } = await import('../extraction/scheduler.js');
 
     const memories = data[MEMORIES_KEY] || [];
     const eventCount = memories.length;
