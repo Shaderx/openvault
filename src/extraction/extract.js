@@ -411,7 +411,9 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         });
 
         // Stage 3A: Event Extraction (LLM Call 1)
+        const t0Events = performance.now();
         const eventJson = await callLLM(prompt, LLM_CONFIGS.extraction_events, { structured: true });
+        record('llm_events', performance.now() - t0Events);
         const eventResult = parseEventExtractionResponse(eventJson);
         let events = eventResult.events;
 
@@ -432,7 +434,9 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                 outputLanguage,
             });
 
+            const t0Graph = performance.now();
             const graphJson = await callLLM(graphPrompt, LLM_CONFIGS.extraction_graph, { structured: true });
+            record('llm_graph', performance.now() - t0Graph);
             graphResult = parseGraphExtractionResponse(graphJson);
         }
 
