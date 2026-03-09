@@ -13,6 +13,8 @@ import {
     extensionName,
     MEMORIES_KEY,
     PAYLOAD_CALC,
+    PERF_METRICS,
+    PERF_THRESHOLDS,
     UI_DEFAULT_HINTS,
 } from '../constants.js';
 import { getDeps } from '../deps.js';
@@ -24,6 +26,7 @@ import {
     setEmbeddingStatusCallback,
 } from '../embeddings.js';
 import { updateEventListeners } from '../events.js';
+import { formatForClipboard, getAll as getPerfData } from '../perf/store.js';
 import { exportToClipboard } from './export-debug.js';
 import { validateRPM } from './helpers.js';
 import { initBrowser, nextPage, prevPage, refreshAllUI, resetAndRender } from './render.js';
@@ -647,6 +650,15 @@ function bindUIElements() {
 
     // Test Ollama connection button
     $('#openvault_test_ollama_btn').on('click', testOllamaConnection);
+
+    // Perf tab clipboard copy button
+    $('#openvault_copy_perf_btn').on('click', () => {
+        const text = formatForClipboard();
+        navigator.clipboard.writeText(text).then(
+            () => showToast('success', 'Perf data copied to clipboard'),
+            () => showToast('error', 'Failed to copy — try selecting manually')
+        );
+    });
 }
 
 // =============================================================================
@@ -850,6 +862,47 @@ function updateBudgetColor(elementId, pct) {
     if (pct < 50) el.addClass('budget-low');
     else if (pct < 80) el.addClass('budget-mid');
     else el.addClass('budget-high');
+}
+
+// =============================================================================
+// Performance Tab
+// =============================================================================
+
+/**
+ * Render the performance metrics table.
+ * Reads from perf store, applies health thresholds, and updates DOM.
+ */
+export function renderPerfTab() {
+    const tbody = document.getElementById('openvault_perf_tbody');
+    if (!tbody) return;
+
+    const data = getPerfData();
+    const entries = Object.entries(data);
+
+    if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="openvault-placeholder">No perf data yet</td></tr>';
+        return;
+    }
+
+    // Render in PERF_METRICS key order so order is stable
+    const rows = [];
+    for (const [id, meta] of Object.entries(PERF_METRICS)) {
+        const entry = data[id];
+        if (!entry) continue;
+        const threshold = PERF_THRESHOLDS[id];
+        const isOk = entry.ms <= threshold;
+        const statusClass = isOk ? 'openvault-perf-ok' : 'openvault-perf-warn';
+        const statusIcon = '●';
+        const syncBadge = meta.sync ? '<span class="openvault-perf-sync-badge">SYNC</span>' : '';
+        rows.push(`<tr>
+            <td class="openvault-perf-icon"><i class="fa-solid ${meta.icon}"></i></td>
+            <td>${meta.label}${syncBadge}</td>
+            <td class="${statusClass}">${entry.ms.toFixed(2)}ms</td>
+            <td>${entry.size || '—'}</td>
+            <td class="openvault-perf-status ${statusClass}">${statusIcon}</td>
+        </tr>`);
+    }
+    tbody.innerHTML = rows.join('');
 }
 
 // =============================================================================

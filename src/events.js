@@ -6,6 +6,7 @@
 
 import { extensionName, MEMORIES_KEY, RETRIEVAL_TIMEOUT_MS } from './constants.js';
 import { getDeps } from './deps.js';
+import { loadFromChat as loadPerfFromChat } from './perf/store.js';
 import {
     clearGenerationLock,
     isChatLoadingCooldown,
@@ -236,6 +237,7 @@ export async function onChatChanged() {
 
     // Refresh UI on chat change
     refreshAllUI();
+    loadPerfFromChat();
     setStatus('ready');
 }
 
