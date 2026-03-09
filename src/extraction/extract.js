@@ -492,6 +492,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         initGraphState(data);
         const entityCap = settings.entityDescriptionCap;
         if (validated.entities) {
+            const t0Merge = performance.now();
+            const existingNodeCount = Object.keys(data.graph.nodes).length;
             for (const entity of validated.entities) {
                 if (entity.name === 'Unknown') continue;
                 await mergeOrInsertEntity(
@@ -503,6 +505,11 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                     settings
                 );
             }
+            record(
+                'entity_merge',
+                performance.now() - t0Merge,
+                `${validated.entities.length}×${existingNodeCount} nodes`
+            );
         }
         const edgeCap = settings.edgeDescriptionCap;
         if (validated.relationships) {
