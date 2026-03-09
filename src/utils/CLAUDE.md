@@ -11,6 +11,12 @@
 - **Chat-Switch Guard**: `saveOpenVaultData(expectedChatId)` aborts save if the user switched chats during an async operation. Prevents massive cross-chat data corruption.
 - `updateMemory()`: Automatically invalidates/deletes the embedding if the `summary` string changes.
 
+### `embedding-codec.js`
+- Base64 Float32Array encode/decode for embeddings.
+- `getEmbedding(obj)`, `setEmbedding(obj, vec)`, `hasEmbedding(obj)`, `deleteEmbedding(obj)`.
+- Lazy migration: reads legacy `embedding: number[]` transparently, writes only `embedding_b64: string`.
+- ~33% storage reduction vs JSON arrays.
+
 ### `tokens.js` (gpt-tokenizer)
 - Exact token counting replacing old heuristic estimators.
 - **Turn-Boundary Snapping** (`snapToTurnBoundary`): Trims message index arrays backward until it finds a valid `Bot -> User` transition or End-of-Chat. **CRITICAL**: Prevents auto-hide or batching from splitting a User message from its Bot response.

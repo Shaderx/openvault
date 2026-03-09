@@ -28,13 +28,13 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
   memories: [{ // Both events and reflections
     id: string, type: "event"|"reflection", summary: string, importance: 1-5,
     tokens: string[], message_ids?: number[], source_ids?: string[], // source_ids for reflections
-    characters_involved: string[], embedding: number[], archived: boolean
+    characters_involved: string[], embedding_b64: string, archived: boolean
   }],
   graph: {
-    nodes: { [normKey]: { name, type, description, mentions, embedding, aliases? } },
+    nodes: { [normKey]: { name, type, description, mentions, embedding_b64: string, aliases? } },
     edges: { "src__tgt": { source, target, description, weight } }
   },
-  communities: { "C0": { title, summary, findings: string[], nodeKeys: string[], embedding: number[] } },
+  communities: { "C0": { title, summary, findings: string[], nodeKeys: string[], embedding_b64: string } },
   character_states: { "Name": { current_emotion, emotion_intensity, known_events: string[] } },
   reflection_state: { "Name": { importance_sum: number } },
   processed_message_ids: number[]
@@ -67,7 +67,7 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 - *Pruning*: Edges involving User/Char temporarily removed before Louvain to prevent "hairball" clusters. Re-assigned after.
 - *Injection*: Pure vector search injected into `openvault_world` slot.
 
-**Embeddings**: True LRU cache (max 500). WebGPU attempts first -> falls back to WASM. `device.lost` not monitored (implicitly retries pipeline on next call). Failures degrade gracefully to BM25.
+**Embeddings**: Stored as Base64 Float32Array. Legacy JSON arrays read transparently (lazy migration). True LRU cache (max 500). WebGPU attempts first -> falls back to WASM. `device.lost` not monitored (implicitly retries pipeline on next call). Failures degrade gracefully to BM25.
 
 **Multilingual Prompt Architecture**:
 - *Output Language Setting*: User-configurable setting (`auto`/`ru`/`en`) controls language instruction and example filtering. `auto` preserves heuristic behavior (script detection via `buildLanguageReminder`). `ru`/`en` forces deterministic language instruction via `buildOutputLanguageInstruction` and filters few-shot examples to matching language only (halving token cost).
