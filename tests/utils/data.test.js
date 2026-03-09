@@ -8,6 +8,7 @@ import {
     generateId,
     getCurrentChatId,
     getOpenVaultData,
+    invalidateStaleEmbeddings,
     saveOpenVaultData,
     updateMemory,
 } from '../../src/utils/data.js';
@@ -269,6 +270,92 @@ describe('data', () => {
             const count = await deleteCurrentChatEmbeddings();
             expect(count).toBe(2);
             expect(mockContext.chatMetadata[METADATA_KEY][MEMORIES_KEY][0].embedding).toBeUndefined();
+        });
+    });
+
+    describe('invalidateStaleEmbeddings', () => {
+        it('stamps model ID on empty chat and returns 0', () => {
+            const data = { memories: [], graph: { nodes: {}, edges: {} }, communities: {} };
+            const result = invalidateStaleEmbeddings(data, 'multilingual-e5-small');
+            expect(result).toBe(0);
+            expect(data.embedding_model_id).toBe('multilingual-e5-small');
+        });
+
+        it('returns 0 when model matches', () => {
+            const data = {
+                embedding_model_id: 'multilingual-e5-small',
+                memories: [{ id: '1', embedding_b64: 'abc' }],
+                graph: { nodes: {}, edges: {} },
+                communities: {},
+            };
+            const result = invalidateStaleEmbeddings(data, 'multilingual-e5-small');
+            expect(result).toBe(0);
+            expect(data.memories[0].embedding_b64).toBe('abc');
+        });
+
+        it('wipes all embeddings on model mismatch', () => {
+            const data = {
+                embedding_model_id: 'multilingual-e5-small',
+                memories: [
+                    { id: '1', embedding_b64: 'abc' },
+                    { id: '2', embedding_b64: 'def' },
+                    { id: '3' }, // no embedding
+                ],
+                graph: {
+                    nodes: {
+                        alice: { name: 'Alice', embedding_b64: 'ghi' },
+                        bob: { name: 'Bob' },
+                    },
+                    edges: {},
+                },
+                communities: {
+                    C0: { title: 'Group', embedding_b64: 'jkl' },
+                    C1: { title: 'Other' },
+                },
+            };
+            const result = invalidateStaleEmbeddings(data, 'bge-small-en-v1.5');
+            expect(result).toBe(4); // 2 memories + 1 node + 1 community
+            expect(data.embedding_model_id).toBe('bge-small-en-v1.5');
+            expect(data.memories[0].embedding_b64).toBeUndefined();
+            expect(data.memories[1].embedding_b64).toBeUndefined();
+            expect(data.graph.nodes.alice.embedding_b64).toBeUndefined();
+            expect(data.communities.C0.embedding_b64).toBeUndefined();
+        });
+
+        it('treats legacy chat (no tag but has embeddings) as mismatch', () => {
+            const data = {
+                memories: [{ id: '1', embedding_b64: 'abc' }],
+                graph: { nodes: {}, edges: {} },
+                communities: {},
+            };
+            // No embedding_model_id set
+            const result = invalidateStaleEmbeddings(data, 'bge-small-en-v1.5');
+            expect(result).toBe(1);
+            expect(data.embedding_model_id).toBe('bge-small-en-v1.5');
+            expect(data.memories[0].embedding_b64).toBeUndefined();
+        });
+
+        it('handles missing graph and communities gracefully', () => {
+            const data = {
+                embedding_model_id: 'old-model',
+                memories: [{ id: '1', embedding_b64: 'abc' }],
+            };
+            const result = invalidateStaleEmbeddings(data, 'new-model');
+            expect(result).toBe(1);
+            expect(data.embedding_model_id).toBe('new-model');
+        });
+
+        it('also wipes legacy embedding arrays (not just embedding_b64)', () => {
+            const data = {
+                embedding_model_id: 'old-model',
+                memories: [{ id: '1', embedding: [1, 2, 3] }],
+                graph: { nodes: {}, edges: {} },
+                communities: {},
+            };
+            const result = invalidateStaleEmbeddings(data, 'new-model');
+            expect(result).toBe(1);
+            expect(data.memories[0].embedding).toBeUndefined();
+            expect(data.memories[0].embedding_b64).toBeUndefined();
         });
     });
 });
