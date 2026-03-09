@@ -11,6 +11,7 @@ import {
     isChatLoadingCooldown,
     operationState,
     resetOperationStatesIfSafe,
+    resetSessionController,
     setChatLoadingCooldown,
     setGenerationLock,
 } from './state.js';
@@ -158,8 +159,13 @@ export async function onBeforeGeneration(type, _options, dryRun = false) {
 
         setStatus('ready');
     } catch (error) {
-        getDeps().console.error('OpenVault: Error during pre-generation retrieval:', error);
-        setStatus('error');
+        if (error.name === 'AbortError') {
+            log('Retrieval aborted (chat switch)');
+            // Don't set error status — chat switch is not an error
+        } else {
+            getDeps().console.error('OpenVault: Error during pre-generation retrieval:', error);
+            setStatus('error');
+        }
         // Don't block generation on retrieval failure
     } finally {
         // Always clear retrieval flag
@@ -180,6 +186,9 @@ export function onGenerationEnded() {
  */
 export async function onChatChanged() {
     if (!isExtensionEnabled()) return;
+
+    // FIRST: abort all in-flight operations from previous chat
+    resetSessionController();
 
     const { clearEmbeddingCache } = await import('./embeddings.js');
     const { cleanupCharacterStates } = await import('./extraction/extract.js');
