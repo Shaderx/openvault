@@ -25,6 +25,7 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 ## 2. DATA SCHEMA (`chatMetadata.openvault`)
 ```typescript
 {
+  embedding_model_id: string,  // tracks which model generated stored embeddings
   memories: [{ // Both events and reflections
     id: string, type: "event"|"reflection", summary: string, importance: 1-5,
     tokens: string[], message_ids?: number[], source_ids?: string[], // source_ids for reflections
@@ -68,6 +69,8 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 - *Injection*: Pure vector search injected into `openvault_world` slot.
 
 **Embeddings**: Stored as Base64 Float32Array, decoded to `Float32Array` at runtime (not `number[]`). Legacy JSON arrays wrapped in `Float32Array` on read (lazy migration). True LRU cache (max 500). All cosine similarity uses 4x loop-unrolled dot product on typed arrays. WebGPU attempts first -> falls back to WASM. `device.lost` not monitored (implicitly retries pipeline on next call). Failures degrade gracefully to BM25.
+
+**Embedding Model Mismatch Protection**: `embedding_model_id` field at root of `chatMetadata.openvault` records which model generated the stored vectors. On `CHAT_CHANGED` and on embedding source dropdown change, `invalidateStaleEmbeddings()` compares the stored tag to the current global `embeddingSource` setting. Mismatch triggers bulk wipe of all `embedding_b64` fields across memories, graph nodes, and communities. Tag is updated to new model. Background worker then re-embeds silently. Legacy chats without a tag are treated as mismatch on first load (one-time re-embed). No UI confirmation needed — all embeddings are local Transformers.js (free).
 
 **Abort/Cancellation**: Session-scoped `AbortController` in `state.js`. `resetSessionController()` fires on `CHAT_CHANGED`, aborting all in-flight LLM and embedding operations. Leaf I/O functions (`callLLM`, `getQueryEmbedding`, `getDocumentEmbedding`) read `getSessionSignal()` as default — mid-level orchestrators need no signature changes. `callLLM` uses `Promise.race` (logical cancel — HTTP continues server-side). Transformers.js pipeline and Ollama fetch use native `signal` (true cancel). AbortError re-thrown from Phase 2 catch, handled cleanly by worker and backfill loops.
 
