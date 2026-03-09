@@ -27,6 +27,7 @@ import {
 } from '../prompts/index.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { generateId } from '../utils/data.js';
+import { getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { log } from '../utils/logging.js';
 import { sortMemoriesBySequence } from '../utils/text.js';
 
@@ -84,12 +85,12 @@ export function filterDuplicateReflections(
     rejectThreshold = 0.9,
     replaceThreshold = 0.8
 ) {
-    const existingReflections = existingMemories.filter((m) => m.type === 'reflection' && m.embedding);
+    const existingReflections = existingMemories.filter((m) => m.type === 'reflection' && hasEmbedding(m));
     const toAdd = [];
     const toArchiveIds = new Set();
 
     for (const ref of newReflections) {
-        if (!ref.embedding) {
+        if (!hasEmbedding(ref)) {
             toAdd.push(ref);
             continue;
         }
@@ -99,7 +100,7 @@ export function filterDuplicateReflections(
         let bestScore = 0;
 
         for (const existing of sameCharReflections) {
-            const sim = cosineSimilarity(ref.embedding, existing.embedding);
+            const sim = cosineSimilarity(getEmbedding(ref), getEmbedding(existing));
             if (sim > bestScore) {
                 bestMatch = existing;
                 bestScore = sim;
@@ -147,7 +148,7 @@ export function shouldSkipReflectionGeneration(recentMemories, existingReflectio
 
     // Calculate average embedding of recent memories (or use top 3 most important)
     const topRecent = recentMemories
-        .filter((m) => m.embedding)
+        .filter((m) => hasEmbedding(m))
         .sort((a, b) => (b.importance || 3) - (a.importance || 3))
         .slice(0, 3);
 
@@ -159,8 +160,8 @@ export function shouldSkipReflectionGeneration(recentMemories, existingReflectio
     let alignCount = 0;
     for (const recent of topRecent) {
         for (const reflection of existingReflections) {
-            if (!reflection.embedding) continue;
-            const sim = cosineSimilarity(recent.embedding, reflection.embedding);
+            if (!hasEmbedding(reflection)) continue;
+            const sim = cosineSimilarity(getEmbedding(recent), getEmbedding(reflection));
             if (sim >= threshold) {
                 alignCount++;
                 break;
@@ -254,8 +255,8 @@ export async function generateReflections(characterName, allMemories, characterS
             const queryEmb = await getQueryEmbedding(question);
             if (queryEmb) {
                 const scored = accessibleMemories
-                    .filter((m) => m.embedding)
-                    .map((m) => ({ memory: m, score: cosineSimilarity(queryEmb, m.embedding) }))
+                    .filter((m) => hasEmbedding(m))
+                    .map((m) => ({ memory: m, score: cosineSimilarity(queryEmb, getEmbedding(m)) }))
                     .sort((a, b) => b.score - a.score)
                     .slice(0, 20);
                 relevantMemories = scored.map((s) => s.memory);
