@@ -12,6 +12,7 @@ import { getDeps } from '../deps.js';
 import { getQueryEmbedding } from '../embeddings.js';
 import { parseCommunitySummaryResponse } from '../extraction/structured.js';
 import { callLLM, LLM_CONFIGS } from '../llm.js';
+import { record } from '../perf/store.js';
 import { buildCommunitySummaryPrompt, resolveExtractionPreamble, resolveOutputLanguage } from '../prompts/index.js';
 import { hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
 import { log } from '../utils/logging.js';
@@ -57,68 +58,77 @@ export function toGraphology(graphData) {
 export function detectCommunities(graphData, mainCharacterKeys = []) {
     if (Object.keys(graphData.nodes || {}).length < 3) return null;
 
-    const directed = toGraphology(graphData);
-    const undirected = toUndirected(directed);
+    const t0 = performance.now();
+    const nodeCount = Object.keys(graphData.nodes).length;
+    const edgeCount = Object.keys(graphData.edges || {}).length;
 
-    // Temporarily remove edges involving main characters for better community structure
-    const mainSet = new Set(mainCharacterKeys);
-    if (mainSet.size > 0) {
-        const edgesToDrop = [];
-        undirected.forEachEdge((edge, _attrs, source, target) => {
-            if (mainSet.has(source) || mainSet.has(target)) {
-                edgesToDrop.push(edge);
+    try {
+        const directed = toGraphology(graphData);
+        const undirected = toUndirected(directed);
+
+        // Temporarily remove edges involving main characters for better community structure
+        const mainSet = new Set(mainCharacterKeys);
+        if (mainSet.size > 0) {
+            const edgesToDrop = [];
+            undirected.forEachEdge((edge, _attrs, source, target) => {
+                if (mainSet.has(source) || mainSet.has(target)) {
+                    edgesToDrop.push(edge);
+                }
+            });
+            for (const edge of edgesToDrop) {
+                undirected.dropEdge(edge);
             }
-        });
-        for (const edge of edgesToDrop) {
-            undirected.dropEdge(edge);
+            // Also drop isolated nodes that lost all edges (main chars themselves)
+            undirected.forEachNode((node) => {
+                if (undirected.degree(node) === 0) {
+                    undirected.dropNode(node);
+                }
+            });
         }
-        // Also drop isolated nodes that lost all edges (main chars themselves)
-        undirected.forEachNode((node) => {
-            if (undirected.degree(node) === 0) {
-                undirected.dropNode(node);
-            }
-        });
-    }
 
-    // Need at least 3 nodes after pruning
-    if (undirected.order < 3) {
-        // Fallback: run without pruning
-        const fallbackDirected = toGraphology(graphData);
-        const fallbackUndirected = toUndirected(fallbackDirected);
-        const details = louvain.detailed(fallbackUndirected, {
+        // Need at least 3 nodes after pruning
+        if (undirected.order < 3) {
+            // Fallback: run without pruning
+            const fallbackDirected = toGraphology(graphData);
+            const fallbackUndirected = toUndirected(fallbackDirected);
+            const details = louvain.detailed(fallbackUndirected, {
+                getEdgeWeight: 'weight',
+                resolution: 1.0,
+            });
+            return { communities: details.communities, count: details.count };
+        }
+
+        const details = louvain.detailed(undirected, {
             getEdgeWeight: 'weight',
             resolution: 1.0,
         });
-        return { communities: details.communities, count: details.count };
-    }
 
-    const details = louvain.detailed(undirected, {
-        getEdgeWeight: 'weight',
-        resolution: 1.0,
-    });
-
-    // Re-assign main characters to the community of their strongest remaining neighbor
-    for (const mainKey of mainCharacterKeys) {
-        if (!graphData.nodes[mainKey]) continue;
-        // Find neighbor with highest edge weight
-        let bestCommunity = 0;
-        let bestWeight = -1;
-        for (const [_edgeKey, edge] of Object.entries(graphData.edges || {})) {
-            const neighborKey = edge.source === mainKey ? edge.target : edge.target === mainKey ? edge.source : null;
-            if (neighborKey && details.communities[neighborKey] !== undefined) {
-                if ((edge.weight || 1) > bestWeight) {
-                    bestWeight = edge.weight || 1;
-                    bestCommunity = details.communities[neighborKey];
+        // Re-assign main characters to the community of their strongest remaining neighbor
+        for (const mainKey of mainCharacterKeys) {
+            if (!graphData.nodes[mainKey]) continue;
+            // Find neighbor with highest edge weight
+            let bestCommunity = 0;
+            let bestWeight = -1;
+            for (const [_edgeKey, edge] of Object.entries(graphData.edges || {})) {
+                const neighborKey =
+                    edge.source === mainKey ? edge.target : edge.target === mainKey ? edge.source : null;
+                if (neighborKey && details.communities[neighborKey] !== undefined) {
+                    if ((edge.weight || 1) > bestWeight) {
+                        bestWeight = edge.weight || 1;
+                        bestCommunity = details.communities[neighborKey];
+                    }
                 }
             }
+            details.communities[mainKey] = bestCommunity;
         }
-        details.communities[mainKey] = bestCommunity;
-    }
 
-    return {
-        communities: details.communities,
-        count: details.count,
-    };
+        return {
+            communities: details.communities,
+            count: details.count,
+        };
+    } finally {
+        record('louvain_detection', performance.now() - t0, `${nodeCount} nodes, ${edgeCount} edges`);
+    }
 }
 
 /**
@@ -193,6 +203,7 @@ export async function updateCommunitySummaries(
     stalenessThreshold = 100,
     isSingleCommunity = false
 ) {
+    const t0 = performance.now();
     const deps = getDeps();
     const settings = deps.getExtensionSettings()?.[extensionName] || {};
     const preamble = resolveExtractionPreamble(settings);
@@ -258,5 +269,7 @@ export async function updateCommunitySummaries(
         }
     }
 
+    const communityCount = Object.keys(updatedCommunities).length;
+    record('llm_communities', performance.now() - t0, `${communityCount} communities`);
     return updatedCommunities;
 }
