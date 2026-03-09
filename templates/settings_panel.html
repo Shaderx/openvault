@@ -20,6 +20,9 @@
                 <button class="openvault-tab-btn" data-tab="advanced">
                     <i class="fa-solid fa-sliders"></i> Advanced
                 </button>
+                <button class="openvault-tab-btn" data-tab="perf">
+                    <i class="fa-solid fa-stopwatch"></i> Perf
+                </button>
             </div>
 
             <!-- ================================================================
@@ -714,6 +717,36 @@
                 <!-- Footer -->
                 <div class="openvault-footer">
                     <small>OpenVault v<span id="openvault_version"></span> - Free & Open Source Agentic Memory</small>
+                </div>
+            </div>
+
+            <!-- ================================================================
+                 TAB 5: PERFORMANCE
+                 ================================================================ -->
+            <div class="openvault-tab-content" data-tab="perf">
+                <div class="openvault-card">
+                    <div class="openvault-card-header">
+                        <span class="openvault-card-title">
+                            <i class="fa-solid fa-stopwatch"></i> Last Run Timings
+                        </span>
+                        <button id="openvault_copy_perf_btn" class="menu_button" style="padding: 4px 10px; font-size: 0.8em;">
+                            <i class="fa-solid fa-clipboard"></i> Copy
+                        </button>
+                    </div>
+                    <table id="openvault_perf_table" class="openvault-perf-table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Metric</th>
+                                <th>Last</th>
+                                <th>Scale</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="openvault_perf_tbody">
+                            <tr><td colspan="5" class="openvault-placeholder">No perf data yet</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
