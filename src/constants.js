@@ -25,6 +25,7 @@ export const PROCESSED_MESSAGES_KEY = 'processed_message_ids';
 export const defaultSettings = {
     enabled: true,
     extractionProfile: '',
+    backupProfile: '',
     debugMode: false,
     requestLogging: false,
     // Extraction settings
