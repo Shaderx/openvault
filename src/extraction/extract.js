@@ -71,6 +71,7 @@ import { refreshAllUI } from '../ui/render.js';
 import { setStatus } from '../ui/status.js';
 import { getCurrentChatId, getOpenVaultData, saveOpenVaultData } from '../utils/data.js';
 import { showToast } from '../utils/dom.js';
+import { getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { log } from '../utils/logging.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
 import { sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
@@ -250,14 +251,14 @@ export async function filterSimilarEvents(newEvents, existingMemories, cosineThr
         for (const event of newEvents) {
             if (idx % 10 === 0) await yieldToMain();
             idx++;
-            if (!event.embedding) {
+            if (!hasEmbedding(event)) {
                 results.push(event);
                 continue;
             }
             let isDuplicate = false;
             for (const memory of existingMemories) {
-                if (!memory.embedding) continue;
-                const similarity = cosineSimilarity(event.embedding, memory.embedding);
+                if (!hasEmbedding(memory)) continue;
+                const similarity = cosineSimilarity(getEmbedding(event), getEmbedding(memory));
                 if (similarity >= cosineThreshold) {
                     // Cross-check: require lexical overlap to prevent false positives
                     // (events with same actors + similar structure but different actions)
