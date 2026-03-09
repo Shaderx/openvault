@@ -730,4 +730,26 @@ describe('extractMemories AbortError propagation', () => {
         // Phase 1 data should still be saved
         expect(mockData.processed_message_ids.length).toBeGreaterThan(0);
     });
+
+    it('Phase 1 AbortError propagates through extractMemories', async () => {
+        // sendRequest throws AbortError on the very first call (events stage)
+        const sendRequest = vi.fn().mockRejectedValueOnce(new DOMException('Aborted', 'AbortError'));
+
+        setupTestContext({
+            context: mockContext,
+            settings: getExtractionSettings(),
+            deps: {
+                connectionManager: getMockConnectionManager(sendRequest),
+                fetch: vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ embedding: [0.1, 0.2] }),
+                })),
+                saveChatConditional: vi.fn(async () => true),
+            },
+        });
+
+        await expect(extractMemories([0, 1], 'test-chat')).rejects.toThrow(
+            expect.objectContaining({ name: 'AbortError' })
+        );
+    });
 });

@@ -752,8 +752,8 @@ export async function extractAllMessages(updateEventListenersFn) {
 
             await rpmDelay(settings, 'Batch rate limit');
         } catch (error) {
-            // If chat changed, stop backfill entirely
-            if (error.message === 'Chat changed during extraction') {
+            // AbortError = chat switched (same as existing chat-change detection)
+            if (error.name === 'AbortError' || error.message === 'Chat changed during extraction') {
                 log('Chat changed during backfill, aborting');
                 $('.openvault-backfill-toast').remove();
                 showToast('warning', 'Backfill aborted: chat changed', 'OpenVault');
