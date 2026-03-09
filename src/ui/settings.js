@@ -276,14 +276,22 @@ async function handleResetSettings() {
     const extension_settings = getDeps().getExtensionSettings();
     const currentSettings = extension_settings[extensionName] || {};
 
-    // Preserve extraction profile as it's connection-specific
-    const preservedProfile = currentSettings.extractionProfile || '';
+    // Preserve all connection settings as they are environment-specific
+    const preservedConnectionSettings = {
+        extractionProfile: currentSettings.extractionProfile || '',
+        backupProfile: currentSettings.backupProfile || '',
+        embeddingSource: currentSettings.embeddingSource,
+        ollamaUrl: currentSettings.ollamaUrl,
+        embeddingModel: currentSettings.embeddingModel,
+        embeddingQueryPrefix: currentSettings.embeddingQueryPrefix,
+        embeddingDocPrefix: currentSettings.embeddingDocPrefix,
+    };
 
     // Reset to defaults
     Object.assign(extension_settings[extensionName], defaultSettings);
 
-    // Restore extraction profile
-    extension_settings[extensionName].extractionProfile = preservedProfile;
+    // Restore connection settings
+    Object.assign(extension_settings[extensionName], preservedConnectionSettings);
 
     // Force debug mode ON after reset
     extension_settings[extensionName].debugMode = true;
@@ -294,7 +302,7 @@ async function handleResetSettings() {
     // Update UI
     updateUI();
 
-    showToast('success', 'Settings reset to default values (Debug Mode enabled)');
+    showToast('success', 'Settings reset to default values (Connection settings preserved, Debug Mode enabled)');
 }
 
 async function backfillEmbeddings() {
