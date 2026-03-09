@@ -7,20 +7,8 @@
 
 import { extensionName } from './constants.js';
 import { getDeps } from './deps.js';
+import { hasEmbedding, setEmbedding } from './utils/embedding-codec.js';
 import { log } from './utils/logging.js';
-
-/**
- * Round embedding vector to 4 decimal places if embeddingRounding is enabled.
- * Reduces JSON serialization size ~60% with negligible cosine similarity impact.
- * @param {number[]} embedding - Raw embedding vector
- * @returns {number[]} Rounded or original embedding
- */
-function maybeRoundEmbedding(embedding) {
-    if (!embedding) return embedding;
-    const settings = getDeps().getExtensionSettings()[extensionName];
-    if (!settings?.embeddingRounding) return embedding;
-    return embedding.map((v) => Math.round(v * 10000) / 10000);
-}
 
 // =============================================================================
 // Strategy Classes (from src/embeddings/strategies.js)
@@ -599,7 +587,7 @@ export async function generateEmbeddingsForMemories(memories) {
         return 0;
     }
 
-    const validMemories = memories.filter((m) => m.summary && !m.embedding);
+    const validMemories = memories.filter((m) => m.summary && !hasEmbedding(m));
 
     if (validMemories.length === 0) {
         return 0;
@@ -616,7 +604,7 @@ export async function generateEmbeddingsForMemories(memories) {
     let count = 0;
     for (let i = 0; i < validMemories.length; i++) {
         if (embeddings[i]) {
-            validMemories[i].embedding = maybeRoundEmbedding(embeddings[i]);
+            setEmbedding(validMemories[i], embeddings[i]);
             count++;
         }
     }
@@ -634,7 +622,7 @@ export async function enrichEventsWithEmbeddings(events) {
         return 0;
     }
 
-    const validEvents = events.filter((e) => e.summary && !e.embedding);
+    const validEvents = events.filter((e) => e.summary && !hasEmbedding(e));
 
     if (validEvents.length === 0) {
         return 0;
@@ -656,7 +644,7 @@ export async function enrichEventsWithEmbeddings(events) {
     let count = 0;
     for (let i = 0; i < validEvents.length; i++) {
         if (embeddings[i]) {
-            validEvents[i].embedding = maybeRoundEmbedding(embeddings[i]);
+            setEmbedding(validEvents[i], embeddings[i]);
             count++;
         }
     }
@@ -671,4 +659,3 @@ export async function enrichEventsWithEmbeddings(events) {
 export { getStrategy };
 export { TRANSFORMERS_MODELS };
 export { getOptimalChunkSize };
-export { maybeRoundEmbedding };
