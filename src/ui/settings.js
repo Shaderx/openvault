@@ -71,7 +71,7 @@ async function testOllamaConnection() {
 }
 
 import { PREFILL_PRESETS } from '../prompts/preambles.js';
-import { deleteCurrentChatData, deleteCurrentChatEmbeddings, getOpenVaultData } from '../utils/data.js';
+import { deleteCurrentChatData, getOpenVaultData } from '../utils/data.js';
 import { showToast } from '../utils/dom.js';
 import { hasEmbedding } from '../utils/embedding-codec.js';
 
@@ -265,26 +265,6 @@ async function handleDeleteChatData() {
     if (deleted) {
         showToast('success', 'Chat memories deleted');
         refreshAllUI();
-    }
-}
-
-async function handleDeleteEmbeddings() {
-    if (!confirm('Are you sure you want to delete all embeddings for this chat?')) {
-        return;
-    }
-
-    const data = getOpenVaultData();
-    if (!data) {
-        showToast('warning', 'No chat data available');
-        return;
-    }
-
-    const count = await deleteCurrentChatEmbeddings();
-    if (count > 0) {
-        showToast('success', `Deleted ${count} embeddings`);
-        refreshAllUI();
-    } else {
-        showToast('info', 'No embeddings to delete');
     }
 }
 
@@ -635,7 +615,6 @@ function bindUIElements() {
     // Danger zone buttons
     $('#openvault_reset_settings_btn').on('click', handleResetSettings);
     $('#openvault_delete_chat_btn').on('click', handleDeleteChatData);
-    $('#openvault_delete_embeddings_btn').on('click', handleDeleteEmbeddings);
     $('#openvault_export_debug_btn').on('click', exportToClipboard);
 
     // Memory browser pagination
