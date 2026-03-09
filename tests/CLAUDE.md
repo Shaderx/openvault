@@ -20,3 +20,8 @@ Do not run real Transformers.js models in Vitest.
 
 ## UI RENDERING TESTS
 `render.js` and `status.js` run real code. jQuery on empty JSDOM selections is a silent no-op. If you need to test DOM output, use string templates from `templates.js` directly, or mount standard HTML to the JSDOM document before running.
+
+## PERF TEST SUITE (`tests/perf/`)
+- **`store.test.js`**: Unit tests for perf store singleton — `record()`, `getAll()`, `loadFromChat()`, `formatForClipboard()`. Uses `_resetForTest()` for isolation.
+- **`tab.test.js`**: HTML/CSS presence tests for Perf tab UI structure.
+- **`instrumentation.test.js`**: Validates that `record()` is called in instrumented code paths (`autoHide`, memory scoring, event dedup, chat save).

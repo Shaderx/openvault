@@ -38,7 +38,10 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
   communities: { "C0": { title, summary, findings: string[], nodeKeys: string[], embedding_b64: string } },
   character_states: { "Name": { current_emotion, emotion_intensity, known_events: string[] } },
   reflection_state: { "Name": { importance_sum: number } },
-  processed_message_ids: number[]
+  processed_message_ids: number[],
+  perf: { // Performance monitoring — last-value-wins per metric
+    [metricId]: { ms: number, size: string | null, ts: number }
+  }
 }
 ```
 
@@ -69,6 +72,8 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 - *Injection*: Pure vector search injected into `openvault_world` slot.
 
 **Embeddings**: Stored as Base64 Float32Array, decoded to `Float32Array` at runtime (not `number[]`). Legacy JSON arrays wrapped in `Float32Array` on read (lazy migration). True LRU cache (max 500). All cosine similarity uses 4x loop-unrolled dot product on typed arrays. WebGPU attempts first -> falls back to WASM. `device.lost` not monitored (implicitly retries pipeline on next call). Failures degrade gracefully to BM25.
+
+**Performance Monitoring**: Singleton store (`src/perf/store.js`) tracks 12 metrics across the pipeline. Sync metrics (`retrieval_injection`, `auto_hide`) run on critical path and block generation — red indicates UX degradation. Async metrics (LLM calls, embeddings, community detection, etc.) run in background worker. Each metric records `{ ms, size, ts }` and persists to `chatMetadata.openvault.perf`. Health thresholds in `PERF_THRESHOLDS` (src/constants.js) determine green/red indicator in UI. Copy-to-clipboard generates plain text report for debugging.
 
 **Embedding Model Mismatch Protection**: `embedding_model_id` field at root of `chatMetadata.openvault` records which model generated the stored vectors. On `CHAT_CHANGED` and on embedding source dropdown change, `invalidateStaleEmbeddings()` compares the stored tag to the current global `embeddingSource` setting. Mismatch triggers bulk wipe of all `embedding_b64` fields across memories, graph nodes, and communities. Tag is updated to new model. Background worker then re-embeds silently. Legacy chats without a tag are treated as mismatch on first load (one-time re-embed). No UI confirmation needed — all embeddings are local Transformers.js (free).
 

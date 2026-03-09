@@ -1,7 +1,7 @@
 # UI Subsystem
 
 ## WHAT
-Handles the ST settings panel, dashboard stats, and the interactive memory/entity browser. Uses standard jQuery but enforces strict architectural boundaries.
+Handles the ST settings panel, dashboard stats, the interactive memory/entity browser, and the Perf monitoring tab. Uses standard jQuery but enforces strict architectural boundaries.
 
 ## ARCHITECTURE
 - **`helpers.js`**: Pure data transformations (pagination, filtering, math). **ZERO DOM INTERACTION**. Fully unit testable.
@@ -28,3 +28,12 @@ Handles the ST settings panel, dashboard stats, and the interactive memory/entit
 - **No Inline Events**: Bind exclusively via jQuery `.on()` in `initBrowser()`.
 - **XSS Safety**: ALL user-generated data (summaries, entity names) MUST pass through `escapeHtml()` from `src/utils/dom.js` before hitting templates.
 - **Manual Backfill Guard**: The manual "Backfill Chat" button checks `isWorkerRunning()` (the background worker) first. If active, it rejects to prevent race conditions. The worker also yields if manual backfill takes over.
+
+## PERF TAB (5th Tab)
+- **Purpose**: Displays last-run timings for 12 metrics (2 sync, 10 async) with health indicators (green/red).
+- **Table Structure**: Icon | Metric name | Last timing | Scale | Status dot
+- **Health Indicators**: Green = within threshold (`PERF_THRESHOLDS`), Red = exceeds threshold
+- **SYNC Badge**: Metrics that block chat generation (`retrieval_injection`, `auto_hide`) show a red "SYNC" badge.
+- **Copy Button**: `formatForClipboard()` generates plain text report for paste into issues/debugging.
+- **Rendering**: `renderPerfTab()` in `settings.js` called from `refreshAllUI()`.
+- **Hydration**: `loadPerfFromChat()` called from `onChatChanged()` to restore persisted perf data on chat switch.

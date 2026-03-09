@@ -26,6 +26,7 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - `src/retrieval/CLAUDE.md` - Alpha-Blend scoring, Forgetfulness curve.
 - `src/graph/CLAUDE.md` - Flat JSON graph, Semantic Merge, GraphRAG Louvain communities.
 - `src/reflection/CLAUDE.md` - Per-character insight pipeline, 3-tier replacement.
-- `src/ui/CLAUDE.md` - jQuery UI patterns, Settings bindings.
+- `src/perf/CLAUDE.md` - Performance monitoring store, 12 metrics (2 sync, 10 async).
+- `src/ui/CLAUDE.md` - jQuery UI patterns, Settings bindings, 5th Perf tab.
 - `src/utils/CLAUDE.md` - Shared utils (stemmer, stopwords).
-- `tests/CLAUDE.md` - Vitest mocking constraints via `deps.js`.
+- `tests/CLAUDE.md` - Vitest mocking constraints via `deps.js`, `tests/perf/` suite.
