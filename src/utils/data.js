@@ -26,11 +26,6 @@ export function getOpenVaultData() {
     }
     const data = context.chatMetadata[METADATA_KEY];
 
-    // Legacy cleanup: remove persisted message_tokens (replaced by in-memory LRU)
-    if (data.message_tokens) {
-        delete data.message_tokens;
-    }
-
     return data;
 }
 

@@ -818,7 +818,7 @@ export async function updateBudgetIndicators() {
     // Extraction indicator
     const extractionBudget = settings.extractionTokenBudget;
     const extractedIds = getExtractedMessageIds(data);
-    const unextractedIds = getUnextractedMessageIds(chat, extractedIds, 0);
+    const unextractedIds = getUnextractedMessageIds(chat, extractedIds);
     const unextractedTokens = getTokenSum(chat, unextractedIds);
     const extractionPct = Math.min((unextractedTokens / extractionBudget) * 100, 100);
 
