@@ -559,6 +559,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                             // Reset accumulator after reflection
                             data.reflection_state[characterName].importance_sum = 0;
                         } catch (error) {
+                            // AbortError must propagate — session cancellation, not a reflection failure
+                            if (error.name === 'AbortError') throw error;
                             deps.console.error(`[OpenVault] Reflection error for ${characterName}:`, error);
                         }
                     }
@@ -598,6 +600,9 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             // Final save — Phase 2 enrichment persisted
             await saveOpenVaultData(targetChatId);
         } catch (phase2Error) {
+            // AbortError must propagate — it's not a Phase 2 failure, it's a session cancel
+            if (phase2Error.name === 'AbortError') throw phase2Error;
+
             deps.console.error('[OpenVault] Phase 2 (reflection/community) error:', phase2Error);
             log(`Phase 2 failed but Phase 1 data is safe: ${phase2Error.message}`);
             // Do NOT re-throw. Phase 1 data is already saved.

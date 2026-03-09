@@ -633,3 +633,101 @@ describe('RPM delay between LLM calls', () => {
         expect(gap).toBeGreaterThanOrEqual(900); // Allow small timing variance
     });
 });
+
+describe('extractMemories AbortError propagation', () => {
+    let mockData;
+    let mockContext;
+
+    beforeEach(() => {
+        // Create 3 existing memories to pass the recentMemories.length >= 3 check
+        const existingMemories = [
+            {
+                id: 'm1',
+                type: 'event',
+                summary: 'Old event 1',
+                sequence: 100,
+                characters_involved: ['King Aldric'],
+                embedding_b64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+            },
+            {
+                id: 'm2',
+                type: 'event',
+                summary: 'Old event 2',
+                sequence: 200,
+                characters_involved: ['King Aldric'],
+                embedding_b64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+            },
+            {
+                id: 'm3',
+                type: 'event',
+                summary: 'Old event 3',
+                sequence: 300,
+                characters_involved: ['King Aldric'],
+                embedding_b64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+            },
+        ];
+
+        mockData = {
+            memories: [...existingMemories],
+            character_states: {},
+            last_processed_message_id: -1,
+            processed_message_ids: [],
+            // Pre-initialize reflection_state with high importance to trigger reflection
+            reflection_state: { 'King Aldric': { importance_sum: 100 } },
+            // Add 3 existing memories to pass the recentMemories.length >= 3 check
+            graph: { nodes: {}, edges: {} },
+        };
+
+        mockContext = {
+            chat: [
+                { mes: 'Hello', is_user: true, name: 'User' },
+                { mes: 'Welcome', is_user: false, name: 'King Aldric' },
+            ],
+            name1: 'User',
+            name2: 'King Aldric',
+            characterId: 'char1',
+            characters: { char1: { description: '' } },
+            chatMetadata: { openvault: mockData },
+            chatId: 'test-chat',
+            powerUserSettings: {},
+        };
+
+        // Use a sendRequest that succeeds for Phase 1 but the reflection
+        // callLLM in Phase 2 will throw AbortError via the signal.
+        // We need 2 successful calls (events + graph) then an AbortError.
+        const sendRequest = vi
+            .fn()
+            .mockResolvedValueOnce({ content: EXTRACTION_RESPONSES.events })
+            .mockResolvedValueOnce({ content: EXTRACTION_RESPONSES.graph })
+            .mockRejectedValueOnce(new DOMException('Aborted', 'AbortError'));
+
+        setupTestContext({
+            context: mockContext,
+            settings: {
+                ...getExtractionSettings(),
+                reflectionThreshold: 1, // Force reflection trigger
+            },
+            deps: {
+                connectionManager: getMockConnectionManager(sendRequest),
+                fetch: vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ embedding: [0.1, 0.2] }),
+                })),
+                saveChatConditional: vi.fn(async () => true),
+            },
+        });
+    });
+
+    afterEach(() => {
+        resetDeps();
+        vi.clearAllMocks();
+    });
+
+    it('re-throws AbortError from Phase 2 instead of swallowing it', async () => {
+        await expect(extractMemories([0, 1], 'test-chat')).rejects.toThrow(
+            expect.objectContaining({ name: 'AbortError' })
+        );
+        // Phase 1 data should still be saved
+        expect(mockData.processed_message_ids.length).toBeGreaterThan(0);
+    });
+});
