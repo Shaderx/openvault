@@ -5,9 +5,10 @@ Selects optimal memories (events + reflections) and community summaries, then fo
 
 ## RETRIEVAL PIPELINE (`retrieve.js`)
 1. **Candidate Pool**: Hidden memories (visible ones are already in ST context) + Reflections (no message IDs).
-2. **POV Filter**: Strict filter. Characters only recall what they witnessed or are told (`known_events`).
-3. **Budgeting**: Top-scored results sliced to `retrievalFinalTokens` limit.
-4. **Formatting**: Grouped into temporal buckets: *The Story So Far*, *Leading Up To This Moment*, *Current Scene*.
+2. **Hidden Memories for IDF**: `allAvailableMemories` in context includes all memories. Non-candidate memories are extracted and passed to `scoreMemories()` as `hiddenMemories` for expanded IDF corpus.
+3. **POV Filter**: Strict filter. Characters only recall what they witnessed or are told (`known_events`).
+4. **Budgeting**: Top-scored results sliced to `retrievalFinalTokens` limit.
+5. **Formatting**: Grouped into temporal buckets: *The Story So Far*, *Leading Up To This Moment*, *Current Scene*.
 
 ## SCORING MATH (Alpha-Blend in `math.js`)
 **Formula**: `Total = Base + (Alpha * VectorBonus) + ((1 - Alpha) * BM25Bonus)`
@@ -19,6 +20,7 @@ Selects optimal memories (events + reflections) and community summaries, then fo
   - *Token Caching*: Pre-computed `m.tokens` (stemmed) to save CPU.
   - *Graph-Anchored*: Extracts query entities directly from Graph Nodes (no regex guessing).
   - *IDF-Aware*: Query tokens weighted by Inverse Document Frequency.
+  - *Expanded Corpus*: IDF calculated from **candidates + hidden memories** (not just candidates). Prevents common terms from getting artificially high IDF scores.
   - *Dynamic Stopwords*: Main character names are stripped from BM25 queries since they have near-zero IDF and waste scoring weight.
 - **Vector Similarity**: Cosine similarity against last 3 user messages + top entities.
 
@@ -30,3 +32,4 @@ Selects optimal memories (events + reflections) and community summaries, then fo
 ## GOTCHAS & RULES
 - **Pure Math**: `math.js` contains ZERO DOM/deps imports. Fully worker-safe.
 - **Bucket Limits**: The *Old* bucket ("The Story So Far") is hard-capped at 50% of the memory budget to prevent ancient history from drowning out recent context.
+- **Function Signatures**: `scoreMemories(memories, ..., hiddenMemories = [])` - hidden memories optional, defaults to empty array (backward compatible).

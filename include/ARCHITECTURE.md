@@ -49,7 +49,7 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 
 **Retrieval Math (Alpha-Blend)**: `Score = Base + (Alpha * VectorBonus) + ((1 - Alpha) * BM25Bonus)`
 - *Base (Forgetfulness)*: `Importance * e^(-Lambda * Distance)`. Imp 5 has soft floor of 1.0. Reflections > 750 msgs decay linearly to 0.25x.
-- *BM25*: IDF-aware. Dynamic Character Stopwords (names filtered out to prevent score inflation).
+- *BM25*: IDF-aware using **expanded corpus** (candidates + hidden memories) to prevent common terms from getting artificially high scores. Dynamic Character Stopwords (names filtered out to prevent score inflation).
 
 **Entity Semantic Merging**: Prevents duplicates ("The King" vs "King Aldric").
 - *Guard 1*: Embeddings (type + name + description) cosine sim >= `0.94`.
