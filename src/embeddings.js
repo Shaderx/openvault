@@ -10,7 +10,7 @@ import { getDeps } from './deps.js';
 import { record } from './perf/store.js';
 import { getSessionSignal } from './state.js';
 import { hasEmbedding, setEmbedding } from './utils/embedding-codec.js';
-import { logDebug } from './utils/logging.js';
+import { logDebug, logError } from './utils/logging.js';
 
 // =============================================================================
 // Strategy Classes (from src/embeddings/strategies.js)
@@ -292,7 +292,10 @@ class TransformersStrategy extends EmbeddingStrategy {
             return output.data instanceof Float32Array ? output.data : new Float32Array(output.data);
         } catch (error) {
             if (error.name === 'AbortError') throw error;
-            logDebug(`Transformers embedding error: ${error?.message || error || 'unknown'}`);
+            logError('Transformers embedding failed', error, {
+                modelName: this.#currentModelKey,
+                textSnippet: text?.slice(0, 100),
+            });
             return null;
         }
     }
@@ -381,7 +384,10 @@ class OllamaStrategy extends EmbeddingStrategy {
             return data.embedding ? new Float32Array(data.embedding) : null;
         } catch (error) {
             if (error.name === 'AbortError') throw error;
-            logDebug(`Ollama embedding error: ${error.message}`);
+            logError('Ollama embedding failed', error, {
+                modelName: this.#getSettings().model,
+                textSnippet: text?.slice(0, 100),
+            });
             return null;
         }
     }
@@ -775,7 +781,7 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
         return { memories: memoryCount, nodes: nodeCount, communities: communityCount, total, skipped: false };
     } catch (error) {
         if (error.name === 'AbortError') throw error;
-        getDeps().console.error('[OpenVault] Backfill embeddings error:', error);
+        logError('Backfill embeddings error', error);
         if (!silent) showToast('error', `Embedding generation failed: ${error.message}`);
         return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: false };
     } finally {

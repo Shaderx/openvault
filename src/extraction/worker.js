@@ -11,7 +11,7 @@ import { getDeps } from '../deps.js';
 import { getSessionSignal, operationState } from '../state.js';
 import { setStatus } from '../ui/status.js';
 import { getCurrentChatId, getOpenVaultData } from '../utils/data.js';
-import { logDebug } from '../utils/logging.js';
+import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled } from '../utils/st-helpers.js';
 import { extractMemories } from './extract.js';
 import { getNextBatch } from './scheduler.js';
@@ -164,7 +164,7 @@ async function runWorkerLoop() {
         if (err.name === 'AbortError') {
             logDebug('Worker: Aborted (chat switch). Clean exit.');
         } else {
-            getDeps().console.error('[OpenVault] Background worker error:', err);
+            logError('Background worker error', err);
         }
     } finally {
         setStatus('ready');

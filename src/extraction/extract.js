@@ -73,7 +73,7 @@ import { setStatus } from '../ui/status.js';
 import { getCurrentChatId, getOpenVaultData, saveOpenVaultData } from '../utils/data.js';
 import { showToast } from '../utils/dom.js';
 import { getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
-import { logDebug } from '../utils/logging.js';
+import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
 import { sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 import { countTokens, getMessageTokenCount } from '../utils/tokens.js';
@@ -581,7 +581,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                         } catch (error) {
                             // AbortError must propagate — session cancellation, not a reflection failure
                             if (error.name === 'AbortError') throw error;
-                            deps.console.error(`[OpenVault] Reflection error for ${characterName}:`, error);
+                            logError(`Reflection error for ${characterName}`, error);
                         }
                     }
                 }
@@ -613,7 +613,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                         logDebug(`Community detection: ${communityResult.count} communities found`);
                     }
                 } catch (error) {
-                    deps.console.error('[OpenVault] Community detection error:', error);
+                    logError('Community detection error', error);
                 }
             }
 
@@ -623,7 +623,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             // AbortError must propagate — it's not a Phase 2 failure, it's a session cancel
             if (phase2Error.name === 'AbortError') throw phase2Error;
 
-            deps.console.error('[OpenVault] Phase 2 (reflection/community) error:', phase2Error);
+            logError('Phase 2 error', phase2Error, { characterName });
             logDebug(`Phase 2 failed but Phase 1 data is safe: ${phase2Error.message}`);
             // Do NOT re-throw. Phase 1 data is already saved.
         }
@@ -640,7 +640,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             messages_processed: messages.length,
         };
     } catch (error) {
-        deps.console.error('[OpenVault] Extraction error:', error);
+        logError('Extraction error', error, { messageCount: messages.length });
         throw error;
     }
 }
@@ -797,7 +797,7 @@ export async function extractAllMessages(updateEventListenersFn) {
                 logDebug(
                     `Batch ${batchesProcessed + 1} failed: cumulative backoff reached ${Math.round(cumulativeBackoffMs / 1000)}s (limit: ${Math.round(MAX_BACKOFF_TOTAL_MS / 1000)}s). Stopping extraction.`
                 );
-                console.error('[OpenVault] Extraction stopped after exceeding backoff limit:', error);
+                logError('Extraction stopped after exceeding backoff limit', error);
                 showToast(
                     'error',
                     `Extraction stopped: API errors persisted for ${Math.round(cumulativeBackoffMs / 1000)}s. Check your API connection and try again.`,
