@@ -191,3 +191,40 @@ export function parseRecentMessages(recentContext, count = 10) {
 
     return recent.map((line) => ({ mes: line }));
 }
+
+/**
+ * Build vocabulary Set from memory tokens and graph descriptions.
+ * Used to filter user-message stems to only corpus-relevant ones.
+ * @param {Object[]} memories - Candidate memories (with m.tokens)
+ * @param {Object[]} hiddenMemories - Hidden memories (with m.tokens)
+ * @param {Object} graphNodes - Graph nodes keyed by normalized name
+ * @param {Object} graphEdges - Graph edges keyed by "src__tgt"
+ * @returns {Set<string>} Set of all stems present in the corpus
+ */
+export function buildCorpusVocab(memories, hiddenMemories, graphNodes, graphEdges) {
+    const vocab = new Set();
+
+    // Memory tokens (pre-computed at extraction time)
+    for (const m of memories) {
+        if (m.tokens) for (const t of m.tokens) vocab.add(t);
+    }
+    for (const m of hiddenMemories) {
+        if (m.tokens) for (const t of m.tokens) vocab.add(t);
+    }
+
+    // Graph node descriptions
+    for (const node of Object.values(graphNodes || {})) {
+        if (node.description) {
+            for (const t of tokenize(node.description)) vocab.add(t);
+        }
+    }
+
+    // Graph edge descriptions
+    for (const edge of Object.values(graphEdges || {})) {
+        if (edge.description) {
+            for (const t of tokenize(edge.description)) vocab.add(t);
+        }
+    }
+
+    return vocab;
+}

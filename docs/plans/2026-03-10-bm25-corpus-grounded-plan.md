@@ -49,7 +49,7 @@ describe('buildCorpusVocab', () => {
         expect(vocab.has('dragon')).toBe(true);
         expect(vocab.has('fire')).toBe(true);
         expect(vocab.has('shield')).toBe(true);
-        expect(vocab.size).toBe(5); // sword deduplicated
+        expect(vocab.size).toBe(6); // sword deduplicated, shield added from hidden
     });
 });
 ```
