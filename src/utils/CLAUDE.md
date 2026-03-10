@@ -3,8 +3,23 @@
 ## MODULES (No Barrel File — Import Explicitly)
 
 ### `logging.js`
-- `log()`: Guarded by `settings.debugMode`. Auto-prefixes `[OpenVault]`.
-- `logRequest()`: Detailed LLM payload debugging using `console.groupCollapsed()`.
+
+**Exported functions** (all auto-prefix `[OpenVault]`, all route through `getDeps().console`):
+
+| Function | Visibility | Use for |
+|---|---|---|
+| `logDebug(msg, data?)` | `debugMode` only | Loop iterations, similarity scores, token math, sleep/wake cycles, per-item processing details |
+| `logInfo(msg, data?)` | Always | Rare milestones that fire **at most once per user action**: init, backfill complete, model change, settings loaded |
+| `logWarn(msg, data?)` | Always | Recovered errors, edge-case fallbacks (array-instead-of-object, stale lock cleared, unknown config key) |
+| `logError(msg, error?, context?)` | Always | Unrecoverable failures. Pass the caught `Error` as second arg. Pass a context object (counts, model names, truncated inputs) as third arg for the 3 critical paths (JSON parse, embedding, extraction). |
+| `logRequest(label, data)` | `requestLogging` only | Full LLM request/response payloads inside `groupCollapsed`. Already well-designed — do not change. |
+
+**Rules:**
+- **Never** use bare `console.*` or `getDeps().console.*` outside `logging.js` and `deps.js`.
+- **Import what you need**: `import { logDebug, logError } from '../utils/logging.js';`
+- **`logInfo` budget**: If a message could fire inside a loop or more than once per user action, it MUST be `logDebug`, not `logInfo`.
+- **Error context**: On critical paths (JSON parse, embedding, extraction top-level), always pass a `context` object to `logError`. Truncate raw text to 100-2000 chars. Never include full chat messages or API keys.
+- **AbortError**: Always re-throw `AbortError` before logging — it signals intentional cancellation, not a failure.
 
 ### `data.js`
 - Lazy-initializes `chatMetadata.openvault`.
