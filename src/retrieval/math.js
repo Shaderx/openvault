@@ -36,7 +36,7 @@ export function tokenize(text) {
  * @param {Map} tokenizedMemories - Map of memory index to tokens
  * @returns {{idfMap: Map<string, number>, avgDL: number}}
  */
-function calculateIDF(memories, tokenizedMemories) {
+export function calculateIDF(memories, tokenizedMemories) {
     const N = memories.length;
     const df = new Map(); // Document frequency for each term
     let totalDL = 0;
