@@ -44,7 +44,15 @@ export function getScoringParams() {
  * @param {string[]} [characterNames] - Main character names to filter from query tokens
  * @returns {Promise<{memories: Object[], scoredResults: Array<{memory: Object, score: number, breakdown: Object}>}>}
  */
-async function scoreMemoriesDirect(memories, contextEmbedding, chatLength, limit, queryTokens, characterNames = []) {
+async function scoreMemoriesDirect(
+    memories,
+    contextEmbedding,
+    chatLength,
+    limit,
+    queryTokens,
+    characterNames = [],
+    hiddenMemories = [] // NEW: Optional parameter
+) {
     const { constants, settings } = getScoringParams();
     const scored = await scoreMemories(
         memories,
@@ -53,7 +61,8 @@ async function scoreMemoriesDirect(memories, contextEmbedding, chatLength, limit
         constants,
         settings,
         queryTokens,
-        characterNames
+        characterNames,
+        hiddenMemories // NEW: Pass through
     );
     const topScored = scored.slice(0, limit);
     return {
