@@ -82,7 +82,7 @@ async function scoreMemoriesDirect(
  * @param {number} limit - Maximum memories to return
  * @returns {Promise<{memories: Object[], scoredResults: Array<{memory: Object, score: number, breakdown: Object}>}>}
  */
-async function selectRelevantMemoriesSimple(memories, ctx, limit) {
+async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemories = []) {
     const { recentContext, userMessages, activeCharacters, chatLength } = ctx;
 
     // Extract context from recent messages for enriched queries
@@ -117,7 +117,15 @@ async function selectRelevantMemoriesSimple(memories, ctx, limit) {
         contextEmbedding = await getQueryEmbedding(embeddingQuery);
     }
 
-    return scoreMemoriesDirect(memories, contextEmbedding, chatLength, limit, bm25Tokens, activeCharacters || []);
+    return scoreMemoriesDirect(
+        memories,
+        contextEmbedding,
+        chatLength,
+        limit,
+        bm25Tokens,
+        activeCharacters || [],
+        allHiddenMemories // NEW: Pass hidden memories for IDF
+    );
 }
 
 /**
