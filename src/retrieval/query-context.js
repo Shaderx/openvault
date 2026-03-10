@@ -11,6 +11,9 @@ import { getOptimalChunkSize } from '../embeddings.js';
 import { stemName, stemWord } from '../utils/stemmer.js';
 import { tokenize } from './math.js';
 
+/** Boost divisor for corpus-grounded tokens relative to entityBoostWeight */
+const CORPUS_GROUNDED_BOOST_DIVISOR = 2;
+
 /**
  * Get settings for query context extraction
  * @returns {Object} Settings object
@@ -145,30 +148,48 @@ export function buildEmbeddingQuery(messages, extractedEntities) {
 }
 
 /**
- * Build enriched token array for BM25 scoring
+ * Build enriched token array for BM25 scoring.
+ * Layer 1: Entity stems with full boost.
+ * Layer 2: User-message stems filtered through corpus vocabulary, half boost.
  * @param {string} userMessage - Original user message
  * @param {{entities: string[], weights: Object}} extractedEntities - Extracted entity context
+ * @param {Set<string>|null} [corpusVocab=null] - Corpus vocabulary for grounding.
+ *   When provided, user-message tokens are filtered through it.
+ *   When null, falls back to including all user-message tokens (backward compat).
  * @returns {string[]} Token array with boosted entities
  */
-export function buildBM25Tokens(userMessage, extractedEntities) {
-    // Start with original user message tokens
-    const tokens = tokenize(userMessage || '');
-
-    if (!extractedEntities || !extractedEntities.entities) {
-        return tokens;
-    }
-
+export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = null) {
+    const tokens = [];
     const settings = getQueryContextSettings();
 
-    // Add entities with boost (repeat = higher term frequency)
-    // Entities go through tokenize() for consistent stemming with memory tokens
-    for (const entity of extractedEntities.entities) {
-        const weight = (extractedEntities.weights[entity] || 1) * settings.entityBoostWeight;
-        const repeats = Math.ceil(weight);
-        const stemmed = tokenize(entity);
-        for (let r = 0; r < repeats; r++) {
-            tokens.push(...stemmed);
+    // Layer 1: Named entities from graph (unchanged)
+    if (extractedEntities?.entities) {
+        for (const entity of extractedEntities.entities) {
+            const weight = (extractedEntities.weights[entity] || 1) * settings.entityBoostWeight;
+            const repeats = Math.ceil(weight);
+            const stemmed = tokenize(entity);
+            for (let r = 0; r < repeats; r++) {
+                tokens.push(...stemmed);
+            }
         }
+    }
+
+    // Layer 2: Corpus-grounded message tokens (NEW)
+    if (corpusVocab && corpusVocab.size > 0) {
+        const msgStems = tokenize(userMessage || '');
+        const grounded = msgStems.filter(t => corpusVocab.has(t));
+
+        // Deduplicate grounded tokens (each unique stem boosted once)
+        const unique = [...new Set(grounded)];
+        const boost = Math.ceil(settings.entityBoostWeight / CORPUS_GROUNDED_BOOST_DIVISOR);
+        for (const t of unique) {
+            for (let r = 0; r < boost; r++) {
+                tokens.push(t);
+            }
+        }
+    } else if (!corpusVocab) {
+        // Backward compat: no corpus vocab → include all message tokens at 1x
+        tokens.push(...tokenize(userMessage || ''));
     }
 
     return tokens;
