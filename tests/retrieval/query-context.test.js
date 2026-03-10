@@ -87,47 +87,46 @@ describe('buildBM25Tokens with corpusVocab', () => {
 
         // User message: "I want to find the sword in the castle"
         // tokenize will stem and filter stopwords
-        // Only stems that exist in corpusVocab should appear
+        // Three-tier system: Layer 2 (grounded) + Layer 3 (non-grounded)
         const tokens = buildBM25Tokens(
             'I want to find the sword in the castle',
             { entities: [], weights: {} },
             corpusVocab
         );
 
-        // "sword" and "castl" (stem of "castle") should be present
-        // "find", "want" should NOT be present (not in corpus)
+        // Layer 2: "sword" and "castl" (stem of "castle") are grounded (in corpus) — 3x boost
         const hasSword = tokens.includes('sword');
         const hasCastl = tokens.includes('castl');
         expect(hasSword).toBe(true);
         expect(hasCastl).toBe(true);
 
-        // Should NOT include tokens not in corpus vocab
+        // Layer 3: "find", "want" are non-grounded (not in corpus) — 2x boost
         const hasFind = tokens.includes('find');
         const hasWant = tokens.includes('want');
-        expect(hasFind).toBe(false);
-        expect(hasWant).toBe(false);
+        expect(hasFind).toBe(true);
+        expect(hasWant).toBe(true);
     });
 
-    it('should apply half-boost (ceil(entityBoostWeight / 2)) to grounded tokens', async () => {
+    it('should apply 60% boost (ceil(entityBoostWeight * 0.6)) to grounded tokens (Layer 2)', async () => {
         const { buildBM25Tokens } = await import('../../src/retrieval/query-context.js');
 
-        // entityBoostWeight = 5, so half-boost = ceil(5/2) = 3
+        // entityBoostWeight = 5, so 60% boost = ceil(5 * 0.6) = 3
         const corpusVocab = new Set(['sword']);
         const tokens = buildBM25Tokens('sword', { entities: [], weights: {} }, corpusVocab);
 
-        // "sword" should appear exactly 3 times (ceil(5/2))
+        // "sword" should appear exactly 3 times (Layer 2 grounded boost)
         const swordCount = tokens.filter(t => t === 'sword').length;
         expect(swordCount).toBe(3);
     });
 
-    it('should deduplicate grounded tokens before boosting', async () => {
+    it('should deduplicate grounded tokens before boosting (Layer 2)', async () => {
         const { buildBM25Tokens } = await import('../../src/retrieval/query-context.js');
 
         const corpusVocab = new Set(['sword']);
         // "sword sword sword" — same stem repeated, should deduplicate to 1 unique stem × boost
         const tokens = buildBM25Tokens('sword sword sword', { entities: [], weights: {} }, corpusVocab);
 
-        // ceil(5/2) = 3 — one unique stem boosted 3 times
+        // ceil(5 * 0.6) = 3 — one unique stem boosted 3 times
         const swordCount = tokens.filter(t => t === 'sword').length;
         expect(swordCount).toBe(3);
     });
@@ -152,7 +151,7 @@ describe('buildBM25Tokens with corpusVocab', () => {
         expect(tokens.length).toBe(0);
     });
 
-    it('should include Layer 1 entity tokens alongside Layer 2 grounded tokens', async () => {
+    it('should include Layer 1 entity tokens, Layer 2 grounded tokens, and Layer 3 non-grounded tokens', async () => {
         const { buildBM25Tokens } = await import('../../src/retrieval/query-context.js');
 
         const corpusVocab = new Set(['sword']);
@@ -163,11 +162,30 @@ describe('buildBM25Tokens with corpusVocab', () => {
 
         const tokens = buildBM25Tokens('sword and magic', entities, corpusVocab);
 
-        // Layer 1: "King Aldric" tokenized + boosted
-        // Layer 2: "sword" grounded + half-boosted
-        // "magic" should NOT appear (not in corpus)
+        // Layer 1: "King Aldric" tokenized + 5x boost
+        // Layer 2: "sword" grounded + 3x boost (in corpus)
+        // Layer 3: "magic" non-grounded + 2x boost (not in corpus)
         expect(tokens.includes('sword')).toBe(true);
-        expect(tokens.some(t => t !== 'sword')).toBe(true); // entity stems present
+        expect(tokens.includes('magic')).toBe(true);
+        // Entity stems from "King Aldric"
+        expect(tokens.some(t => t.startsWith('king') || t === 'king')).toBe(true);
+        expect(tokens.some(t => t.startsWith('aldr') || t === 'aldr')).toBe(true);
+
+        // Verify Layer 3 non-grounded tokens get 2x boost
+        const magicCount = tokens.filter(t => t === 'magic').length;
+        expect(magicCount).toBe(2); // ceil(5 * 0.4) = 2
+    });
+
+    it('should apply 40% boost (ceil(entityBoostWeight * 0.4)) to non-grounded tokens (Layer 3)', async () => {
+        const { buildBM25Tokens } = await import('../../src/retrieval/query-context.js');
+
+        // entityBoostWeight = 5, so 40% boost = ceil(5 * 0.4) = 2
+        const corpusVocab = new Set(['sword']); // "magic" is NOT in corpus
+        const tokens = buildBM25Tokens('magic magic', { entities: [], weights: {} }, corpusVocab);
+
+        // "magic" should appear exactly 2 times (Layer 3 non-grounded boost)
+        const magicCount = tokens.filter(t => t === 'magic').length;
+        expect(magicCount).toBe(2);
     });
 });
 

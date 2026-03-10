@@ -11,8 +11,9 @@ import { getOptimalChunkSize } from '../embeddings.js';
 import { stemName, stemWord } from '../utils/stemmer.js';
 import { tokenize } from './math.js';
 
-/** Boost divisor for corpus-grounded tokens relative to entityBoostWeight */
-const CORPUS_GROUNDED_BOOST_DIVISOR = 2;
+// Three-tier BM25 token weights (multipliers of entityBoostWeight)
+const CORPUS_GROUNDED_BOOST_RATIO = 0.6; // Layer 2: 60% of entity boost (3x when entityBoostWeight=5)
+const NON_GROUNDED_BOOST_RATIO = 0.4; // Layer 3: 40% of entity boost (2x when entityBoostWeight=5)
 
 /**
  * Get settings for query context extraction
@@ -150,13 +151,17 @@ export function buildEmbeddingQuery(messages, extractedEntities) {
 /**
  * Build enriched token array for BM25 scoring.
  * Layer 1: Entity stems with full boost.
- * Layer 2: User-message stems filtered through corpus vocabulary, half boost.
+ * Three-tier token approach:
+ * - Layer 1: Entity stems with full boost (5x)
+ * - Layer 2: Corpus-grounded message stems at 60% boost (3x)
+ * - Layer 3: Non-grounded message stems at 40% boost (2x)
+ *
  * @param {string} userMessage - Original user message
  * @param {{entities: string[], weights: Object}} extractedEntities - Extracted entity context
  * @param {Set<string>|null} [corpusVocab=null] - Corpus vocabulary for grounding.
- *   When provided, user-message tokens are filtered through it.
- *   When null, falls back to including all user-message tokens (backward compat).
- * @returns {string[]} Token array with boosted entities
+ *   When provided, user-message tokens are split into grounded/non-grounded tiers.
+ *   When null, falls back to including all user-message tokens at 1x (backward compat).
+ * @returns {string[]} Token array with boosted entities and message stems
  */
 export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = null) {
     const tokens = [];
@@ -174,28 +179,43 @@ export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = nu
         }
     }
 
-    // Layer 2: Corpus-grounded message tokens (NEW)
+    // Three-tier message token processing
     if (corpusVocab && corpusVocab.size > 0) {
         const msgStems = tokenize(userMessage || '');
         const grounded = msgStems.filter(t => corpusVocab.has(t));
+        const nonGrounded = msgStems.filter(t => !corpusVocab.has(t));
 
         // DEBUG: Log corpus grounding behavior
         if (msgStems.length > 0) {
-            const filtered = msgStems.filter(t => !corpusVocab.has(t));
-            console.log('[BM25-DEBUG] Corpus grounding:', {
-                msgStems: msgStems.slice(0, 20), // First 20 stems
+            console.log('[BM25-DEBUG] Three-tier BM25:', {
+                msgStems: msgStems.slice(0, 20),
                 groundedCount: grounded.length,
-                filteredCount: filtered.length,
-                sampleFiltered: filtered.slice(0, 10),
-                vocabSize: corpusVocab.size
+                nonGroundedCount: nonGrounded.length,
+                sampleGrounded: grounded.slice(0, 10),
+                sampleNonGrounded: nonGrounded.slice(0, 10),
+                vocabSize: corpusVocab.size,
+                weights: {
+                    layer1: `${settings.entityBoostWeight}x (entities)`,
+                    layer2: `${Math.ceil(settings.entityBoostWeight * CORPUS_GROUNDED_BOOST_RATIO)}x (grounded)`,
+                    layer3: `${Math.ceil(settings.entityBoostWeight * NON_GROUNDED_BOOST_RATIO)}x (non-grounded)`
+                }
             });
         }
 
-        // Deduplicate grounded tokens (each unique stem boosted once)
-        const unique = [...new Set(grounded)];
-        const boost = Math.ceil(settings.entityBoostWeight / CORPUS_GROUNDED_BOOST_DIVISOR);
-        for (const t of unique) {
-            for (let r = 0; r < boost; r++) {
+        // Layer 2: Corpus-grounded tokens (60% boost = 3x when entityBoostWeight=5)
+        const uniqueGrounded = [...new Set(grounded)];
+        const groundedBoost = Math.ceil(settings.entityBoostWeight * CORPUS_GROUNDED_BOOST_RATIO);
+        for (const t of uniqueGrounded) {
+            for (let r = 0; r < groundedBoost; r++) {
+                tokens.push(t);
+            }
+        }
+
+        // Layer 3: Non-grounded tokens (40% boost = 2x when entityBoostWeight=5)
+        const uniqueNonGrounded = [...new Set(nonGrounded)];
+        const nonGroundedBoost = Math.ceil(settings.entityBoostWeight * NON_GROUNDED_BOOST_RATIO);
+        for (const t of uniqueNonGrounded) {
+            for (let r = 0; r < nonGroundedBoost; r++) {
                 tokens.push(t);
             }
         }
