@@ -478,6 +478,12 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         if (events.length > 0) {
             await enrichEventsWithEmbeddings(events);
 
+            // Stamp embedding model ID on first successful embedding generation
+            // Prevents invalidateStaleEmbeddings from treating this chat as "legacy" on next open
+            if (!data.embedding_model_id && events.some((e) => hasEmbedding(e))) {
+                data.embedding_model_id = settings.embeddingSource;
+            }
+
             const dedupThreshold = settings.dedupSimilarityThreshold;
             const jaccardThreshold = settings.dedupJaccardThreshold;
             const existingMemoriesList = data.memories || [];

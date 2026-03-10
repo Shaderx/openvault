@@ -11,26 +11,19 @@ import {
     embeddingModelPrefixes,
     extensionFolderPath,
     extensionName,
-    MEMORIES_KEY,
     PAYLOAD_CALC,
     PERF_METRICS,
     PERF_THRESHOLDS,
     UI_DEFAULT_HINTS,
 } from '../constants.js';
 import { getDeps } from '../deps.js';
-import {
-    generateEmbeddingsForMemories,
-    getEmbeddingStatus,
-    getStrategy,
-    isEmbeddingsEnabled,
-    setEmbeddingStatusCallback,
-} from '../embeddings.js';
+import { getEmbeddingStatus, getStrategy, isEmbeddingsEnabled, setEmbeddingStatusCallback } from '../embeddings.js';
 import { updateEventListeners } from '../events.js';
 import { formatForClipboard, getAll as getPerfData } from '../perf/store.js';
 import { exportToClipboard } from './export-debug.js';
 import { validateRPM } from './helpers.js';
 import { initBrowser, nextPage, prevPage, refreshAllUI, resetAndRender } from './render.js';
-import { setStatus, updateEmbeddingStatusDisplay } from './status.js';
+import { updateEmbeddingStatusDisplay } from './status.js';
 
 /**
  * Test Ollama connection
@@ -76,7 +69,6 @@ async function testOllamaConnection() {
 import { PREFILL_PRESETS } from '../prompts/preambles.js';
 import { deleteCurrentChatData, getOpenVaultData } from '../utils/data.js';
 import { showToast } from '../utils/dom.js';
-import { hasEmbedding } from '../utils/embedding-codec.js';
 
 // =============================================================================
 // Helper Functions (inlined from bindings.js)
@@ -314,39 +306,20 @@ async function backfillEmbeddings() {
         return;
     }
 
-    const data = getOpenVaultData();
-    if (!data) {
-        showToast('warning', 'No chat data available');
-        return;
+    const { backfillAllEmbeddings } = await import('../embeddings.js');
+    const result = await backfillAllEmbeddings();
+
+    if (result.total > 0) {
+        showToast(
+            'success',
+            `Generated ${result.total} embeddings (${result.memories}m, ${result.nodes}n, ${result.communities}c)`
+        );
+    } else if (result.skipped) {
+        showToast('info', 'All items already have embeddings');
+    } else {
+        showToast('warning', 'No embeddings generated - check connection');
     }
 
-    const memories = data[MEMORIES_KEY] || [];
-    const needsEmbedding = memories.filter((m) => !hasEmbedding(m));
-
-    if (needsEmbedding.length === 0) {
-        showToast('info', 'All memories already have embeddings');
-        return;
-    }
-
-    showToast('info', `Generating embeddings for ${needsEmbedding.length} memories...`);
-    setStatus('extracting');
-
-    try {
-        const count = await generateEmbeddingsForMemories(needsEmbedding);
-
-        if (count > 0) {
-            await getDeps().saveChatConditional();
-            showToast('success', `Generated ${count} embeddings`);
-            console.log(`[OpenVault] Backfill complete: generated ${count} embeddings for existing memories`);
-        } else {
-            showToast('warning', 'No embeddings generated - check Ollama connection');
-        }
-    } catch (error) {
-        console.error('[OpenVault] Backfill embeddings error:', error);
-        showToast('error', `Embedding generation failed: ${error.message}`);
-    }
-
-    setStatus('ready');
     refreshAllUI();
 }
 
@@ -560,6 +533,12 @@ function bindUIElements() {
             if (wiped > 0) {
                 await saveOpenVaultData();
                 showToast('info', `Embedding model changed. Re-embedding ${wiped} vectors in background.`);
+                // Auto-trigger comprehensive re-embedding in background
+                import('../embeddings.js').then(({ backfillAllEmbeddings }) => {
+                    backfillAllEmbeddings({ silent: true })
+                        .then(() => refreshAllUI())
+                        .catch(() => {});
+                });
                 refreshAllUI();
             }
         }
