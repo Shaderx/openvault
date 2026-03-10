@@ -135,6 +135,10 @@ jQuery(() => {
         await loadSettings();
         registerCommands();
 
+        // Load perf data from current chat into memory store
+        const { loadFromChat } = await import('./src/perf/store.js');
+        loadFromChat();
+
         // Set cooldown during initial load to prevent extraction from MESSAGE_RECEIVED events
         setChatLoadingCooldown(2000, logDebug);
 
