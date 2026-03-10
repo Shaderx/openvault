@@ -279,12 +279,5 @@ export function buildCorpusVocab(memories, hiddenMemories, graphNodes, graphEdge
         }
     }
 
-    // DEBUG: Log corpus vocab sample
-    const vocabArray = Array.from(vocab);
-    const candleRelated = vocabArray.filter(t => t.includes('свеч') || t.includes('воск'));
-    if (candleRelated.length > 0) {
-        console.log('[BM25-DEBUG] Corpus vocab candle/wax stems:', candleRelated);
-    }
-
     return vocab;
 }
