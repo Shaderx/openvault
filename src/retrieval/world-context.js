@@ -29,12 +29,25 @@ export function detectMacroIntent(userMessagesString) {
 
 /**
  * Retrieve the most relevant community summaries for the current context.
+ * Now supports intent-based routing: macro queries use global state, local queries use vector search.
+ *
  * @param {Object} communities - Community data from state
+ * @param {Object|null} globalState - Pre-computed global world state
+ * @param {string} userMessagesString - Concatenated user messages for intent detection
  * @param {Float32Array} queryEmbedding - Embedding of current context
  * @param {number} tokenBudget - Max tokens for world context (default: 2000)
  * @returns {{ text: string, communityIds: string[] }}
  */
-export function retrieveWorldContext(communities, queryEmbedding, tokenBudget = 2000) {
+export function retrieveWorldContext(communities, globalState, userMessagesString, queryEmbedding, tokenBudget = 2000) {
+    // Intent-based routing: check for macro intent first
+    if (detectMacroIntent(userMessagesString) && globalState?.summary) {
+        return {
+            text: `<world_context>\n${globalState.summary}\n</world_context>`,
+            communityIds: [],
+        };
+    }
+
+    // Fall back to existing vector search logic
     if (!communities || !queryEmbedding) {
         return { text: '', communityIds: [] };
     }
