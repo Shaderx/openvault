@@ -264,13 +264,33 @@ export async function selectRelevantMemories(memories, ctx) {
     // Cache scoring details for debug export
     cacheScoringDetails(scoredResults, selectedIds);
 
-    // Cache token budget utilization for debug export
+    // Calculate bucket distribution before and after soft balance
+    const beforeBuckets = assignMemoriesToBuckets(scoredMemories, ctx.chatLength);
+    const afterBuckets = assignMemoriesToBuckets(finalResults, ctx.chatLength);
+
+    const countTokens = (bucket) =>
+        bucket.reduce((sum, m) => sum + (m.summary?.length || 0), 0); // Approximation
+
+    // Cache token budget utilization and bucket distribution for debug export
     cacheRetrievalDebug({
         tokenBudget: {
             budget: finalTokens,
             scoredCount: scoredMemories.length,
             selectedCount: finalResults.length,
             trimmedByBudget: scoredMemories.length - finalResults.length,
+        },
+        bucketDistribution: {
+            before: {
+                old: countTokens(beforeBuckets.old),
+                mid: countTokens(beforeBuckets.mid),
+                recent: countTokens(beforeBuckets.recent),
+            },
+            after: {
+                old: countTokens(afterBuckets.old),
+                mid: countTokens(afterBuckets.mid),
+                recent: countTokens(afterBuckets.recent),
+            },
+            selectedCount: finalResults.length,
         },
     });
 

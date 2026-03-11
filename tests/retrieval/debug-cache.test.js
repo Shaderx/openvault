@@ -104,3 +104,23 @@ describe('Layer 0 token count in debug export', () => {
         expect(cached.queryContext.bm25Tokens.layer1Count).toBe(5);
     });
 });
+
+describe('Bucket distribution in debug export', () => {
+    beforeEach(() => {
+        clearRetrievalDebug();
+    });
+
+    it('should include bucket distribution in cached data', () => {
+        cacheRetrievalDebug({
+            bucketDistribution: {
+                before: { old: 100, mid: 200, recent: 300 },
+                after: { old: 150, mid: 200, recent: 250 },
+            }
+        });
+
+        const cached = getLastRetrievalDebug();
+        expect(cached.bucketDistribution).toBeDefined();
+        expect(cached.bucketDistribution.before.old).toBe(100);
+        expect(cached.bucketDistribution.after.old).toBe(150);
+    });
+});
