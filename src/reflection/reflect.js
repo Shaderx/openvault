@@ -262,25 +262,33 @@ export async function generateReflections(characterName, allMemories, characterS
 
     // Convert unified reflections to memory objects
     const now = deps.Date.now();
-    const newReflections = reflections.map(({ question, insight, evidence_ids }) => ({
-        id: `ref_${generateId()}`,
-        type: 'reflection',
-        summary: insight,
-        tokens: tokenize(insight || ''),
-        importance: 4,
-        sequence: now,
-        characters_involved: [characterName],
-        character: characterName,
-        source_ids: evidence_ids,    // For level 1: event IDs
-        parent_ids: [],              // NEW: Empty for level 1 (derived from events)
-        level: 1,                    // NEW: Default level for event-derived reflections
-        witnesses: [characterName],
-        location: null,
-        is_secret: false,
-        emotional_impact: {},
-        relationship_impact: {},
-        created_at: now,
-    }));
+    const newReflections = reflections.map(({ question, insight, evidence_ids }) => {
+        // Detect meta-synthesis: if evidence_ids contain reflection IDs (starting with "ref_"),
+        // this is a Level 2+ reflection synthesizing existing reflections
+        const hasReflectionEvidence = evidence_ids.some(id => id.startsWith('ref_'));
+        const reflectionEvidenceIds = evidence_ids.filter(id => id.startsWith('ref_'));
+        const eventEvidenceIds = evidence_ids.filter(id => !id.startsWith('ref_'));
+
+        return {
+            id: `ref_${generateId()}`,
+            type: 'reflection',
+            summary: insight,
+            tokens: tokenize(insight || ''),
+            importance: 4,
+            sequence: now,
+            characters_involved: [characterName],
+            character: characterName,
+            source_ids: eventEvidenceIds,     // Event IDs used as source
+            parent_ids: reflectionEvidenceIds, // Reflection IDs synthesized (empty for level 1)
+            level: hasReflectionEvidence ? 2 : 1, // Level 2 if synthesizing reflections, else 1
+            witnesses: [characterName],
+            location: null,
+            is_secret: false,
+            emotional_impact: {},
+            relationship_impact: {},
+            created_at: now,
+        };
+    });
 
     // Generate embeddings for reflections
     await enrichEventsWithEmbeddings(newReflections);

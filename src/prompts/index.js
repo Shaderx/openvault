@@ -412,26 +412,47 @@ Respond with a single JSON object containing 'entities' and 'relationships' keys
  * @returns {object} { system, user } prompt object
  */
 export function buildUnifiedReflectionPrompt(characterName, recentMemories, preamble, outputLanguage = 'auto') {
-    const memoryList = recentMemories.map((m) =>
-        `${m.id}. [${'★'.repeat(m.importance || 3)}] ${m.summary}`
-    ).join('\n');
+    // Detect if candidate set contains existing reflections (for level-aware synthesis)
+    const hasOldReflections = recentMemories.some(m => m.type === 'reflection' && (m.level || 1) >= 1);
+
+    // Format memories with level indicator for reflections
+    const memoryList = recentMemories.map((m) => {
+        const importance = '★'.repeat(m.importance || 3);
+        const levelIndicator = m.type === 'reflection' ? ` [Ref L${m.level || 1}]` : '';
+        return `${m.id}. [${importance}]${levelIndicator} ${m.summary}`;
+    }).join('\n');
+
+    // Use level-aware rules if old reflections are present
+    const rules = hasOldReflections
+        ? UNIFIED_REFLECTION_RULES + '\n\nLEVEL-AWARE SYNTHESIS:\n' +
+          '5. Some candidate memories are existing reflections (marked [Ref L1], [Ref L2], etc.).\n' +
+          '6. You may synthesize multiple existing reflections into higher-level insights (Level 2+).\n' +
+          '7. Level 2 reflections should distill common patterns across multiple Level 1 reflections.\n' +
+          '8. When synthesizing reflections, cite the reflection IDs as evidence_ids.'
+        : UNIFIED_REFLECTION_RULES;
 
     const systemPrompt = assembleSystemPrompt({
         role: UNIFIED_REFLECTION_ROLE,
         schema: UNIFIED_REFLECTION_SCHEMA,
-        rules: UNIFIED_REFLECTION_RULES,
+        rules,
         examples: UNIFIED_REFLECTION_EXAMPLES,
         outputLanguage,
     });
 
     const languageInstruction = resolveLanguageInstruction(memoryList, outputLanguage);
+
+    // Add level-aware instruction to user prompt if old reflections present
+    const levelAwareInstruction = hasOldReflections
+        ? `\n\nLEVEL-AWARE SYNTHESIS MODE:\nSome memories are existing reflections (marked [Ref L1], [Ref L2]). You may synthesize them into higher-level meta-insights.\n- Level 2 insights should distill common patterns across multiple Level 1 reflections.\n- When synthesizing reflections, cite the reflection IDs as evidence_ids.\n`
+        : '';
+
     const userPrompt = `<character>${characterName}</character>
 
 <recent_memories>
 ${memoryList}
 </recent_memories>
 
-${languageInstruction}
+${languageInstruction}${levelAwareInstruction}
 Based on these memories about ${characterName}:
 1. Generate 1-3 salient high-level questions about their current psychological state, relationships, goals, or unresolved conflicts.
 2. For each question, provide a deep insight that synthesizes patterns across the memories.
