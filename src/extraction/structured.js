@@ -325,6 +325,42 @@ export function parseInsightExtractionResponse(content) {
     return parseStructuredResponse(content, InsightExtractionSchema);
 }
 
+// --- Unified Reflection Schema ---
+
+/**
+ * Schema for unified reflection (single-call: question + insight combined)
+ * 1-3 reflections, each with question, insight, and evidence_ids
+ */
+export const UnifiedReflectionSchema = z.object({
+    reflections: z
+        .array(
+            z.object({
+                question: z.string().min(1, 'Question is required'),
+                insight: z.string().min(1, 'Insight is required'),
+                evidence_ids: z.array(z.string()).default([]),
+            })
+        )
+        .min(1, 'At least 1 reflection required')
+        .max(3, 'Maximum 3 reflections'),
+});
+
+/**
+ * Get jsonSchema for unified reflection
+ * @returns {Object} ConnectionManager jsonSchema object
+ */
+export function getUnifiedReflectionJsonSchema() {
+    return toJsonSchema(UnifiedReflectionSchema, 'UnifiedReflection');
+}
+
+/**
+ * Parse unified reflection response
+ * @param {string} content - Raw LLM response
+ * @returns {Object} Validated unified reflection with reflections array
+ */
+export function parseUnifiedReflectionResponse(content) {
+    return parseStructuredResponse(content, UnifiedReflectionSchema);
+}
+
 // --- Community Summary Schema ---
 
 /**

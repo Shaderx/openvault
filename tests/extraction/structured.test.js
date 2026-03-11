@@ -9,6 +9,7 @@ import {
     parseGraphExtractionResponse,
     parseInsightExtractionResponse,
     parseSalientQuestionsResponse,
+    parseUnifiedReflectionResponse,
 } from '../../src/extraction/structured.js';
 
 describe('stripMarkdown edge cases', () => {
@@ -235,5 +236,32 @@ describe('parseGraphExtractionResponse', () => {
         const result = parseGraphExtractionResponse(json);
         expect(result.entities).toHaveLength(1);
         expect(result.relationships).toHaveLength(1);
+    });
+});
+
+describe('UnifiedReflectionSchema', () => {
+    it('parses unified reflection response with question and insight', () => {
+        const raw = JSON.stringify({
+            reflections: [
+                {
+                    question: 'Why is Alice hiding the truth?',
+                    insight: 'Alice is protecting Bob from painful knowledge',
+                    evidence_ids: ['ev_001', 'ev_005'],
+                },
+            ],
+        });
+        const result = parseUnifiedReflectionResponse(raw);
+        expect(result.reflections).toHaveLength(1);
+        expect(result.reflections[0].question).toBe('Why is Alice hiding the truth?');
+        expect(result.reflections[0].insight).toBe('Alice is protecting Bob from painful knowledge');
+        expect(result.reflections[0].evidence_ids).toEqual(['ev_001', 'ev_005']);
+    });
+
+    it('accepts 1-3 reflections (not strictly 3)', () => {
+        const raw = JSON.stringify({
+            reflections: [{ question: 'Q1', insight: 'I1', evidence_ids: ['ev_001'] }],
+        });
+        const result = parseUnifiedReflectionResponse(raw);
+        expect(result.reflections).toHaveLength(1);
     });
 });
