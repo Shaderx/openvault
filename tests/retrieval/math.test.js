@@ -175,3 +175,48 @@ describe('Debug cache propagation', () => {
         expect(cached[0].scores.frequencyFactor).toBeCloseTo(1.115);
     });
 });
+
+describe('hasExactPhrase', () => {
+    it('should return true when phrase exists in memory summary', async () => {
+        const { hasExactPhrase } = await import('../../src/retrieval/math.js');
+
+        const memory = { summary: 'The King Aldric ruled wisely for decades' };
+        const result = hasExactPhrase('King Aldric', memory);
+        expect(result).toBe(true);
+    });
+
+    it('should be case-insensitive', async () => {
+        const { hasExactPhrase } = await import('../../src/retrieval/math.js');
+
+        const memory = { summary: 'KING ALDRIC ruled the kingdom' };
+        expect(hasExactPhrase('king aldrIC', memory)).toBe(true);
+    });
+
+    it('should normalize whitespace', async () => {
+        const { hasExactPhrase } = await import('../../src/retrieval/math.js');
+
+        const memory = { summary: 'The  King   Aldric  arrived' }; // extra spaces
+        expect(hasExactPhrase('King Aldric', memory)).toBe(true);
+    });
+
+    it('should return false for partial matches', async () => {
+        const { hasExactPhrase } = await import('../../src/retrieval/math.js');
+
+        const memory = { summary: 'The King ruled alone' };
+        expect(hasExactPhrase('King Aldric', memory)).toBe(false); // "Aldric" missing
+    });
+
+    it('should return false for word-order mismatches', async () => {
+        const { hasExactPhrase } = await import('../../src/retrieval/math.js');
+
+        const memory = { summary: 'Aldric the King arrived' };
+        expect(hasExactPhrase('King Aldric', memory)).toBe(false);
+    });
+
+    it('should handle punctuation by stripping it', async () => {
+        const { hasExactPhrase } = await import('../../src/retrieval/math.js');
+
+        const memory = { summary: 'King Aldric, Jr. was crowned' };
+        expect(hasExactPhrase('King Aldric', memory)).toBe(true);
+    });
+});

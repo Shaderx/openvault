@@ -31,6 +31,33 @@ export function tokenize(text) {
 }
 
 /**
+ * Check if a memory contains an exact multi-word phrase (case-insensitive).
+ * Normalizes whitespace and strips punctuation for matching.
+ * @param {string} phrase - Multi-word phrase to find (must contain space)
+ * @param {Object} memory - Memory object with summary field
+ * @returns {boolean} True if exact phrase found in memory
+ */
+export function hasExactPhrase(phrase, memory) {
+    if (!phrase || !memory?.summary) return false;
+
+    // Only handle multi-word phrases
+    const trimmedPhrase = phrase.trim();
+    if (!trimmedPhrase.includes(' ')) return false;
+
+    // Normalize both strings: lowercase, normalize whitespace, strip punctuation
+    const normalize = (str) =>
+        str.toLowerCase()
+            .replace(/\s+/g, ' ')  // Normalize whitespace
+            .replace(/[^\p{L}\p{N}\s]/gu, '')  // Strip punctuation (keep letters, numbers, spaces)
+            .trim();
+
+    const normalizedPhrase = normalize(trimmedPhrase);
+    const normalizedSummary = normalize(memory.summary);
+
+    return normalizedSummary.includes(normalizedPhrase);
+}
+
+/**
  * Calculate IDF scores and average document length for a corpus
  * @param {Object[]} memories - Memories to analyze
  * @param {Map} tokenizedMemories - Map of memory index to tokens
