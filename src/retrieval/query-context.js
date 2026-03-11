@@ -150,9 +150,9 @@ export function buildEmbeddingQuery(messages, extractedEntities) {
 
 /**
  * Build enriched token array for BM25 scoring.
- * Layer 1: Entity stems with full boost.
- * Three-tier token approach:
- * - Layer 1: Entity stems with full boost (5x)
+ * Four-tier token approach:
+ * - Layer 0: Multi-word entity exact phrases (un-tokenized, added once, boost applied in scoring)
+ * - Layer 1: Single-word entity stems with full boost (5x)
  * - Layer 2: Corpus-grounded message stems at 60% boost (3x)
  * - Layer 3: Non-grounded message stems at 40% boost (2x)
  *
@@ -161,25 +161,42 @@ export function buildEmbeddingQuery(messages, extractedEntities) {
  * @param {Set<string>|null} [corpusVocab=null] - Corpus vocabulary for grounding.
  *   When provided, user-message tokens are split into grounded/non-grounded tiers.
  *   When null, falls back to including all user-message tokens at 1x (backward compat).
+ * @param {Object} [meta=null] - Optional metadata object to populate with layer counts
  * @returns {string[]} Token array with boosted entities and message stems
  */
 export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = null, meta = null) {
     const tokens = [];
     const settings = getQueryContextSettings();
 
-    // Layer 1: Named entities from graph (unchanged)
+    // Layer 0: Multi-word entities (exact phrases, un-tokenized, added ONCE)
+    // Layer 1: Single-word entities (stems, with 5x boost)
+    let layer0Count = 0, layer1Count = 0;
+
     if (extractedEntities?.entities) {
         for (const entity of extractedEntities.entities) {
-            const weight = (extractedEntities.weights[entity] || 1) * settings.entityBoostWeight;
-            const repeats = Math.ceil(weight);
-            const stemmed = tokenize(entity);
-            for (let r = 0; r < repeats; r++) {
-                tokens.push(...stemmed);
+            const weight = extractedEntities.weights[entity] || 1;
+
+            // Check if entity is multi-word (contains space after trimming)
+            const isMultiWord = entity.trim().includes(' ');
+
+            if (isMultiWord) {
+                // Layer 0: Exact phrase token (un-tokenized, added ONCE)
+                // Boost will be applied in BM25 scoring via hasExactPhrase check
+                tokens.push(entity);
+                layer0Count += 1;
+            } else {
+                // Layer 1: Single-word entity stems (existing behavior, 5x boost)
+                const stemBoost = Math.ceil(weight * settings.entityBoostWeight);
+                const stemmed = tokenize(entity);
+                for (let r = 0; r < stemBoost; r++) {
+                    tokens.push(...stemmed);
+                }
+                layer1Count += stemmed.length * stemBoost;
             }
         }
     }
 
-    const entityStemCount = tokens.length; // Count after Layer 1
+    const entityStemCount = layer1Count; // Count of Layer 1 stems (Layer 0 counted separately)
     let groundedCount = 0, nonGroundedCount = 0;
 
     // Three-tier message token processing
@@ -232,6 +249,8 @@ export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = nu
 
     if (meta) {
         meta.entityStems = entityStemCount;
+        meta.layer0Count = layer0Count;
+        meta.layer1Count = layer1Count;
         meta.grounded = corpusVocab && corpusVocab.size > 0 ? groundedCount : 0;
         meta.nonGrounded = corpusVocab && corpusVocab.size > 0 ? nonGroundedCount : 0;
     }

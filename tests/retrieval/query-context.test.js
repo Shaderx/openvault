@@ -156,20 +156,20 @@ describe('buildBM25Tokens with corpusVocab', () => {
 
         const corpusVocab = new Set(['sword']);
         const entities = {
-            entities: ['King Aldric'],
-            weights: { 'King Aldric': 1.0 },
+            entities: ['Dragon'],  // Single-word entity for Layer 1
+            weights: { Dragon: 1.0 },
         };
 
         const tokens = buildBM25Tokens('sword and magic', entities, corpusVocab);
 
-        // Layer 1: "King Aldric" tokenized + 5x boost
+        // Layer 0: None (Dragon is single-word)
+        // Layer 1: "Dragon" tokenized + 5x boost
         // Layer 2: "sword" grounded + 3x boost (in corpus)
         // Layer 3: "magic" non-grounded + 2x boost (not in corpus)
         expect(tokens.includes('sword')).toBe(true);
         expect(tokens.includes('magic')).toBe(true);
-        // Entity stems from "King Aldric"
-        expect(tokens.some(t => t.startsWith('king') || t === 'king')).toBe(true);
-        expect(tokens.some(t => t.startsWith('aldr') || t === 'aldr')).toBe(true);
+        // Entity stems from "Dragon"
+        expect(tokens.some(t => t.startsWith('drag') || t === 'drag')).toBe(true);
 
         // Verify Layer 3 non-grounded tokens get 2x boost
         const magicCount = tokens.filter(t => t === 'magic').length;
@@ -216,5 +216,65 @@ describe('Event gate behavior', () => {
         // Simulates skipped BM25 (no events → no buildBM25Tokens call → empty array)
         const tokens = buildBM25Tokens('', { entities: [], weights: {} }, new Set());
         expect(tokens).toEqual([]);
+    });
+});
+
+describe('buildBM25Tokens multi-word entity splitting', () => {
+    it('should separate multi-word entities (Layer 0) from single-word entities (Layer 1)', async () => {
+        const { buildBM25Tokens } = await import('../../src/retrieval/query-context.js');
+
+        const entities = {
+            entities: ['King Aldric', 'Queen', 'Silver Sword of Destiny'],
+            weights: { 'King Aldric': 2.0, 'Queen': 1.0, 'Silver Sword of Destiny': 3.0 }
+        };
+        const corpusVocab = new Set(['sword', 'king']);
+        const meta = {};
+
+        const tokens = buildBM25Tokens('test message', entities, corpusVocab, meta);
+
+        // Layer 0: multi-word entities (un-tokenized, contain spaces)
+        const layer0Tokens = tokens.filter(t => t.includes(' '));
+        // Layer 1: single-word entity stems (no spaces)
+        const layer1Tokens = tokens.filter(t => !t.includes(' ')).filter(t =>
+            t.startsWith('king') || t.startsWith('aldr') || t.startsWith('queen')
+        );
+
+        // "King Aldric" appears once (boost applied in scoring)
+        expect(layer0Tokens.filter(t => t === 'King Aldric').length).toBe(1);
+        // "Silver Sword of Destiny" appears once
+        expect(layer0Tokens.filter(t => t === 'Silver Sword of Destiny').length).toBe(1);
+        // Single-word "Queen" goes to Layer 1 (stemmed, 5x boost)
+        expect(layer1Tokens.length).toBeGreaterThan(0);
+
+        // Meta should track layer counts (phrases added once each)
+        expect(meta.layer0Count).toBe(2); // 1 + 1 (not 10 + 10)
+        expect(meta.layer1Count).toBeGreaterThan(0);
+    });
+
+    it('should treat entities with single space as multi-word', async () => {
+        const { buildBM25Tokens } = await import('../../src/retrieval/query-context.js');
+
+        const entities = { entities: ['Dark Castle'], weights: { 'Dark Castle': 1.0 } };
+        const corpusVocab = new Set();
+
+        const tokens = buildBM25Tokens('test', entities, corpusVocab, {});
+
+        // Should have exact phrase "Dark Castle" once (boost applied in scoring)
+        expect(tokens.filter(t => t === 'Dark Castle').length).toBe(1);
+    });
+
+    it('should treat single-word entities as Layer 1 (stemmed)', async () => {
+        const { buildBM25Tokens } = await import('../../src/retrieval/query-context.js');
+
+        const entities = { entities: ['Dragon'], weights: { Dragon: 1.0 } };
+        const corpusVocab = new Set();
+
+        const tokens = buildBM25Tokens('test', entities, corpusVocab, {});
+
+        // Single-word entity should be stemmed (drag -> drag, not "Dragon")
+        const hasStemmed = tokens.some(t => t.includes('drag') && t !== 'Dragon');
+        expect(hasStemmed).toBe(true);
+        // Should NOT contain raw "Dragon" with space
+        expect(tokens.includes('Dragon')).toBe(false);
     });
 });
