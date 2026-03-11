@@ -613,7 +613,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                         const groups = buildCommunityGroups(data.graph, communityResult.communities);
                         const stalenessThreshold = settings.communityStalenessThreshold;
                         const isSingleCommunity = communityResult.count === 1;
-                        data.communities = await updateCommunitySummaries(
+                        const communityUpdateResult = await updateCommunitySummaries(
                             data.graph,
                             groups,
                             data.communities || {},
@@ -621,6 +621,10 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                             stalenessThreshold,
                             isSingleCommunity
                         );
+                        data.communities = communityUpdateResult.communities;
+                        if (communityUpdateResult.global_world_state) {
+                            data.global_world_state = communityUpdateResult.global_world_state;
+                        }
                         logDebug(`Community detection: ${communityResult.count} communities found`);
                     }
                 } catch (error) {
