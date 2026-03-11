@@ -668,6 +668,101 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 }
 
 /**
+ * Run Phase 2 enrichment (Reflections & Communities) independently.
+ * Used after backfill completes to run comprehensive synthesis once.
+ *
+ * @param {Object} data - OpenVault data object (modified in-place)
+ * @param {Object} settings - Extension settings
+ * @param {string} targetChatId - Chat ID for change detection
+ * @returns {Promise<void>}
+ */
+export async function runPhase2Enrichment(data, settings, targetChatId) {
+    const memories = data[MEMORIES_KEY] || [];
+
+    // Guard: No memories to enrich
+    if (memories.length === 0) {
+        logDebug('runPhase2Enrichment: No memories to enrich');
+        return;
+    }
+
+    logDebug('runPhase2Enrichment: Starting comprehensive Phase 2 synthesis');
+
+    try {
+        // ===== REFLECTIONS: Process all characters with accumulated importance =====
+        initGraphState(data); // Ensures reflection_state exists
+        const characterNames = Object.keys(data.reflection_state || {});
+        const reflectionThreshold = settings.reflectionThreshold;
+
+        for (const characterName of characterNames) {
+            if (shouldReflect(data.reflection_state, characterName, reflectionThreshold)) {
+                try {
+                    const reflections = await generateReflections(
+                        characterName,
+                        memories,
+                        data[CHARACTERS_KEY] || {}
+                    );
+                    if (reflections.length > 0) {
+                        data[MEMORIES_KEY].push(...reflections);
+                    }
+                    // Reset accumulator after reflection
+                    data.reflection_state[characterName].importance_sum = 0;
+                } catch (error) {
+                    if (error.name === 'AbortError') throw error;
+                    logError(`Reflection error for ${characterName}`, error);
+                }
+            }
+        }
+
+        // ===== COMMUNITIES: Force-run unconditionally (skip interval check) =====
+        const context = getDeps().getContext();
+        const characterName = context.name2;
+        const userName = context.name1;
+
+        try {
+            const baseKeys = [normalizeKey(characterName), normalizeKey(userName)];
+            const mainCharacterKeys = expandMainCharacterKeys(baseKeys, data.graph.nodes || {});
+            const communityResult = detectCommunities(data.graph, mainCharacterKeys);
+            if (communityResult) {
+                // Consolidate bloated edges before summarization
+                if (data.graph._edgesNeedingConsolidation?.length > 0) {
+                    const consolidated = await consolidateEdges(data.graph, settings);
+                    if (consolidated > 0) {
+                        logDebug(`Consolidated ${consolidated} graph edges before community summarization`);
+                    }
+                }
+
+                const groups = buildCommunityGroups(data.graph, communityResult.communities);
+                const stalenessThreshold = settings.communityStalenessThreshold;
+                const isSingleCommunity = communityResult.count === 1;
+                const communityUpdateResult = await updateCommunitySummaries(
+                    data.graph,
+                    groups,
+                    data.communities || {},
+                    data.graph_message_count || 0,
+                    stalenessThreshold,
+                    isSingleCommunity
+                );
+                data.communities = communityUpdateResult.communities;
+                if (communityUpdateResult.global_world_state) {
+                    data.global_world_state = communityUpdateResult.global_world_state;
+                }
+                logDebug(`runPhase2Enrichment: ${communityResult.count} communities processed`);
+            }
+        } catch (error) {
+            logError('Community detection error', error);
+        }
+
+        // Final save
+        await saveOpenVaultData(targetChatId);
+        logInfo('runPhase2Enrichment: Complete');
+    } catch (error) {
+        if (error.name === 'AbortError') throw error;
+        logError('runPhase2Enrichment failed', error);
+        throw error;
+    }
+}
+
+/**
  * Extract memories from all unextracted messages in current chat
  * Processes in batches determined by extractionTokenBudget setting
  * @param {function} updateEventListenersFn - Function to update event listeners after backfill

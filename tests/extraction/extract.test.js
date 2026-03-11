@@ -6,6 +6,7 @@ import {
     extractMemories,
     filterSimilarEvents,
     updateCharacterStatesFromEvents,
+    runPhase2Enrichment,
 } from '../../src/extraction/extract.js';
 
 /**
@@ -908,5 +909,127 @@ describe('extractMemories AbortError propagation', () => {
         await expect(extractMemories([0, 1], 'test-chat')).rejects.toThrow(
             expect.objectContaining({ name: 'AbortError' })
         );
+    });
+});
+
+describe('runPhase2Enrichment', () => {
+    let mockContext;
+    let mockDataWithState;
+
+    beforeEach(() => {
+        mockContext = {
+            chat: [
+                { mes: 'Hello', is_user: true, name: 'User' },
+                { mes: 'Welcome to the Castle', is_user: false, name: 'King Aldric' },
+            ],
+            name1: 'User',
+            name2: 'King Aldric',
+            characterId: 'char1',
+            characters: { char1: { description: '' } },
+            chatId: 'test-chat',
+            powerUserSettings: {},
+        };
+
+        mockDataWithState = {
+            memories: [
+                {
+                    id: 'event_1',
+                    type: 'event',
+                    summary: 'Test event 1',
+                    importance: 5,
+                    tokens: ['test'],
+                    message_ids: [0],
+                    sequence: 0,
+                    characters_involved: ['King Aldric'],
+                    witnesses: ['King Aldric'],
+                    embedding_b64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+                },
+                {
+                    id: 'event_2',
+                    type: 'event',
+                    summary: 'Test event 2',
+                    importance: 5,
+                    tokens: ['test'],
+                    message_ids: [1],
+                    sequence: 1,
+                    characters_involved: ['King Aldric'],
+                    witnesses: ['King Aldric'],
+                    embedding_b64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+                },
+                {
+                    id: 'event_3',
+                    type: 'event',
+                    summary: 'Test event 3',
+                    importance: 5,
+                    tokens: ['test'],
+                    message_ids: [2],
+                    sequence: 2,
+                    characters_involved: ['King Aldric'],
+                    witnesses: ['King Aldric'],
+                    embedding_b64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+                },
+            ],
+            reflection_state: {
+                'King Aldric': { importance_sum: 45 }, // >= threshold of 40
+            },
+            graph: { nodes: {}, edges: {}, _mergeRedirects: {} },
+            graph_message_count: 100,
+            character_states: {},
+        };
+    });
+
+    afterEach(() => {
+        resetDeps();
+        vi.clearAllMocks();
+    });
+
+    it('should process all characters with accumulated importance', async () => {
+        // Mock reflection LLM response (unified format with reflections array)
+        const reflectionResponse = JSON.stringify({
+            reflections: [
+                {
+                    question: 'What defines King Aldric?',
+                    insight: 'King Aldric has been ruling with wisdom',
+                    evidence_ids: ['event_1', 'event_2'],
+                },
+            ],
+        });
+
+        // Mock community detection response
+        const communityResponse = JSON.stringify({
+            communities: [],
+        });
+
+        const sendRequest = vi
+            .fn()
+            .mockResolvedValueOnce({ content: reflectionResponse }) // Reflection
+            .mockResolvedValueOnce({ content: communityResponse }); // Community
+
+        setupTestContext({
+            context: mockContext,
+            settings: {
+                ...getExtractionSettings(),
+                reflectionThreshold: 40,
+            },
+            deps: {
+                connectionManager: getMockConnectionManager(sendRequest),
+                fetch: vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ embedding: [0.1, 0.2] }),
+                })),
+                saveChatConditional: vi.fn(async () => true),
+            },
+        });
+
+        const initialLength = mockDataWithState.memories.length;
+
+        // Act: Call the new helper with data passed directly
+        await runPhase2Enrichment(mockDataWithState, getExtractionSettings(), null);
+
+        // Assert: At least one reflection was added
+        expect(mockDataWithState.memories.length).toBeGreaterThan(initialLength);
+        const reflection = mockDataWithState.memories.find((m) => m.type === 'reflection');
+        expect(reflection).toBeDefined();
+        expect(reflection.summary).toContain('King Aldric');
     });
 });
