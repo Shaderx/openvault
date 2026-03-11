@@ -163,7 +163,7 @@ export function buildEmbeddingQuery(messages, extractedEntities) {
  *   When null, falls back to including all user-message tokens at 1x (backward compat).
  * @returns {string[]} Token array with boosted entities and message stems
  */
-export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = null) {
+export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = null, meta = null) {
     const tokens = [];
     const settings = getQueryContextSettings();
 
@@ -178,6 +178,9 @@ export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = nu
             }
         }
     }
+
+    const entityStemCount = tokens.length; // Count after Layer 1
+    let groundedCount = 0, nonGroundedCount = 0;
 
     // Three-tier message token processing
     if (corpusVocab && corpusVocab.size > 0) {
@@ -219,9 +222,18 @@ export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = nu
                 tokens.push(t);
             }
         }
+
+        groundedCount = uniqueGrounded.length * groundedBoost;
+        nonGroundedCount = uniqueNonGrounded.length * nonGroundedBoost;
     } else if (!corpusVocab) {
         // Backward compat: no corpus vocab → include all message tokens at 1x
         tokens.push(...tokenize(userMessage || ''));
+    }
+
+    if (meta) {
+        meta.entityStems = entityStemCount;
+        meta.grounded = corpusVocab && corpusVocab.size > 0 ? groundedCount : 0;
+        meta.nonGrounded = corpusVocab && corpusVocab.size > 0 ? nonGroundedCount : 0;
     }
 
     return tokens;

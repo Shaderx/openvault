@@ -187,6 +187,26 @@ describe('buildBM25Tokens with corpusVocab', () => {
         const magicCount = tokens.filter(t => t === 'magic').length;
         expect(magicCount).toBe(2);
     });
+
+    it('populates meta object with tier counts when provided', async () => {
+        const { buildBM25Tokens } = await import('../../src/retrieval/query-context.js');
+        const corpusVocab = new Set(['sword', 'magic']);
+        const entities = { entities: ['Dragon'], weights: { Dragon: 3 } };
+        const meta = {};
+        buildBM25Tokens('sword castle', entities, corpusVocab, meta);
+        expect(meta.entityStems).toBeTypeOf('number');
+        expect(meta.entityStems).toBeGreaterThan(0); // 'dragon' stem from entity
+        expect(meta.grounded).toBeGreaterThanOrEqual(1); // 'sword' is in corpus
+        expect(meta.nonGrounded).toBeGreaterThanOrEqual(0); // 'castle' is not in corpus (may be filtered by length/stem)
+        expect(meta.entityStems + meta.grounded + meta.nonGrounded).toBeGreaterThan(0);
+    });
+
+    it('does not fail when meta is not provided', async () => {
+        const { buildBM25Tokens } = await import('../../src/retrieval/query-context.js');
+        const corpusVocab = new Set(['sword']);
+        const tokens = buildBM25Tokens('sword', { entities: [], weights: {} }, corpusVocab);
+        expect(tokens.length).toBeGreaterThan(0);
+    });
 });
 
 describe('Event gate behavior', () => {
