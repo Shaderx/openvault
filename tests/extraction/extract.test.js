@@ -1032,4 +1032,33 @@ describe('runPhase2Enrichment', () => {
         expect(reflection).toBeDefined();
         expect(reflection.summary).toContain('King Aldric');
     });
+
+    it('should return early if no memories exist', async () => {
+        // Arrange: Empty data
+        const emptyData = {
+            memories: [],
+            reflection_state: {},
+            graph: { nodes: {}, edges: {} },
+        };
+
+        const sendRequest = vi.fn(); // Should NOT be called
+        setupTestContext({
+            context: mockContext,
+            settings: getExtractionSettings(),
+            deps: {
+                connectionManager: getMockConnectionManager(sendRequest),
+                fetch: vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ embedding: [0.1, 0.2] }),
+                })),
+                saveChatConditional: vi.fn(async () => true),
+            },
+        });
+
+        // Act: Call with empty data
+        await runPhase2Enrichment(emptyData, getExtractionSettings(), null);
+
+        // Assert: No LLM calls made
+        expect(sendRequest).not.toHaveBeenCalled();
+    });
 });
