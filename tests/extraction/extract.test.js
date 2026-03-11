@@ -549,6 +549,30 @@ describe('two-phase extraction with intermediate save', () => {
         expect(result.status).toBe('success');
     });
 
+    it('should accept isBackfill option without errors', async () => {
+        // Arrange: Mock minimal LLM responses (events + graph, no phase 2)
+        const sendRequest = mockSendRequest();
+        setupTestContext({
+            context: mockContext,
+            settings: getExtractionSettings(),
+            deps: {
+                connectionManager: getMockConnectionManager(sendRequest),
+                fetch: vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ embedding: [0.1, 0.2] }),
+                })),
+                saveChatConditional: vi.fn(async () => true),
+            },
+        });
+
+        // Act: Call with isBackfill option
+        const result = await extractMemories([0, 1], null, { isBackfill: true });
+
+        // Assert: Should succeed and return events
+        expect(result.status).toBe('success');
+        expect(result.events_created).toBe(1);
+    });
+
     it('updates PROCESSED_MESSAGES_KEY only after events are pushed to memories', async () => {
         // Verify ordering: memories should contain events AND processed_message_ids should be set
         const result = await extractMemories([0, 1]);
