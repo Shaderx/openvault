@@ -13,8 +13,6 @@ import { getOpenVaultData } from '../utils/data.js';
 import { showToast } from '../utils/dom.js';
 import { deleteEmbedding } from '../utils/embedding-codec.js';
 
-const _RECENT_CONTEXT_CAP = 2000;
-
 /**
  * Round number to 2 decimal places.
  * @param {number} n
