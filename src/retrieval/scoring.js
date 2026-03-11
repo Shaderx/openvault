@@ -119,6 +119,8 @@ async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemor
                 entityStems: bm25Meta.entityStems || 0,
                 grounded: bm25Meta.grounded || 0,
                 nonGrounded: bm25Meta.nonGrounded || 0,
+                layer0Count: bm25Meta.layer0Count || 0,
+                layer1Count: bm25Meta.layer1Count || 0,
             },
         },
     });

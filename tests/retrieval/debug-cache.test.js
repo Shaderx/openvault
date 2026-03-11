@@ -78,3 +78,29 @@ describe('cacheScoringDetails', () => {
         expect(cached[0].characters_involved).toEqual([]);
     });
 });
+
+describe('Layer 0 token count in debug export', () => {
+    beforeEach(() => {
+        clearRetrievalDebug();
+    });
+
+    it('should include layer0Count in cached query context', () => {
+        cacheRetrievalDebug({
+            queryContext: {
+                entities: ['King Aldric'],
+                bm25Tokens: {
+                    total: 25,
+                    entityStems: 5,
+                    grounded: 10,
+                    nonGrounded: 5,
+                    layer0Count: 5, // NEW
+                    layer1Count: 5, // NEW
+                }
+            }
+        });
+
+        const cached = getLastRetrievalDebug();
+        expect(cached.queryContext.bm25Tokens.layer0Count).toBe(5);
+        expect(cached.queryContext.bm25Tokens.layer1Count).toBe(5);
+    });
+});
