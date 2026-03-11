@@ -258,7 +258,7 @@ export async function selectRelevantMemories(memories, ctx) {
         1000,
         hiddenMemories
     );
-    const finalResults = sliceToTokenBudget(scoredMemories, finalTokens);
+    const finalResults = selectMemoriesWithSoftBalance(scoredResults, finalTokens, ctx.chatLength);
     const selectedIds = new Set(finalResults.map((m) => m.id));
 
     // Cache scoring details for debug export
