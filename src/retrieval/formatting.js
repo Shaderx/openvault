@@ -129,8 +129,19 @@ export function formatContextForInjection(
 ) {
     const lines = ['<scene_memory>', `(#${chatLength} messages | ★=minor ★★★=notable ★★★★★=critical)`, ''];
 
-    // Assign memories to buckets
-    const buckets = assignMemoriesToBuckets(memories, chatLength);
+    // Handle null/undefined memories
+    if (!memories || !Array.isArray(memories)) {
+        lines.push('</scene_memory>');
+        return lines.join('\n');
+    }
+
+    // Separate memories into events and reflections for different XML blocks
+    // Treat memories without a type field as events (backward compatibility)
+    const events = memories.filter(m => !m.type || m.type === 'event');
+    const reflections = memories.filter(m => m.type === 'reflection');
+
+    // Assign only events to buckets (reflections go to subconscious_drives)
+    const buckets = assignMemoriesToBuckets(events, chatLength);
 
     // Helper to format present characters
     const formatPresent = () => {
@@ -138,7 +149,7 @@ export function formatContextForInjection(
         return `Present: ${presentCharacters.join(', ')}`;
     };
 
-    // Helper to format a single memory
+    // Helper to format a single memory (events only)
     const formatMemory = (memory) => {
         const importance = memory.importance || 3;
         const stars = '\u2605'.repeat(importance);
@@ -147,10 +158,7 @@ export function formatContextForInjection(
         const isKnown = !memory.is_secret && (memory.witnesses?.length || 0) > 2;
         const prefix = isKnown ? '[Known] ' : '';
 
-        // Tag reflections with insight indicator
-        const reflectionTag = memory.type === 'reflection' ? ' \u2758insight\u2759' : '';
-
-        return `[${stars}] ${prefix}${memory.summary}${reflectionTag}`;
+        return `[${stars}] ${prefix}${memory.summary}`;
     };
 
     // Calculate token overhead for non-empty bucket headers
@@ -273,6 +281,21 @@ export function formatContextForInjection(
     }
 
     lines.push('</scene_memory>');
+
+    // Add subconscious_drives block for reflections (if any exist)
+    if (reflections.length > 0) {
+        lines.push('');
+        lines.push('<subconscious_drives>');
+        lines.push('[CRITICAL RULE: The following are hidden psychological truths. The character is NOT consciously aware of these dynamics and would NEVER speak them aloud. Use this ONLY as subtext to influence their subtle actions and emotional reactions.]');
+        lines.push('');
+        for (const ref of reflections) {
+            const importance = ref.importance || 3;
+            const stars = '\u2605'.repeat(importance);
+            lines.push(`[${stars}] ${ref.summary}`);
+        }
+        lines.push('');
+        lines.push('</subconscious_drives>');
+    }
 
     return lines.join('\n');
 }
