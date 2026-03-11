@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { retrieveWorldContext } from '../../src/retrieval/world-context.js';
+import { retrieveWorldContext, detectMacroIntent } from '../../src/retrieval/world-context.js';
 
 describe('retrieveWorldContext', () => {
     const communities = {
@@ -50,5 +50,33 @@ describe('retrieveWorldContext', () => {
         const result = retrieveWorldContext(communities, queryEmbedding, 2000);
         expect(result.text).toContain('<world_context>');
         expect(result.text).toContain('</world_context>');
+    });
+});
+
+describe('detectMacroIntent', () => {
+    it('should detect English macro intent keywords', () => {
+        expect(detectMacroIntent('Can you summarize what happened so far?')).toBe(true);
+        expect(detectMacroIntent('Give me a recap of the story')).toBe(true);
+        expect(detectMacroIntent('What is the overall dynamic?')).toBe(true);
+        expect(detectMacroIntent('Tell me about what has happened lately')).toBe(true);
+    });
+
+    it('should detect Russian macro intent keywords', () => {
+        expect(detectMacroIntent('Расскажи вкратце, что было')).toBe(true);
+        expect(detectMacroIntent('Какой итог нашей истории?')).toBe(true);
+        expect(detectMacroIntent('Наполни контекст о происходящем')).toBe(true);
+        expect(detectMacroIntent('Напомни, как всё началось')).toBe(true);
+    });
+
+    it('should return false for local queries', () => {
+        expect(detectMacroIntent('Let\'s go to the kitchen')).toBe(false);
+        expect(detectMacroIntent('I kiss her gently')).toBe(false);
+        expect(detectMacroIntent('Пойдём в спальню')).toBe(false);
+    });
+
+    it('should handle empty input gracefully', () => {
+        expect(detectMacroIntent('')).toBe(false);
+        expect(detectMacroIntent(null)).toBe(false);
+        expect(detectMacroIntent(undefined)).toBe(false);
     });
 });

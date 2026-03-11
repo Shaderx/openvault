@@ -9,6 +9,25 @@ import { countTokens } from '../utils/tokens.js';
 import { cosineSimilarity } from './math.js';
 
 /**
+ * Multilingual regex for macro-intent detection.
+ * Matches keywords that indicate user wants a global summary rather than local context.
+ * English + Russian triggers as per Phase 2 design.
+ */
+const MACRO_INTENT_REGEX = /(summarize|recap|story so far|overall|time skip|what has happened|lately|dynamic|вкратце|что было|расскажи|итог|наполни|напомни)/i;
+
+/**
+ * Detect if user message indicates macro-intent (global summary needed).
+ * @param {string|null|undefined} userMessagesString - Concatenated user messages
+ * @returns {boolean} True if macro intent detected
+ */
+export function detectMacroIntent(userMessagesString) {
+    if (!userMessagesString || typeof userMessagesString !== 'string') {
+        return false;
+    }
+    return MACRO_INTENT_REGEX.test(userMessagesString);
+}
+
+/**
  * Retrieve the most relevant community summaries for the current context.
  * @param {Object} communities - Community data from state
  * @param {Float32Array} queryEmbedding - Embedding of current context
