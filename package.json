@@ -12,8 +12,9 @@
         "test": "node scripts/test.js",
         "sync-version": "node scripts/sync-version.js",
         "check-css": "node scripts/check-css.js",
-        "repomix": "npm run repomix:logic && npm run repomix:ui && npm run repomix:tests",
-        "repomix:logic": "npx repomix --remove-empty-lines --compress --output repomix-logic.md --include \"src/**/*.js,index.js,package.json,include/**,**/CLAUDE.md\" --ignore \"src/ui/**,src/prompts/examples/**,**/*.css,**/*.html\"",
+        "repomix": "npm run repomix:logic-lite && npm run repomix:logic-full && npm run repomix:ui && npm run repomix:tests",
+        "repomix:logic-full": "npx repomix --remove-empty-lines --output repomix-logic-full.md --include \"src/**/*.js,index.js,package.json,include/**,**/CLAUDE.md\" --ignore \"src/ui/**,**/*.css,**/*.html\"",
+        "repomix:logic-lite": "npx repomix --remove-empty-lines --compress --output repomix-logic-lite.md --include \"src/**/*.js,index.js,package.json,include/**,**/CLAUDE.md\" --ignore \"src/ui/**,src/prompts/examples/**,**/*.css,**/*.html\"",
         "repomix:ui": "npx repomix --remove-empty-lines --compress --output repomix-ui.md --include \"src/ui/**/*.js,templates/**/*.html,css/**/*.css,manifest.json,**/CLAUDE.md\" --remove-empty-lines",
         "repomix:tests": "npx repomix --remove-empty-lines --compress --output repomix-tests.md --include \"tests/**,vitest.config.js,**/CLAUDE.md\""
     },
