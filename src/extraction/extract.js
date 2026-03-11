@@ -50,6 +50,7 @@ import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
 import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
 import {
+    consolidateEdges,
     expandMainCharacterKeys,
     initGraphState,
     mergeOrInsertEntity,
@@ -601,6 +602,14 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                     const mainCharacterKeys = expandMainCharacterKeys(baseKeys, data.graph.nodes || {});
                     const communityResult = detectCommunities(data.graph, mainCharacterKeys);
                     if (communityResult) {
+                        // Consolidate bloated edges before summarization
+                        if (data.graph._edgesNeedingConsolidation?.length > 0) {
+                            const consolidated = await consolidateEdges(data.graph, settings);
+                            if (consolidated > 0) {
+                                logDebug(`Consolidated ${consolidated} graph edges before community summarization`);
+                            }
+                        }
+
                         const groups = buildCommunityGroups(data.graph, communityResult.communities);
                         const stalenessThreshold = settings.communityStalenessThreshold;
                         const isSingleCommunity = communityResult.count === 1;
