@@ -878,7 +878,7 @@ export async function extractAllMessages(updateEventListenersFn) {
 
         try {
             logDebug(`Processing batch ${batchesProcessed + 1}/${initialBatchCount}${retryText}...`);
-            const result = await extractMemories(currentBatch, targetChatId);
+            const result = await extractMemories(currentBatch, targetChatId, { isBackfill: true, silent: true });
             totalEvents += result?.events_created || 0;
             messagesProcessed += currentBatch?.length || 0;
 
@@ -937,6 +937,23 @@ export async function extractAllMessages(updateEventListenersFn) {
         }
     }
 
+    // ===== NEW: Run final Phase 2 synthesis =====
+    // Update existing progress toast for the final heavy lifting
+    logInfo('Backfill Phase 1 complete. Running final Phase 2 synthesis...');
+    $('.openvault-backfill-toast .toast-message').text(
+        `Backfill: 100% - Synthesizing world state and reflections. This may take a minute...`
+    );
+
+    try {
+        await runPhase2Enrichment(data, settings, targetChatId);
+    } catch (error) {
+        logError('Final Phase 2 enrichment failed', error);
+        showToast('warning', 'Events saved, but final summarization failed. You can re-run later.', 'OpenVault');
+        // Don't throw - Phase 1 data is safe
+    }
+    // ===== END FINAL PHASE 2 =====
+
+    // Now clear it when everything is truly done
     // Clear progress toast
     $('.openvault-backfill-toast').remove();
 
