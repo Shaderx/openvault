@@ -8,6 +8,8 @@ import {
     parseEventExtractionResponse,
     parseGraphExtractionResponse,
     parseUnifiedReflectionResponse,
+    parseGlobalSynthesisResponse,
+    GlobalSynthesisSchema,
 } from '../../src/extraction/structured.js';
 
 describe('stripMarkdown edge cases', () => {
@@ -236,5 +238,24 @@ describe('UnifiedReflectionSchema', () => {
         });
         const result = parseUnifiedReflectionResponse(raw);
         expect(result.reflections).toHaveLength(1);
+    });
+});
+
+describe('Global Synthesis Schema', () => {
+    it('should validate correct global synthesis response', () => {
+        const input = '{"global_summary": "The story has evolved from initial meeting to deep conflict..."}';
+        const result = parseGlobalSynthesisResponse(input);
+        expect(result).toEqual({ global_summary: 'The story has evolved from initial meeting to deep conflict...' });
+    });
+
+    it('should enforce min length constraint', () => {
+        const tooShort = { global_summary: 'Too short' };
+        const result1 = GlobalSynthesisSchema.safeParse(tooShort);
+        expect(result1.success).toBe(false);
+
+        // Valid length
+        const valid = { global_summary: 'A'.repeat(100) };
+        const result2 = GlobalSynthesisSchema.safeParse(valid);
+        expect(result2.success).toBe(true);
     });
 });

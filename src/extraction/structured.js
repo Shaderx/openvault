@@ -356,6 +356,36 @@ export function parseCommunitySummaryResponse(content) {
     return parseStructuredResponse(content, CommunitySummarySchema);
 }
 
+// --- Global Synthesis Schema ---
+
+/**
+ * Schema for global world state synthesis
+ * Map-reduce output over all community summaries
+ */
+export const GlobalSynthesisSchema = z.object({
+    global_summary: z
+        .string()
+        .min(50, 'Global summary must be substantive')
+        .describe('Overarching summary of current story state, focusing on macro-relationships and trajectory (max ~300 tokens)'),
+});
+
+/**
+ * Get jsonSchema for global synthesis
+ * @returns {Object} ConnectionManager jsonSchema object
+ */
+export function getGlobalSynthesisJsonSchema() {
+    return toJsonSchema(GlobalSynthesisSchema, 'GlobalSynthesis');
+}
+
+/**
+ * Parse global synthesis response
+ * @param {string} content - Raw LLM response
+ * @returns {Object} Validated global synthesis with global_summary
+ */
+export function parseGlobalSynthesisResponse(content) {
+    return parseStructuredResponse(content, GlobalSynthesisSchema);
+}
+
 // --- Edge Consolidation Schema ---
 
 /**
