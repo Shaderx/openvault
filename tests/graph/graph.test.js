@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CONSOLIDATION } from '../../src/constants.js';
 import { getDocumentEmbedding } from '../../src/embeddings.js';
 import {
+    consolidateEdges,
     consolidateGraph,
     createEmptyGraph,
     expandMainCharacterKeys,
@@ -17,6 +18,25 @@ import {
 // Mock embeddings module
 vi.mock('../../src/embeddings.js', () => ({
     getDocumentEmbedding: vi.fn(),
+    isEmbeddingsEnabled: vi.fn(() => false),
+}));
+
+// Mock llm module
+vi.mock('../../src/llm.js', () => ({
+    callLLM: vi.fn(),
+}));
+
+// Mock extraction/structured module
+vi.mock('../../src/extraction/structured.js', () => ({
+    parseConsolidationResponse: (content) => JSON.parse(content),
+}));
+
+// Mock prompts/index module
+vi.mock('../../src/prompts/index.js', () => ({
+    buildEdgeConsolidationPrompt: (edgeData) => ({
+        system: 'relationship state synthesizer',
+        user: `Synthesize: ${edgeData.source} - ${edgeData.target}`,
+    }),
 }));
 
 // Mock embedding-codec module
@@ -676,5 +696,100 @@ describe('markEdgeForConsolidation', () => {
         // Duplicate add is idempotent
         markEdgeForConsolidation(graph, 'alice__bob');
         expect(graph._edgesNeedingConsolidation.filter(e => e === 'alice__bob')).toHaveLength(1);
+    });
+});
+
+describe('consolidateEdges', () => {
+    it('consolidates edges marked for consolidation', async () => {
+        const { callLLM: mockCallLLM } = await import('../../src/llm.js');
+        const { isEmbeddingsEnabled } = await import('../../src/embeddings.js');
+
+        mockCallLLM.mockResolvedValue(
+            JSON.stringify({ consolidated_description: 'From strangers to battle allies' })
+        );
+        isEmbeddingsEnabled.mockReturnValue(false);
+
+        const graph = {
+            nodes: {
+                alice: { name: 'Alice', type: 'PERSON', description: 'test', mentions: 1, embedding_b64: null },
+                bob: { name: 'Bob', type: 'PERSON', description: 'test', mentions: 1, embedding_b64: null }
+            },
+            edges: {
+                'alice__bob': {
+                    source: 'alice',
+                    target: 'bob',
+                    description: 'Met | Traded | Fought | Celebrated | Parted',
+                    weight: 5,
+                    _descriptionTokens: 600
+                }
+            },
+            _edgesNeedingConsolidation: ['alice__bob']
+        };
+
+        const mockSettings = { consolidationTokenThreshold: 500 };
+
+        const result = await consolidateEdges(graph, mockSettings);
+        expect(result).toBe(1);
+        expect(graph.edges['alice__bob'].description).toBe('From strangers to battle allies');
+        expect(graph._edgesNeedingConsolidation).toHaveLength(0);
+    });
+
+    it('returns 0 when no edges need consolidation', async () => {
+        const graph = {
+            nodes: {
+                alice: { name: 'Alice', type: 'PERSON', description: 'test', mentions: 1 },
+                bob: { name: 'Bob', type: 'PERSON', description: 'test', mentions: 1 }
+            },
+            edges: {
+                'alice__bob': {
+                    source: 'alice',
+                    target: 'bob',
+                    description: 'Met',
+                    weight: 1,
+                    _descriptionTokens: 5
+                }
+            },
+            _edgesNeedingConsolidation: []
+        };
+
+        const result = await consolidateEdges(graph, {});
+        expect(result).toBe(0);
+    });
+
+    it('respects MAX_CONSOLIDATION_BATCH limit', async () => {
+        const { callLLM: mockCallLLM } = await import('../../src/llm.js');
+        const { isEmbeddingsEnabled } = await import('../../src/embeddings.js');
+
+        mockCallLLM.mockResolvedValue(
+            JSON.stringify({ consolidated_description: 'Consolidated' })
+        );
+        isEmbeddingsEnabled.mockReturnValue(false);
+
+        const graph = {
+            nodes: {},
+            edges: {},
+            _edgesNeedingConsolidation: []
+        };
+
+        // Create 15 edges over the threshold (MAX_CONSOLIDATION_BATCH is 10)
+        for (let i = 0; i < 15; i++) {
+            const src = `node${i}`;
+            const tgt = `node${i + 1}`;
+            graph.nodes[src] = { name: src, type: 'PERSON', description: 'test', mentions: 1 };
+            graph.nodes[tgt] = { name: tgt, type: 'PERSON', description: 'test', mentions: 1 };
+            graph.edges[`${src}__${tgt}`] = {
+                source: src,
+                target: tgt,
+                description: 'Long description',
+                weight: 1,
+                _descriptionTokens: 600
+            };
+            graph._edgesNeedingConsolidation.push(`${src}__${tgt}`);
+        }
+
+        const result = await consolidateEdges(graph, {});
+        // Should only process 10 (MAX_CONSOLIDATION_BATCH), 5 should remain
+        expect(result).toBe(10);
+        expect(graph._edgesNeedingConsolidation).toHaveLength(5);
     });
 });

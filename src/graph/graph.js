@@ -5,15 +5,18 @@
  * All data stored in chatMetadata.openvault.graph as { nodes, edges }.
  */
 
-import { getDocumentEmbedding } from '../embeddings.js';
-import { cosineSimilarity } from '../retrieval/math.js';
-import { getEmbedding, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
-import { logDebug } from '../utils/logging.js';
+import { getDocumentEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
+import { callLLM } from '../llm.js';
+import { parseConsolidationResponse } from '../extraction/structured.js';
+import { buildEdgeConsolidationPrompt } from '../prompts/index.js';
+import { logError, logDebug } from '../utils/logging.js';
 import { yieldToMain } from '../utils/st-helpers.js';
 import { stemWord } from '../utils/stemmer.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
 import { countTokens } from '../utils/tokens.js';
 import { CONSOLIDATION } from '../constants.js';
+import { cosineSimilarity } from '../retrieval/math.js';
+import { getEmbedding, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
 
 /**
  * Resolve a raw entity name to its final graph key, accounting for merge redirects.
@@ -528,4 +531,59 @@ export async function consolidateGraph(graphData, settings) {
     }
 
     return { mergedCount, embeddedCount };
+}
+
+/**
+ * Consolidate graph edges that have exceeded token budget.
+ * Runs during community detection phase.
+ * @param {Object} graphData - The graph object
+ * @param {Object} settings - Extension settings
+ * @returns {Promise<number>} Number of edges consolidated
+ */
+export async function consolidateEdges(graphData, settings) {
+    if (!graphData._edgesNeedingConsolidation?.length) {
+        return 0;
+    }
+
+    const toProcess = graphData._edgesNeedingConsolidation
+        .slice(0, CONSOLIDATION.MAX_CONSOLIDATION_BATCH);
+
+    let consolidated = 0;
+
+    for (const edgeKey of toProcess) {
+        const edge = graphData.edges[edgeKey];
+        if (!edge) continue;
+
+        try {
+            const prompt = buildEdgeConsolidationPrompt(edge);
+            const response = await callLLM(prompt, {
+                maxTokens: 200,
+                temperature: 0.3
+            }, { structured: true });
+
+            const result = parseConsolidationResponse(response);
+            if (result.consolidated_description) {
+                edge.description = result.consolidated_description;
+                edge._descriptionTokens = countTokens(result.consolidated_description);
+
+                // Re-embed for accurate RAG (only if embeddings enabled)
+                if (isEmbeddingsEnabled()) {
+                    const newEmbedding = await getDocumentEmbedding(
+                        `relationship: ${edge.source} - ${edge.target}: ${edge.description}`
+                    );
+                    setEmbedding(edge, newEmbedding);
+                }
+
+                consolidated++;
+            }
+        } catch (err) {
+            logError(`Failed to consolidate edge ${edgeKey}`, err);
+        }
+    }
+
+    // Remove processed edges from queue
+    graphData._edgesNeedingConsolidation = graphData._edgesNeedingConsolidation
+        .slice(consolidated);
+
+    return consolidated;
 }
