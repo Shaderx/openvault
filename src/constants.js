@@ -74,6 +74,7 @@ export const defaultSettings = {
     recencyDecayFactor: 0.09, // weight reduction per position
     topEntitiesCount: 5, // max entities to inject
     entityBoostWeight: 5.0, // BM25 boost for extracted entities
+    exactPhraseBoostWeight: 10.0, // 10x boost for multi-word entity exact phrases
     // Reflection decay settings
     // Reflections older than this many messages get a linear penalty (down to 0.25x).
     // 750 gives medium-length chats (~700 msgs) breathing room before decay kicks in.
@@ -114,6 +115,7 @@ export const QUERY_CONTEXT_DEFAULTS = {
     recencyDecayFactor: 0.09, // weight reduction per position
     topEntitiesCount: 5, // max entities to inject
     entityBoostWeight: 5.0, // BM25 boost for extracted entities
+    exactPhraseBoostWeight: 10.0,
 };
 
 /**
@@ -157,6 +159,7 @@ export const UI_DEFAULT_HINTS = {
     embeddingWindowSize: QUERY_CONTEXT_DEFAULTS.embeddingWindowSize,
     topEntitiesCount: QUERY_CONTEXT_DEFAULTS.topEntitiesCount,
     entityBoostWeight: QUERY_CONTEXT_DEFAULTS.entityBoostWeight,
+    exactPhraseBoostWeight: defaultSettings.exactPhraseBoostWeight,
 
     // Summarization
     contextWindowSize: defaultSettings.extractionRearviewTokens,

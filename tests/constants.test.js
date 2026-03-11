@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSettings, PAYLOAD_CALC } from '../src/constants.js';
+import { defaultSettings, PAYLOAD_CALC, UI_DEFAULT_HINTS } from '../src/constants.js';
 
 describe('PAYLOAD_CALC', () => {
     it('exports all required fields', () => {
@@ -26,5 +26,16 @@ describe('CONSOLIDATION', () => {
         expect(CONSOLIDATION.TOKEN_THRESHOLD).toBe(500);
         expect(CONSOLIDATION.MAX_CONSOLIDATION_BATCH).toBe(10);
         expect(CONSOLIDATION.CONSOLIDATED_DESCRIPTION_CAP).toBe(2);
+    });
+});
+
+describe('Exact Phrase Boost Settings', () => {
+    it('should have exactPhraseBoostWeight in defaultSettings', () => {
+        expect(defaultSettings.exactPhraseBoostWeight).toBeDefined();
+        expect(defaultSettings.exactPhraseBoostWeight).toBe(10.0);
+    });
+
+    it('should have exactPhraseBoostWeight in UI_DEFAULT_HINTS', () => {
+        expect(UI_DEFAULT_HINTS.exactPhraseBoostWeight).toBeDefined();
     });
 });
