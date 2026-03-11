@@ -362,13 +362,35 @@ export async function scoreMemories(
         }
     }
 
-    // Compute raw BM25 scores
+    // Separate exact phrase tokens from stem tokens
+    // Exact phrases contain spaces (multi-word entities from Layer 0)
+    // Stem tokens are single words (Layer 1+)
+    const exactPhrases = (tokens || []).filter(t => t.includes(' '));
+    const stemTokens = (tokens || []).filter(t => !t.includes(' '));
+
+    // Compute BM25 using stem tokens only (existing logic)
     const rawBM25Scores = memories.map((_memory, index) => {
-        if (tokens && idfMap && memoryTokensList) {
-            return bm25Score(tokens, memoryTokensList[index], idfMap, avgDL);
+        if (stemTokens.length > 0 && idfMap && memoryTokensList) {
+            return bm25Score(stemTokens, memoryTokensList[index], idfMap, avgDL);
         }
         return 0;
     });
+
+    // Apply exact phrase boost: flat additive score for matching phrases
+    // Use max IDF as phrase weight (phrases are highly specific)
+    const maxIDF = idfMap ? Math.max(...idfMap.values()) : Math.log(idfCorpus.length + 1);
+
+    for (let i = 0; i < memories.length; i++) {
+        if (exactPhrases.length === 0) break;
+
+        for (const phrase of exactPhrases) {
+            if (hasExactPhrase(phrase, memories[i])) {
+                // Add flat 10x boost per matching exact phrase
+                // Multiplied by maxIDF to scale with corpus size
+                rawBM25Scores[i] += 10.0 * maxIDF;
+            }
+        }
+    }
 
     // Batch-max normalize BM25 to [0, 1] for alpha-blend scoring
     const maxBM25 = Math.max(...rawBM25Scores, 1e-9);

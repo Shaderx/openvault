@@ -220,3 +220,80 @@ describe('hasExactPhrase', () => {
         expect(hasExactPhrase('King Aldric', memory)).toBe(true);
     });
 });
+
+describe('BM25 with exact phrase tokens', () => {
+    it('should apply additional boost for memories with exact phrase matches', async () => {
+        const { scoreMemories } = await import('../../src/retrieval/math.js');
+
+        const memories = [
+            { id: '1', summary: 'She wore the burgundy lingerie set to bed', tokens: ['burgundi', 'lingeri', 'set'], message_ids: [100], importance: 3 },
+            { id: '2', summary: 'He grabbed the key set from the table', tokens: ['key', 'set', 'tabl'], message_ids: [100], importance: 3 },
+        ];
+
+        const contextEmbedding = null;
+        const chatLength = 200;
+        const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 1.0, reflectionDecayThreshold: 750 };
+        const settings = { vectorSimilarityThreshold: 0.5, alpha: 0.5, combinedBoostWeight: 2.0 };
+
+        // Query tokens: "бордовый комплект белья" as exact phrase + stems
+        // This simulates user typing about the burgundy lingerie set
+        const queryTokens = [
+            'lingerie set', 'lingerie set', // Layer 0 (10x would be 10, using 2 for test)
+            'lingeri', 'set'  // Layer 1 stems
+        ];
+
+        const scored = await scoreMemories(memories, contextEmbedding, chatLength, constants, settings, queryTokens);
+
+        // Memory 1 should score higher due to exact phrase "lingerie set" appearing
+        expect(scored.length).toBe(2);
+        expect(scored[0].memory.id).toBe('1'); // Higher score due to exact phrase match
+    });
+
+    it('should treat exact phrases as separate scoring dimension from stems', async () => {
+        const { scoreMemories } = await import('../../src/retrieval/math.js');
+
+        const memories = [
+            { id: '1', summary: 'The King Aldric ruled wisely', tokens: ['king', 'aldr', 'rule', 'wis'], message_ids: [100], importance: 3 },
+            { id: '2', summary: 'Aldric was a great ruler', tokens: ['aldr', 'great', 'ruler'], message_ids: [100], importance: 3 },
+        ];
+
+        const contextEmbedding = null;
+        const chatLength = 200;
+        const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 1.0, reflectionDecayThreshold: 750 };
+        const settings = { vectorSimilarityThreshold: 0.5, alpha: 0.5, combinedBoostWeight: 2.0 };
+
+        // Query with both exact phrase "King Aldric" and stems
+        const queryTokens = [
+            'King Aldric', // Layer 0: exact phrase
+            'king', 'aldr' // Layer 1: stems
+        ];
+
+        const scored = await scoreMemories(memories, contextEmbedding, chatLength, constants, settings, queryTokens);
+
+        // Memory 1 should score higher due to exact phrase match
+        expect(scored[0].memory.id).toBe('1');
+        expect(scored[0].score).toBeGreaterThan(scored[1].score);
+    });
+
+    it('should handle query with only stem tokens (no exact phrases)', async () => {
+        const { scoreMemories } = await import('../../src/retrieval/math.js');
+
+        const memories = [
+            { id: '1', summary: 'The brave knight fought', tokens: ['brave', 'knight', 'fought'], message_ids: [100], importance: 3 },
+            { id: '2', summary: 'The kingdom is at peace', tokens: ['kingdom', 'peace'], message_ids: [100], importance: 3 },
+        ];
+
+        const contextEmbedding = null;
+        const chatLength = 200;
+        const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 1.0, reflectionDecayThreshold: 750 };
+        const settings = { vectorSimilarityThreshold: 0.5, alpha: 0.5, combinedBoostWeight: 2.0 };
+
+        // Query with only stems (no spaces = no exact phrases)
+        const queryTokens = ['knight', 'fought'];
+
+        const scored = await scoreMemories(memories, contextEmbedding, chatLength, constants, settings, queryTokens);
+
+        expect(scored.length).toBe(2);
+        expect(scored[0].memory.id).toBe('1'); // Memory 1 matches the stems
+    });
+});
