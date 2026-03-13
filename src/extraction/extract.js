@@ -424,26 +424,36 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         let events = eventResult.events;
 
         // Stage 3B: Graph Extraction (LLM Call 2) — skip if no events
+        // Wrapped in try-catch: graph failure degrades gracefully (events are still saved).
+        // Without this, a persistent graph parse failure (model refusal, truncation, non-JSON)
+        // would throw the entire batch, discard successfully extracted events, leave messages
+        // unprocessed, and cause the worker to retry the same batch indefinitely.
         let graphResult = { entities: [], relationships: [] };
         if (events.length > 0) {
-            await rpmDelay(settings, 'Inter-call rate limit');
-            const formattedEvents = events.map((e, i) => `${i + 1}. [${e.importance}★] ${e.summary}`);
-            const graphPrompt = buildGraphExtractionPrompt({
-                messages: messagesText,
-                names: { char: characterName, user: userName },
-                extractedEvents: formattedEvents,
-                context: {
-                    charDesc: characterDescription,
-                    personaDesc: personaDescription,
-                },
-                preamble,
-                outputLanguage,
-            });
+            try {
+                await rpmDelay(settings, 'Inter-call rate limit');
+                const formattedEvents = events.map((e, i) => `${i + 1}. [${e.importance}★] ${e.summary}`);
+                const graphPrompt = buildGraphExtractionPrompt({
+                    messages: messagesText,
+                    names: { char: characterName, user: userName },
+                    extractedEvents: formattedEvents,
+                    context: {
+                        charDesc: characterDescription,
+                        personaDesc: personaDescription,
+                    },
+                    preamble,
+                    outputLanguage,
+                });
 
-            const t0Graph = performance.now();
-            const graphJson = await callLLM(graphPrompt, LLM_CONFIGS.extraction_graph, { structured: true });
-            record('llm_graph', performance.now() - t0Graph);
-            graphResult = parseGraphExtractionResponse(graphJson);
+                const t0Graph = performance.now();
+                const graphJson = await callLLM(graphPrompt, LLM_CONFIGS.extraction_graph, { structured: true });
+                record('llm_graph', performance.now() - t0Graph);
+                graphResult = parseGraphExtractionResponse(graphJson);
+            } catch (graphError) {
+                // AbortError = session cancel (chat switch) — must propagate
+                if (graphError.name === 'AbortError') throw graphError;
+                logError('Graph extraction failed, continuing with events only', graphError);
+            }
         }
 
         // Merge into unified validated object for downstream stages
