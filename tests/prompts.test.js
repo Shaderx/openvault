@@ -361,7 +361,7 @@ describe('preamble and prefill exports', () => {
         expect(SYSTEM_PREAMBLE_EN).toContain('EXTRACT');
     });
 
-    it('exports PREFILL_PRESETS with all 9 keys', () => {
+    it('exports PREFILL_PRESETS with all 10 keys', () => {
         const keys = Object.keys(PREFILL_PRESETS);
         expect(keys).toContain('think_tag');
         expect(keys).toContain('think_closed');
@@ -372,7 +372,8 @@ describe('preamble and prefill exports', () => {
         expect(keys).toContain('standard');
         expect(keys).toContain('json_opener');
         expect(keys).toContain('none');
-        expect(keys).toHaveLength(9);
+        expect(keys).toContain('cn_compliance');
+        expect(keys).toHaveLength(10);
     });
 
     it('each preset has label and value', () => {
@@ -386,6 +387,12 @@ describe('preamble and prefill exports', () => {
 
     it('think_tag preset has <think> value', () => {
         expect(PREFILL_PRESETS.think_tag.value).toBe('<think>\n');
+    });
+
+    it('cn_compliance preset has Chinese forensic framing', () => {
+        expect(PREFILL_PRESETS.cn_compliance.value).toContain('系统日志');
+        expect(PREFILL_PRESETS.cn_compliance.value).toContain('<think>');
+        expect(PREFILL_PRESETS.cn_compliance.label).toBe('CN Compliance Lock');
     });
 
     it('none preset has empty string value', () => {
