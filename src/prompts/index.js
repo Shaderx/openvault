@@ -310,6 +310,33 @@ const GLOBAL_SYNTHESIS_RULES = `1. Synthesize ALL provided communities into a co
 5. Reference community titles to ground your synthesis in specific details.`;
 
 // =============================================================================
+// EDGE CONSOLIDATION
+// =============================================================================
+
+const EDGE_CONSOLIDATION_ROLE = `You are a relationship state synthesizer for a knowledge graph.
+Combine multiple relationship description segments into a single, coherent summary that preserves narrative depth.`;
+
+const EDGE_CONSOLIDATION_SCHEMA = `You MUST respond with EXACTLY ONE JSON object. No other text, no markdown fences, no commentary.
+
+The JSON object MUST have this EXACT structure:
+
+{
+  "consolidated_description": "string - unified relationship summary that captures the evolution"
+}
+
+CRITICAL FORMAT RULES:
+1. The top level MUST be a JSON object { }, NEVER a bare array [ ].
+2. "consolidated_description" must be a single string under 100 tokens.
+3. Do NOT wrap output in markdown code blocks.
+4. Do NOT include ANY text outside the JSON object.`;
+
+const EDGE_CONSOLIDATION_RULES = `1. Summarize the CURRENT dynamic, but preserve critical historical shifts.
+2. For example: "Started as enemies, but allied after the dragon incident; now close friends."
+3. If the relationship has evolved significantly, capture that trajectory concisely.
+4. Keep the description under 100 tokens.
+5. Use EXACT entity names from the input data — do NOT transliterate, abbreviate, or translate names.`;
+
+// =============================================================================
 // PUBLIC API — PROMPT BUILDERS
 // =============================================================================
 
@@ -466,34 +493,35 @@ Respond with a single JSON object containing a "reflections" array with 1-3 item
 /**
  * Build the edge consolidation prompt.
  * @param {Object} edgeData - Edge object with source, target, description, weight
- * @returns {object} { system, user } prompt object
+ * @param {string} [preamble] - System preamble (anti-refusal framing)
+ * @param {string} [outputLanguage='auto'] - Output language setting
+ * @returns {Array<{role: string, content: string}>} Array of message objects
  */
-export function buildEdgeConsolidationPrompt(edgeData) {
-    const segments = edgeData.description.split(' | ');
-    return {
-        system: 'You are a relationship state synthesizer. Combine multiple relationship descriptions into a single, coherent summary that preserves narrative depth.',
-        user: `Synthesize these relationship developments into ONE unified description:
+export function buildEdgeConsolidationPrompt(edgeData, preamble, outputLanguage = 'auto') {
+    const systemPrompt = assembleSystemPrompt({
+        role: EDGE_CONSOLIDATION_ROLE,
+        schema: EDGE_CONSOLIDATION_SCHEMA,
+        rules: EDGE_CONSOLIDATION_RULES,
+        examples: [],
+        outputLanguage,
+    });
 
+    const segments = edgeData.description.split(' | ');
+    const segmentText = segments.map((s, i) => `${i + 1}. ${s}`).join('\n');
+    const languageInstruction = resolveLanguageInstruction(segmentText, outputLanguage);
+    const userPrompt = `<edge_data>
 Source: ${edgeData.source}
 Target: ${edgeData.target}
 Weight: ${edgeData.weight}
 
 Timeline segments:
-${segments.map((s, i) => `${i + 1}. ${s}`).join('\n')}
+${segmentText}
+</edge_data>
+${languageInstruction}
+Synthesize these relationship developments into ONE unified description.
+Respond with a single JSON object containing "consolidated_description". No other text.`;
 
-Output a JSON object with:
-{
-  "consolidated_description": "string - unified relationship summary that captures the evolution"
-}
-
-Keep the description under 100 tokens.
-
-IMPORTANT: Summarize the CURRENT dynamic, but preserve critical historical shifts.
-For example: "Started as enemies, but allied after the dragon incident; now close friends."
-If the relationship has evolved significantly, capture that trajectory in a concise way.
-
-Respond with a single JSON object. No other text.`,
-    };
+    return buildMessages(systemPrompt, userPrompt, '{', preamble);
 }
 
 /**
@@ -532,7 +560,7 @@ Respond with a single JSON object containing title, summary, and 1-5 findings. N
  * @param {Object[]} communities - Array of community objects with { title, summary, findings }
  * @param {string} preamble - System preamble (anti-refusal framing)
  * @param {string} outputLanguage - Output language setting ('auto'|'en'|'ru')
- * @returns {object} { system, user } prompt object
+ * @returns {Array<{role: string, content: string}>} Array of message objects
  */
 export function buildGlobalSynthesisPrompt(communities, preamble, outputLanguage = 'auto') {
     const systemPrompt = assembleSystemPrompt({
@@ -558,5 +586,5 @@ Focus on macro-relationships, overarching tensions, and plot trajectory.
 
 Respond with a single JSON object containing "global_summary". No other text.`;
 
-    return { system: systemPrompt, user: userPrompt };
+    return buildMessages(systemPrompt, userPrompt, '{', preamble);
 }

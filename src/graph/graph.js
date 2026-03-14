@@ -6,17 +6,18 @@
  */
 
 import { getDocumentEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
-import { callLLM } from '../llm.js';
+import { callLLM, LLM_CONFIGS } from '../llm.js';
 import { parseConsolidationResponse } from '../extraction/structured.js';
-import { buildEdgeConsolidationPrompt } from '../prompts/index.js';
+import { buildEdgeConsolidationPrompt, resolveExtractionPreamble, resolveOutputLanguage } from '../prompts/index.js';
 import { logError, logDebug } from '../utils/logging.js';
 import { yieldToMain } from '../utils/st-helpers.js';
 import { stemWord } from '../utils/stemmer.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
 import { countTokens } from '../utils/tokens.js';
-import { CONSOLIDATION } from '../constants.js';
+import { CONSOLIDATION, extensionName } from '../constants.js';
 import { cosineSimilarity } from '../retrieval/math.js';
 import { getEmbedding, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
+import { getDeps } from '../deps.js';
 
 /**
  * Resolve a raw entity name to its final graph key, accounting for merge redirects.
@@ -567,6 +568,10 @@ export async function consolidateEdges(graphData, settings) {
     const toProcess = graphData._edgesNeedingConsolidation
         .slice(0, CONSOLIDATION.MAX_CONSOLIDATION_BATCH);
 
+    const deps = getDeps();
+    const extensionSettings = deps.getExtensionSettings()?.[extensionName] || {};
+    const preamble = resolveExtractionPreamble(extensionSettings);
+    const outputLanguage = resolveOutputLanguage(extensionSettings);
     const successfulKeys = [];
 
     for (const edgeKey of toProcess) {
@@ -574,11 +579,8 @@ export async function consolidateEdges(graphData, settings) {
         if (!edge) continue;
 
         try {
-            const prompt = buildEdgeConsolidationPrompt(edge);
-            const response = await callLLM(prompt, {
-                maxTokens: 200,
-                temperature: 0.3
-            }, { structured: true });
+            const prompt = buildEdgeConsolidationPrompt(edge, preamble, outputLanguage);
+            const response = await callLLM(prompt, LLM_CONFIGS.edge_consolidation, { structured: true });
 
             const result = parseConsolidationResponse(response);
             if (result.consolidated_description) {

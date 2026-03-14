@@ -9,6 +9,7 @@ import { extensionName } from './constants.js';
 import { getDeps } from './deps.js';
 import {
     getCommunitySummaryJsonSchema,
+    getEdgeConsolidationJsonSchema,
     getEventExtractionJsonSchema,
     getGraphExtractionJsonSchema,
     getUnifiedReflectionJsonSchema,
@@ -77,6 +78,13 @@ export const LLM_CONFIGS = {
         errorContext: 'Community summarization',
         timeoutMs: 90000,
         getJsonSchema: getCommunitySummaryJsonSchema,
+    },
+    edge_consolidation: {
+        profileSettingKey: 'extractionProfile',
+        maxTokens: 200,
+        errorContext: 'Edge consolidation',
+        timeoutMs: 60000,
+        getJsonSchema: getEdgeConsolidationJsonSchema,
     },
 };
 

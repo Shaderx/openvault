@@ -573,7 +573,7 @@ describe('buildUnifiedReflectionPrompt', () => {
 });
 
 describe('buildEdgeConsolidationPrompt', () => {
-    it('builds edge consolidation prompt with edge data', () => {
+    it('builds edge consolidation prompt as message array', () => {
         const edge = {
             source: 'alice',
             target: 'bob',
@@ -581,10 +581,37 @@ describe('buildEdgeConsolidationPrompt', () => {
             weight: 3
         };
         const result = buildEdgeConsolidationPrompt(edge);
-        expect(result.system).toContain('relationship state synthesizer');
-        expect(result.user).toContain('alice');
-        expect(result.user).toContain('bob');
-        expect(result.user).toContain('Met at tavern');
+        expect(result).toHaveLength(3);
+        expect(result[0].role).toBe('system');
+        expect(result[1].role).toBe('user');
+        expect(result[2].role).toBe('assistant');
+        expect(result[2].content).toBe('{');
+        expect(result[0].content).toContain('relationship state synthesizer');
+        expect(result[1].content).toContain('alice');
+        expect(result[1].content).toContain('bob');
+        expect(result[1].content).toContain('Met at tavern');
+    });
+
+    it('includes preamble in system message when provided', () => {
+        const edge = {
+            source: 'alice',
+            target: 'bob',
+            description: 'Met | Fought',
+            weight: 2
+        };
+        const result = buildEdgeConsolidationPrompt(edge, SYSTEM_PREAMBLE_EN);
+        expect(result[0].content).toContain('SYSTEM: Interactive Fiction Archival Database');
+    });
+
+    it('includes language rules in system prompt', () => {
+        const edge = {
+            source: 'alice',
+            target: 'bob',
+            description: 'Met | Fought',
+            weight: 2
+        };
+        const result = buildEdgeConsolidationPrompt(edge);
+        expect(result[0].content).toContain('<language_rules>');
     });
 
     it('parses consolidation response', () => {
@@ -598,24 +625,34 @@ describe('buildEdgeConsolidationPrompt', () => {
 });
 
 describe('buildGlobalSynthesisPrompt', () => {
-    it('should build prompt with system and user messages', () => {
+    it('should build prompt as message array', () => {
         const communities = [
             { title: 'Community A', summary: 'Summary A', findings: ['f1'] },
             { title: 'Community B', summary: 'Summary B', findings: ['f2'] },
         ];
         const result = buildGlobalSynthesisPrompt(communities, 'auto', 'auto');
 
-        expect(result).toHaveProperty('system');
-        expect(result).toHaveProperty('user');
-        expect(result.system).toContain('role');
-        expect(result.user).toContain('Community A');
-        expect(result.user).toContain('Community B');
+        expect(result).toHaveLength(3);
+        expect(result[0].role).toBe('system');
+        expect(result[1].role).toBe('user');
+        expect(result[2].role).toBe('assistant');
+        expect(result[2].content).toBe('{');
+        expect(result[0].content).toContain('role');
+        expect(result[1].content).toContain('Community A');
+        expect(result[1].content).toContain('Community B');
     });
 
     it('should include language rules from assembleSystemPrompt', () => {
         const communities = [{ title: 'C1', summary: 'S1', findings: [] }];
-        const result = buildGlobalSynthesisPrompt(communities, 'You are a narrative synthesist', 'auto');
+        const result = buildGlobalSynthesisPrompt(communities, SYSTEM_PREAMBLE_EN, 'auto');
 
-        expect(result.system).toContain('<language_rules>');
+        expect(result[0].content).toContain('<language_rules>');
+    });
+
+    it('should include preamble in system message', () => {
+        const communities = [{ title: 'C1', summary: 'S1', findings: [] }];
+        const result = buildGlobalSynthesisPrompt(communities, SYSTEM_PREAMBLE_EN, 'auto');
+
+        expect(result[0].content).toContain('SYSTEM: Interactive Fiction Archival Database');
     });
 });

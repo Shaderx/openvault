@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CONSOLIDATION } from '../../src/constants.js';
+import { CONSOLIDATION, extensionName, defaultSettings } from '../../src/constants.js';
 import { getDocumentEmbedding } from '../../src/embeddings.js';
 import {
     consolidateEdges,
@@ -25,6 +25,15 @@ vi.mock('../../src/embeddings.js', () => ({
 // Mock llm module
 vi.mock('../../src/llm.js', () => ({
     callLLM: vi.fn(),
+    LLM_CONFIGS: {
+        edge_consolidation: {
+            profileSettingKey: 'extractionProfile',
+            maxTokens: 200,
+            errorContext: 'Edge consolidation',
+            timeoutMs: 60000,
+            getJsonSchema: undefined,
+        },
+    },
 }));
 
 // Mock extraction/structured module
@@ -34,10 +43,24 @@ vi.mock('../../src/extraction/structured.js', () => ({
 
 // Mock prompts/index module
 vi.mock('../../src/prompts/index.js', () => ({
-    buildEdgeConsolidationPrompt: (edgeData) => ({
-        system: 'relationship state synthesizer',
-        user: `Synthesize: ${edgeData.source} - ${edgeData.target}`,
+    buildEdgeConsolidationPrompt: (edgeData) => [
+        { role: 'system', content: 'relationship state synthesizer' },
+        { role: 'user', content: `Synthesize: ${edgeData.source} - ${edgeData.target}` },
+        { role: 'assistant', content: '{' },
+    ],
+    resolveExtractionPreamble: () => 'preamble',
+    resolveOutputLanguage: () => 'auto',
+}));
+
+// Mock deps module (needed by consolidateEdges for preamble/outputLanguage resolution)
+vi.mock('../../src/deps.js', () => ({
+    getDeps: () => ({
+        getExtensionSettings: () => ({
+            [extensionName]: { ...defaultSettings },
+        }),
+        console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
     }),
+    resetDeps: vi.fn(),
 }));
 
 // Mock embedding-codec module
