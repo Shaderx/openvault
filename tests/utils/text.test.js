@@ -165,9 +165,26 @@ describe('text', () => {
             expect(safeParseJSON(input)).toEqual({ selected: [1, 2, 3] });
         });
 
-        it('extracts first JSON object when multiple present', () => {
-            const input = '{"result": {"data": [1]}} some text {"other": "value"}';
-            expect(safeParseJSON(input)).toEqual({ result: { data: [1] } });
+        it('extracts last JSON object when multiple present', () => {
+            const input = '{"noise": "before"} some text {"result": "value"}';
+            expect(safeParseJSON(input)).toEqual({ result: 'value' });
+        });
+
+        it('returns last block when tool_call noise is larger than payload', () => {
+            const input = '<tool_call>{"name": "extract_events", "arguments": {"query": "test"}}</tool_call>{"events": []}';
+            expect(safeParseJSON(input)).toEqual({ events: [] });
+        });
+
+        it('returns last block when tool_call noise is smaller than payload', () => {
+            const input = '<tool_call>{"name": "x"}</tool_call>{"events": [{"summary": "Alice fought Bob", "importance": 3, "characters_involved": ["Alice", "Bob"]}]}';
+            const result = safeParseJSON(input);
+            expect(result.events).toHaveLength(1);
+            expect(result.events[0].summary).toBe('Alice fought Bob');
+        });
+
+        it('returns single block unchanged (common case)', () => {
+            const input = '{"events": [{"summary": "test"}]}';
+            expect(safeParseJSON(input)).toEqual({ events: [{ summary: 'test' }] });
         });
     });
 
