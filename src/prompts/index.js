@@ -141,7 +141,8 @@ CRITICAL FORMAT RULES:
 2. The "reflections" array MUST contain 1 to 3 reflection objects.
 3. Each reflection MUST have "question", "insight" (strings) and "evidence_ids" (array of strings).
 4. Do NOT wrap output in markdown code blocks.
-5. Do NOT include ANY text outside the JSON object.
+5. You MAY use <thinking> tags for reasoning before providing the JSON.
+   The JSON object must still be valid and parseable.
 
 CRITICAL ID GROUNDING RULE:
 For "evidence_ids", you MUST ONLY use the exact IDs shown in the <recent_memories> list.
