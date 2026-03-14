@@ -228,7 +228,7 @@ export const PERF_METRICS = {
 
 // Edge consolidation constants
 export const CONSOLIDATION = {
-    TOKEN_THRESHOLD: 500,           // Trigger consolidation when description exceeds this
+    TOKEN_THRESHOLD: 250,           // Trigger consolidation when description exceeds this
     MAX_CONSOLIDATION_BATCH: 10,    // Max edges to consolidate per community detection run
     CONSOLIDATED_DESCRIPTION_CAP: 2, // After consolidation, cap future additions to 2 segments
 };

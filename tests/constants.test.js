@@ -21,7 +21,7 @@ describe('CONSOLIDATION', () => {
     it('defines CONSOLIDATION constants', async () => {
         const { CONSOLIDATION } = await import('../src/constants.js');
         expect(CONSOLIDATION).toBeDefined();
-        expect(CONSOLIDATION.TOKEN_THRESHOLD).toBe(500);
+        expect(CONSOLIDATION.TOKEN_THRESHOLD).toBe(250);
         expect(CONSOLIDATION.MAX_CONSOLIDATION_BATCH).toBe(10);
         expect(CONSOLIDATION.CONSOLIDATED_DESCRIPTION_CAP).toBe(2);
     });
