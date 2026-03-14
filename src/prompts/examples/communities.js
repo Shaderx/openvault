@@ -18,7 +18,10 @@ Relationships:
 - Kira → Ashwood's Flasks: Secretly kept two flasks, practicing resurrection formula
 - Guild Master Aldric → The Explorer Guild: Commands operations and assigns missions
 - The Explorer Guild → Ashwood's Flasks: Has been searching for a century`,
-        output: `{
+        output: `<thinking>
+This is a political intrigue community centered on deception. Kira has betrayed the guild by hiding artifacts. The key finding is that Kira's deception creates an unstable power dynamic - Guild Master Aldric doesn't know about the theft. The resurrection formula is the true prize, making Kira's personal goal potentially catastrophic for the organization. The community structure shows clear conflict potential.
+</thinking>
+{
   "title": "Explorer Guild Flask Conflict",
   "summary": "A brewing internal conflict centered on Ashwood's preservation flasks. Kira, a guild member, has stolen two flasks and is secretly experimenting with a resurrection formula, directly deceiving Guild Master Aldric. The guild has invested a century into finding these artifacts, making Kira's betrayal a critical threat to the organization's trust structure.",
   "findings": [
@@ -42,7 +45,10 @@ Relationships:
 - Дима → Лена: Эмоциональная поддержка, обнимал за плечо, обещал быть рядом
 - Лена → Соседки: Избегает после слухов и сплетен
 - Соседки → Лена: Обсуждают за спиной, создают атмосферу отчуждения`,
-        output: `{
+        output: `<thinking>
+Социальная структура с одним позитивным связью и токсичным окружением. Лена изолирована из-за сплетен соседок. Дима — её единственная поддержка. Структура показывает риск патологической созависимости: нет альтернативных социальных связей. Соседки создают токсичную среду, от которой Лена защищается избеганием. Ключевые выводы: изоляция, единственная поддержка, потенциальная созависимость.
+</thinking>
+{
   "title": "Социальный круг Лены в общежитии",
   "summary": "Изолированная социальная структура с одним сильным позитивным связью и токсичным фоном. Лена cutoff от коллектива соседок из-за сплетен и испытывает глубокое одиночество. Единственный якорь — Дима, который становится её главным источником эмоциональной поддержки. Риск паттерна: полная зависимость от одного человека при отсутствии альтернативных связей.",
   "findings": [
@@ -68,7 +74,10 @@ Relationships:
 - Lyra → Thorne: Healing support during battles
 - Thorne → Shadowbeast Pack: Frontline defender taking damage
 - Harlan → Enchanted Blade: Wields with expert skill against multiple enemies`,
-        output: `{
+        output: `<thinking>
+Combat party with clear role division. Harlan leads, Thorne tanks, Lyra heals. The external threat (Shadowbeast Pack) binds them together. Harlan's mentorship of Lyra is protective but potentially overbearing. Thorne and Harlan have friction but mutual respect. Lyra is the emotional center and potential vulnerability. Key findings: functional combat synergy, protective mentorship that may be overbearing, and external threat as binding force.
+</thinking>
+{
   "title": "Mercenary Combat Party",
   "summary": "A three-person combat unit with defined roles and interpersonal tensions. Harlan leads with experience, Thorne absorbs damage, and Lyra provides healing support. The party faces external threat from Shadowbeast Pack while internal dynamics include mentorship, bickering camaraderie, and Lyra's struggle with combat fear. Harlan's protective but demanding approach to Lyra creates both growth and pressure.",
   "findings": [
@@ -94,7 +103,10 @@ Relationships:
 - Елена → Андрей: Любовь, подозрения об измене
 - Мария → Андрей: Взаимный интерес, провокационное поведение
 - Елена → Мария: Ревность, напряжённость в совместных встречах`,
-        output: `{
+        output: `<thinking>
+Классический любовный треугольник. Андрей в центре конфликта между стабильностью (Елена) и новизной (Мария). Елена чувствует угрозу, Мария ведёт себя провокационно. Общая компания становится полем битвы. Ключевые выводы: нерешительность Андрея — топливо для эскалации, отсутствие честного разговора гарантирует травматичное разрешение, все трое вынуждены взаимодействовать в общем пространстве.
+</thinking>
+{
   "title": "Романтический треугольник Андрея, Елены и Марии",
   "summary": "Классический любовный треугольник с центральным конфликтом вокруг Андрея. Долгосрочная стабильность с Еленой конкурирует с новым влечением к Марии. Елена чувствует угрозу и проявляет ревность, Мария активно флиртует, Андрей колеблется между привязанностью и желанием. Ситуация усугубляется тем, что все трое вынуждены общаться в общей компании.",
   "findings": [
@@ -121,7 +133,10 @@ Relationships:
 - Lila → Julia: Confides about sexual encounters, discusses desires
 - Julia → Lila: Supportive listener, validates her exploration
 - Marcus → Hair Pulling: Initially resisted, now accepts and responds to`,
-        output: `{
+        output: `<thinking>
+Intimate relationship network with inverted power dynamics. Lila dominates, Marcus submits. Julia is external confidant providing validation. The escalation pattern (first contact → hair-pulling → feeling owned) shows deepening exploration. Key findings: power inversion with Lila directing, Marcus accepting submission, Julia providing external validation, and escalation suggesting deeper needs being explored.
+</thinking>
+{
   "title": "Lila and Marcus Intimate Circle",
   "summary": "A sexual dynamic between Lila and Marcus where traditional roles are reversed — Lila dominates and Marcus submits. Their encounters have escalated from first sexual contact to rough play including hair-pulling and requests for feeling 'owned.' Julia serves as Lila's confidant outside the bedroom. Marcus shows increasing comfort with submission while Lila explores her dominant desires.",
   "findings": [
@@ -147,7 +162,10 @@ Relationships:
 - Маша → Ошейник: Застёгивает на Кае как инструмент власти
 - Кай → Малина: Знает стоп-слово, но ни разу не использовал
 - Маша → Кай (забота): Выразила беспокойство о потере его воли за пределами сцен`,
-        output: `{
+        output: `<thinking>
+Замкнутая система с выраженной иерархией власти. Маша — полный контролёр, Кай добровольно подчиняется. Критический сигнал: Маша сама обеспокоена стиранием границ. Кай переносит подчинение в быт без запроса. Стоп-слово существует, но не используется. Ключевые выводы: динамика вышла за пределы сцен, потенциальная психологическая зависимость, Маша — единственный сдерживающий фактор.
+</thinking>
+{
   "title": "Динамика власти Маши и Кая",
   "summary": "Замкнутая система из двух человек с выраженной иерархией доминирования. Маша выступает полным контролёром — от сцен с ошейником и поводком до бытовых решений. Кай добровольно расширяет подчинение за пределы оговорённых сцен (ужин на коленях, просьба не снимать ошейник). Критический сигнал: Маша сама обеспокоена стиранием границ, но Кай воспринимает подчинение как источник психологического комфорта.",
   "findings": [

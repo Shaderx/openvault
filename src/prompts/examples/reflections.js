@@ -13,7 +13,10 @@ export const UNIFIED_REFLECTION_EXAMPLES = [
 3. [★★★★] Kira lied to the guild about finding only three flasks, secretly keeping two
 4. [★★★] Kira decoded ancient text on the flask labels revealing a resurrection formula
 5. [★★] Kira practiced the formula alone at night, burning her fingertips on failed attempts`,
-        output: `{
+        output: `<thinking>
+This pattern shows clear deception: Kira discovered valuable artifacts, lied about the quantity, and is secretly experimenting. The deception (memory 3) combined with secret practice (memory 5) suggests a personal agenda. The resurrection formula (memory 4) explains the motivation. The argument with guild master (memory 2) shows tension around disclosure. The burned fingertips (memory 5) indicate desperation and personal risk. Questions should probe why she's lying and what she wants to resurrect.
+</thinking>
+{
   "reflections": [
     {
       "question": "Why is Kira hiding flasks from the guild she pledged loyalty to, and what does this deception reveal about her shifting priorities?",
@@ -36,7 +39,10 @@ export const UNIFIED_REFLECTION_EXAMPLES = [
 3. [★★★] Лена впервые улыбнулась за неделю, когда Дима принёс ей чай
 4. [★★] Лена услышала, как соседки обсуждают её за спиной
 5. [★★★★] Лена рассказала Диме о буллинге в школе, впервые упомянув об этом вслух`,
-        output: `{
+        output: `<thinking>
+Паттерн изоляции и зависимости. Лена избегает социальных пространств (память 2), слышит сплетни о себе (память 4), и впервые улыбнулась за неделю благодаря Диме (память 3). Признание о буллинге (память 5) раскрывает корень проблемы. Дима — единственный источник поддержки (память 1, 3). Вопросы должны исследовать связь детского опыта с нынешней изоляцией и риски зависимости от одного человека.
+</thinking>
+{
   "reflections": [
     {
       "question": "Как детский опыт буллинга формирует нынешнюю изоляцию Лены и её неспособность доверять окружающим?",
@@ -59,7 +65,10 @@ export const UNIFIED_REFLECTION_EXAMPLES = [
 3. [★★] Mara woke screaming from nightmare about the raid
 4. [★★★] Mara flinched when a merchant reached for her sword arm
 5. [★★★] Mara confessed to her companion that she feels numb during fights, not brave`,
-        output: `{
+        output: `<thinking>
+Combat trauma pattern with classic PTSD symptoms. The killing and wound (memory 1) is the traumatic event. Refusal of healing (memory 2) suggests need for control or self-punishment. Nightmares (memory 3) are intrusion symptoms. The flinch response (memory 4) shows hypervigilance. The confession about numbness (memory 5) reveals dissociation during combat. Questions should probe whether her coping mechanisms are healthy or signs of deepening trauma.
+</thinking>
+{
   "reflections": [
     {
       "question": "Is Mara's refusal of healing and self-isolation after combat a sign of resilience or deepening trauma?",
@@ -82,7 +91,10 @@ export const UNIFIED_REFLECTION_EXAMPLES = [
 3. [★★] Аня избегала взгляда Сергея на следующее утро, краснея при встрече
 4. [★★★] Аня написала в дневнике, что боится всё испортить, если признается в своих чувствах
 5. [★★] Аня спросила подругу, как понять, что это любовь, а не просто влюблённость`,
-        output: `{
+        output: `<thinking>
+Романтическая уязвимость и страх близости. Первый поцелуй (память 1) — значимое событие с смешанными эмоциями. Бессонница (память 2) показывает эмоциональную значимость. Избегание взгляда (память 3) — защитная реакция. Страх испортить (память 4) раскрывает прошлый опыт. Вопрос подруге (память 5) — поиск ориентиров. Нужно исследовать корень страха и динамику между защитой и близостью.
+</thinking>
+{
   "reflections": [
     {
       "question": "Почему Аня так боится признаться в своих чувствах Сергею, даже после взаимного поцелуя?",
@@ -105,7 +117,10 @@ export const UNIFIED_REFLECTION_EXAMPLES = [
 3. [★★] Lila told Marcus she doesn't want gentle — she wants to feel owned
 4. [★★★★] Lila broke down crying after an intense session, saying she doesn't know why
 5. [★★★] Lila refused to discuss the crying incident the next morning, deflecting with humor`,
-        output: `{
+        output: `<thinking>
+Pattern of using sexual intensity to cope with unprocessed emotions. The escalation from first time (memory 1) to hair-pulling (memory 2) to wanting to feel owned (memory 3) shows increasing intensity. The breakdown (memory 4) is the key indicator of emotional overwhelm. Refusing to discuss (memory 5) shows avoidance of processing. Questions should probe what psychological need the intensity serves and why she can't process the emotions that surface.
+</thinking>
+{
   "reflections": [
     {
       "question": "What psychological need is Lila fulfilling by escalating physical intensity and requesting dominance from Marcus?",
@@ -128,7 +143,10 @@ export const UNIFIED_REFLECTION_EXAMPLES = [
 3. [★★] Кай приготовил ужин для Маши, стоя на коленях пока она ела
 4. [★★★★] Кай признался, что чувствует себя спокойнее, когда Маша принимает все решения за него
 5. [★★★] Маша выразила беспокойство, что Кай теряет собственную волю за пределами сцен`,
-        output: `{
+        output: `<thinking>
+Паттерн распространения D/s динамики за пределы сцен. Первый шаг (память 2) — просьба оставить ошейник, второй (память 3) — бытовое подчинение, третий (память 4) — признание в зависимости от решений. Беспокойство Маши (память 5) — критический сигнал, что динамика стала нездоровой. Вопросы должны исследовать, является ли подчинение выбором или избеганием, и как это влияет на равноправие.
+</thinking>
+{
   "reflections": [
     {
       "question": "Является ли стремление Кая к постоянному подчинению здоровым выражением его натуры или попыткой избежать ответственности?",

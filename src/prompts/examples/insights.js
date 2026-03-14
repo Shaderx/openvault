@@ -13,7 +13,10 @@ Relevant memories:
 - ev_003: [★★★★] Kira lied to the guild about finding only three flasks, secretly keeping two
 - ev_004: [★★★] Kira decoded ancient text revealing a resurrection formula
 - ev_005: [★★] Kira practiced the formula alone at night, burning her fingertips`,
-        output: `{
+        output: `<thinking>
+The question asks about deception. The evidence shows a clear pattern: discovery (ev_001), deception (ev_003), and the motivation (ev_004) — the resurrection formula. The secret practice with self-harm (ev_005) suggests emotional urgency. Two key insights emerge: the theft is driven by an undisclosed personal goal related to the resurrection formula, and the self-harm pattern suggests unresolved grief or desperation connected to someone she wants to resurrect.
+</thinking>
+{
   "insights": [
     {
       "insight": "Kira's theft of the flasks is driven by the resurrection formula — she is willing to betray the guild to pursue a deeply personal goal she hasn't disclosed to anyone",
@@ -37,7 +40,10 @@ Relevant memories:
 - ev_022: [★★★] Лена впервые улыбнулась за неделю, когда Дима принёс ей чай
 - ev_023: [★★] Лена услышала, как соседки обсуждают её за спиной
 - ev_024: [★★★★] Лена рассказала Диме о буллинге в школе, впервые упомянув об этом вслух`,
-        output: `{
+        output: `<thinking>
+Вопрос об изоляции. Доказательства показывают паттерн: избегание социальных пространств (ev_021), сплетни соседок (ev_023), признание о буллинге (ev_024). Это формирует защитный механизм. Дима — единственная поддержка (ev_020, ev_022). Два инсайта: изоляция — защитный механизм от буллинга, и Дима создаёт опасную зависимость как единственный мост в социальный мир.
+</thinking>
+{
   "insights": [
     {
       "insight": "Изоляция Лены — защитный механизм, сформировавшийся в ответ на школьный буллинг: она избегает социальных пространств, ожидая негатива со стороны окружающих",
@@ -61,7 +67,10 @@ Relevant memories:
 - ev_102: [★★] Mara refuses to sleep in a tent, preferring exposed ground where she can see the sky
 - ev_103: [★★★] Mara has formed an intense attachment to the new recruit, Theron, who reminds her of her fallen lieutenant
 - ev_104: [★★] Mara trains with her sword until her hands bleed, refusing to stop until exhaustion`,
-        output: `{
+        output: `<thinking>
+Question about trauma processing. The traumatic event (ev_100) leads to classic PTSD symptoms: nightmares (ev_101), hypervigilance (ev_102), and displacement (ev_103). The physical self-harm through training (ev_104) suggests using pain for control. Two insights: hyper-vigilance and compulsion to exhaustion suggest using pain to feel in control, and the attachment to Theron is displacement of grief for the fallen lieutenant.
+</thinking>
+{
   "insights": [
     {
       "insight": "Mara's trauma manifests as hyper-vigilance (sleeping exposed, nightmares) and a compulsion to push herself to physical exhaustion, suggesting she uses pain as a way to feel in control of her body",
@@ -85,7 +94,10 @@ Relevant memories:
 - ev_152: [★★★] Сергей сказал, что не собирается никуда уходить, и взял её за руку
 - ev_153: [★★] Аня начала замечать, что думает о Сергее постоянно, даже во время работы
 - ev_154: [★★★] Аня позвонила Сергею в три часа ночи после кошмара, и он приехал без вопросов`,
-        output: `{
+        output: `<thinking>
+Вопрос о развитии отношений. После поцелуя (ev_150) следует признание о страхе (ev_151) и поддержка (ev_152). Ночной звонок (ev_154) — переломный момент уязвимости. Постоянные мысли (ev_153) показывают глубину привязанности. Два инсайта: отношения развиваются от конфликта к уязвимости с переносом травматического опыта, и ночной звонок — переход от защиты к реальной близости.
+</thinking>
+{
   "insights": [
     {
       "insight": "Отношения развиваются от конфликта к глубокой эмоциональной зависимости: Аня переносит на Сергея травматический опыт прошлых отношений, но постепенно учится доверять",
@@ -109,7 +121,10 @@ Relevant memories:
 - ev_202: [★★] Lila told Marcus she doesn't want gentle — she wants to feel owned
 - ev_203: [★★★★] Lila broke down crying after an intense session, saying she doesn't know why
 - ev_204: [★★★] Lila refused to discuss the crying incident the next morning, deflecting with humor`,
-        output: `{
+        output: `<thinking>
+Question about psychological needs behind escalating intensity. The pattern shows progression: first time (ev_200), hair-pulling (ev_201), wanting to feel owned (ev_202). The breakdown (ev_203) is key — emotions surfacing that she can't process. Refusal to discuss (ev_204) shows avoidance. Two insights: using physical intensity to bypass emotional defenses, and the breakdown indicates approaching an emotional threshold she's avoiding.
+</thinking>
+{
   "insights": [
     {
       "insight": "Lila is using sexual intensity and requested dominance as a way to bypass emotional defenses — physical intensity allows her to feel without confronting why she needs intensity to feel at all",
@@ -132,7 +147,10 @@ Relevant memories:
 - ev_251: [★★★] Кай попросил Машу не снимать ошейник после сцены — хотел носить его весь вечер
 - ev_252: [★★] Кай приготовил ужин для Маши, стоя на коленях пока она ела
 - ev_253: [★★★★] Кай признался, что чувствует себя спокойнее, когда Маша принимает все решения за него`,
-        output: `{
+        output: `<thinking>
+Вопрос о потребности в подчинении. Сцена с ошейником (ev_250) расширяется: просьба не снимать (ev_251), бытовой сервис (ev_252), признание в зависимости от решений (ev_253). Паттерн показывает перенос динамики в реальность. Два инсайта: подчинение как механизм эмоциональной регуляции для снятия тревоги, и стирание границы между сценой и реальностью указывает на психологическую зависимость.
+</thinking>
+{
   "insights": [
     {
       "insight": "Подчинение для Кая — механизм эмоциональной регуляции: передача контроля Маше снимает тревогу и создаёт ощущение безопасности, что объясняет его нежелание выходить из роли",
