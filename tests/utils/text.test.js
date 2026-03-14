@@ -186,6 +186,24 @@ describe('text', () => {
             const input = '{"events": [{"summary": "test"}]}';
             expect(safeParseJSON(input)).toEqual({ events: [{ summary: 'test' }] });
         });
+
+        it('fixes string concatenation hallucination', () => {
+            const input = '{"events": [{"summary": "Alice walked " + "to the garden"}]}';
+            const result = safeParseJSON(input);
+            expect(result.events[0].summary).toBe('Alice walked to the garden');
+        });
+
+        it('fixes multiple concatenations in one input', () => {
+            const input = '{"a": "hello " + "world", "b": "foo " + "bar"}';
+            const result = safeParseJSON(input);
+            expect(result.a).toBe('hello world');
+            expect(result.b).toBe('foo bar');
+        });
+
+        it('does not break normal JSON without concatenation', () => {
+            const input = '{"summary": "no plus signs here"}';
+            expect(safeParseJSON(input)).toEqual({ summary: 'no plus signs here' });
+        });
     });
 
     describe('sortMemoriesBySequence', () => {
