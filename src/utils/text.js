@@ -151,14 +151,20 @@ export function safeParseJSON(input) {
         // Negative lookbehinds (?<!\\) ensure we don't accidentally remove escaped quotes inside valid strings.
         // Matches both standard (+) and full-width (＋) Chinese plus signs.
         
-        // 1. Mid-string concatenation: "text" + "more text" -> "textmore text"
-        cleanedInput = cleanedInput.replace(/(?<!\\)(["'])\s*[+＋]\s*(?<!\\)(["'])/g, "");
+        // 1. Mid-string concatenation across newlines: "text" +\n "more" -> "textmore"
+        cleanedInput = cleanedInput.replace(/(?<!\\)(["'])\s*[+＋]\s*(?:\r?\n)?\s*(?<!\\)(["'])/g, "");
+        
+        // 2. Dangling plus before punctuation/newlines: "text" + , -> "text" ,
+        cleanedInput = cleanedInput.replace(/(?<!\\)(["'])\s*[+＋]\s*(?:\r?\n)?\s*([,}\]])/g, "$1$2");
+        
+        // 3. Cut-off dangling plus at EOF or followed by whitespace/EOF: "text" + \n -> "text"
+        cleanedInput = cleanedInput.replace(/(?<!\\)(["'])\s*[+＋]\s*(?:\r?\n)?\s*$/g, "$1");
 
-        // 2. Dangling plus before punctuation: "text" + , -> "text" ,
-        cleanedInput = cleanedInput.replace(/(?<!\\)(["'])\s*[+＋]\s*([,}\]])/g, "$1$2");
-
-        // 3. Cut-off dangling plus at EOF: "text" + [EOF] -> "text"
-        cleanedInput = cleanedInput.replace(/(?<!\\)(["'])\s*[+＋]\s*$/g, "$1");
+        // 4. NEW: Strip unclosed string quotes at the very end of truncated outputs 
+        // to help jsonrepair reconstruct the array.
+        if (cleanedInput.match(/(?<!\\)["'][^"']*$/)) {
+            cleanedInput = cleanedInput + '"]}]}'; // Blindly pad brackets, jsonrepair will untangle it
+        }
 
         // Pass sanitized string to repair library
         const repaired = jsonrepair(cleanedInput);
