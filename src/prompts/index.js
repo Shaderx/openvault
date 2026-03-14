@@ -184,7 +184,8 @@ CRITICAL FORMAT RULES:
 3. "summary" must be a comprehensive paragraph.
 4. "findings" must be an array of 1-5 strings, each a key insight about the community.
 5. Do NOT wrap output in markdown code blocks.
-6. Do NOT include ANY text outside the JSON object.`;
+6. You MAY use <thinking> tags for reasoning before providing the JSON.
+   The JSON object must still be valid and parseable.`;
 
 const GLOBAL_SYNTHESIS_SCHEMA = `You MUST respond with EXACTLY ONE JSON object. No other text, no markdown fences, no commentary.
 
