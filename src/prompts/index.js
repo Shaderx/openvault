@@ -329,7 +329,8 @@ CRITICAL FORMAT RULES:
 1. The top level MUST be a JSON object { }, NEVER a bare array [ ].
 2. "consolidated_description" must be a single string under 100 tokens.
 3. Do NOT wrap output in markdown code blocks.
-4. Do NOT include ANY text outside the JSON object.`;
+4. You MAY use <thinking> tags for reasoning before providing the JSON.
+   The JSON object must still be valid and parseable.`;
 
 const EDGE_CONSOLIDATION_RULES = `1. Summarize the CURRENT dynamic, but preserve critical historical shifts.
 2. For example: "Started as enemies, but allied after the dragon incident; now close friends."

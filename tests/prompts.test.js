@@ -204,6 +204,15 @@ describe('GRAPH_SCHEMA think tag support', () => {
     });
 });
 
+describe('CONSOLIDATION_SCHEMA think tag support', () => {
+    it('allows think tags before JSON', () => {
+        const edge = { source: 'A', target: 'B', description: 'Test', weight: 1 };
+        const result = buildEdgeConsolidationPrompt(edge);
+        const sys = result[0].content;
+        expect(sys).toContain('You MAY use <thinking> tags');
+    });
+});
+
 describe('CN preamble and assistant prefill', () => {
     it('all prompts include CN system preamble in system message', () => {
         const eventResult = buildEventExtractionPrompt({
