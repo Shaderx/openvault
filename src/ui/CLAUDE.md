@@ -12,7 +12,7 @@ Handles the ST settings panel, dashboard stats, the interactive memory/entity br
 ## PATTERNS & CONVENTIONS
 - **Drawers (`.openvault-details`)**: Collapsible `<details>` elements. CSS hides the native triangle, uses `::after` for a rotating `›` chevron, and applies a tinted background via `color-mix()`.
 - **Settings Binding**: Uses `bindSetting(elementId, settingKey, type)`. ALL saves must use `getDeps().saveSettingsDebounced()`.
-- **Dropdowns**: `preambleLanguage` (cn/en) and `extractionPrefill` (7 presets) bound via `$('#openvault_...').on('change')` + `saveSetting()`. Populated from `PREFILL_PRESETS` in `src/prompts.js`.
+- **Dropdowns**: `preambleLanguage` (cn/en) and `extractionPrefill` (10 presets) bound via `$('#openvault_...').on('change')` + `saveSetting()`. Populated from `PREFILL_PRESETS` in `src/prompts.js`.
 - **Naming**: 
   - IDs: `openvault_setting_name`
   - Values: `openvault_setting_name_value`

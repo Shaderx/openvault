@@ -15,7 +15,7 @@ Background pipeline converting raw messages -> structured JSON -> Deduplicated M
 1. **Batching**: `scheduler.js` determines unextracted batches via token budget + turn boundaries.
 2. **Stage A (Events)**: LLM uses configurable assistant prefill (default: `<think>`) -> returns `EventExtractionSchema`. Preamble language (CN/EN) and prefill preset resolved from `settings` via `resolveExtractionPreamble()`/`resolveExtractionPrefill()`. Validates events *individually* (one bad event drops itself, doesn't reject whole batch).
 3. **RPM Delay**: Evaluates `lastApiCallTime` and sleeps remaining delta dynamically.
-4. **Stage B (Graph)**: Contextualized by Stage A. Returns `GraphExtractionSchema` (Entities + Relationships).
+4. **Stage B (Graph)**: Contextualized by Stage A. Uses same resolved prefill. Returns `GraphExtractionSchema` (Entities + Relationships).
 5. **Graph Upsert**: `mergeOrInsertEntity()` (Semantic + Token overlap) and `upsertRelationship()`.
 6. **Commit**: Pre-computes BM25 `tokens` (stemmed), updates `MEMORIES_KEY` & `PROCESSED_MESSAGES_KEY`.
 7. **Intermediate Save**: Persists Phase 1 to disk.
