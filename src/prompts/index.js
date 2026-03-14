@@ -74,9 +74,10 @@ CRITICAL FORMAT RULES — violating ANY of these will cause a system error:
 2. The key "events" MUST always be present.
 3. If nothing was found, use empty array: "events": [].
 4. Do NOT wrap output in markdown code blocks (no \\\`\\\`\\\`json).
-5. Do NOT include ANY text outside the <think> tags and the JSON object.
-6. Keep character names exactly as they appear in the input.
-7. Start your response with { after the </think> close tag. No other wrapping.`;
+5. Do NOT use <tool_call> or function schemas. Output directly to the chat as plain text.
+6. Do NOT include ANY text outside the <thinking> tags and the JSON object.
+7. Keep character names exactly as they appear in the input.
+8. Start your response with { after the </think> close tag. No other wrapping.`;
 
 const GRAPH_SCHEMA = `You MUST respond with EXACTLY ONE JSON object. Nothing else — no markdown fences, no commentary, no text before or after.
 
