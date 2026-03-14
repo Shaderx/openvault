@@ -402,8 +402,12 @@ export function buildGraphExtractionPrompt({
     extractedEvents = [],
     context = {},
     preamble,
+    prefill,
     outputLanguage = 'auto',
 }) {
+    if (!prefill) {
+        throw new Error('buildGraphExtractionPrompt: prefill is required');
+    }
     const { char: characterName, user: userName } = names;
     const { charDesc: characterDescription = '', personaDesc: personaDescription = '' } = context;
 
@@ -431,7 +435,7 @@ Based on the messages${extractedEvents.length > 0 ? ' and extracted events above
 Use EXACT character names: ${characterName}, ${userName}. Never transliterate these names into another script.
 Respond with a single JSON object containing 'entities' and 'relationships' keys. No other text.`;
 
-    return buildMessages(systemPrompt, userPrompt, '{', preamble);
+    return buildMessages(systemPrompt, userPrompt, prefill, preamble);
 }
 
 /**

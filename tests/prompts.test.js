@@ -143,6 +143,7 @@ describe('all prompts use raw JSON instruction', () => {
         const result = buildGraphExtractionPrompt({
             messages: '[TestUser]: Hello',
             names: { char: 'TestChar', user: 'TestUser' },
+            prefill: '{',
         });
         const sys = result[0].content;
         expect(sys).toContain('Do NOT wrap output in markdown code blocks');
@@ -162,6 +163,7 @@ describe('buildGraphExtractionPrompt', () => {
             names: { char: 'Alice', user: 'Bob' },
             extractedEvents: ['Alice greeted Bob warmly'],
             context: {},
+            prefill: '{',
         });
         expect(result).toHaveLength(3);
         expect(result[0].role).toBe('system');
@@ -174,6 +176,7 @@ describe('buildGraphExtractionPrompt', () => {
             names: { char: 'Alice', user: 'Bob' },
             extractedEvents: ['Alice greeted Bob warmly'],
             context: {},
+            prefill: '{',
         });
         const userContent = result[1].content;
         expect(userContent).toContain('Alice greeted Bob warmly');
@@ -185,10 +188,37 @@ describe('buildGraphExtractionPrompt', () => {
             names: { char: 'Alice', user: 'Bob' },
             extractedEvents: [],
             context: {},
+            prefill: '{',
         });
         const systemContent = result[0].content;
         expect(systemContent).not.toContain('"importance"');
         expect(systemContent).not.toContain('"is_secret"');
+    });
+});
+
+describe('buildGraphExtractionPrompt prefill parameter', () => {
+    it('throws when prefill is missing', () => {
+        expect(() => buildGraphExtractionPrompt({
+            messages: '[A]: test',
+            names: { char: 'A', user: 'B' },
+        })).toThrow('prefill is required');
+    });
+
+    it('throws when prefill is empty string', () => {
+        expect(() => buildGraphExtractionPrompt({
+            messages: '[A]: test',
+            names: { char: 'A', user: 'B' },
+            prefill: '',
+        })).toThrow('prefill is required');
+    });
+
+    it('uses provided prefill in assistant message', () => {
+        const result = buildGraphExtractionPrompt({
+            messages: '[A]: test',
+            names: { char: 'A', user: 'B' },
+            prefill: '<thinking>',
+        });
+        expect(result[2].content).toBe('<thinking>');
     });
 });
 
@@ -197,6 +227,7 @@ describe('GRAPH_SCHEMA think tag support', () => {
         const result = buildGraphExtractionPrompt({
             messages: '[A]: test',
             names: { char: 'A', user: 'B' },
+            prefill: '{',
         });
         const sys = result[0].content;
         expect(sys).toContain('You MAY use <thinking> tags');
@@ -247,6 +278,7 @@ describe('CN preamble and assistant prefill', () => {
         const graphResult = buildGraphExtractionPrompt({
             messages: '[A]: test',
             names: { char: 'A', user: 'B' },
+            prefill: '{',
         });
         const communityResult = buildCommunitySummaryPrompt([], []);
 
@@ -266,10 +298,11 @@ describe('CN preamble and assistant prefill', () => {
         expect(result[2].content).toBe('<think>\n');
     });
 
-    it('non-think prompts prefill assistant with JSON opener', () => {
+    it('non-think prompts use provided prefill', () => {
         const graphResult = buildGraphExtractionPrompt({
             messages: '[A]: test',
             names: { char: 'A', user: 'B' },
+            prefill: '{',
         });
         const communityResult = buildCommunitySummaryPrompt([], []);
 
@@ -391,11 +424,12 @@ describe('buildMessages via buildEventExtractionPrompt', () => {
 });
 
 describe('buildMessages via non-event prompts', () => {
-    it('graph prompt uses custom preamble but keeps { prefill', () => {
+    it('graph prompt uses custom preamble but uses provided prefill', () => {
         const result = buildGraphExtractionPrompt({
             messages: '[Alice]: Hello',
             names: { char: 'Alice', user: 'Bob' },
             preamble: SYSTEM_PREAMBLE_EN,
+            prefill: '{',
         });
         expect(result[0].content).toContain('Interactive Fiction Archival Database');
         expect(result[2].content).toBe('{');
@@ -522,6 +556,7 @@ describe('output language in builders', () => {
             messages: '[Alice]: Hello',
             names: { char: 'Alice', user: 'Bob' },
             outputLanguage: 'ru',
+            prefill: '{',
         });
         const user = result[1].content;
         expect(user).toContain('Russian');
@@ -552,6 +587,7 @@ describe('multilingual prompt compliance', () => {
     const graphResult = buildGraphExtractionPrompt({
         messages: '[A]: test',
         names: { char: 'A', user: 'B' },
+        prefill: '{',
     });
     const communityResult = buildCommunitySummaryPrompt([], []);
 

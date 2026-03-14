@@ -442,6 +442,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                         personaDesc: personaDescription,
                     },
                     preamble,
+                    prefill,
                     outputLanguage,
                 });
 
