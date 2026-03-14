@@ -236,3 +236,7 @@ export const CONSOLIDATION = {
 // Maximum number of recent memories to consider as reflection candidates.
 // Reducing from 100 to 50 cuts reflection prompt size without losing signal quality.
 export const REFLECTION_CANDIDATE_LIMIT = 50;
+
+// Maximum number of communities per chunk in map-reduce global synthesis.
+// Sets larger than this are chunked into regional summaries before final reduction.
+export const GLOBAL_SYNTHESIS_CHUNK_SIZE = 10;

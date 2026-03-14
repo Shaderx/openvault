@@ -12,7 +12,7 @@ const [{ default: Graph }, { default: louvain }, { toUndirected }] = await Promi
     cdnImport('graphology-operators'),
 ]);
 
-import { extensionName } from '../constants.js';
+import { extensionName, GLOBAL_SYNTHESIS_CHUNK_SIZE } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getQueryEmbedding } from '../embeddings.js';
 import { parseCommunitySummaryResponse, parseGlobalSynthesisResponse } from '../extraction/structured.js';
@@ -295,6 +295,54 @@ export async function updateCommunitySummaries(
 }
 
 /**
+ * Synthesize community summaries into a global narrative.
+ * Uses single-pass for small sets, map-reduce for larger sets.
+ *
+ * @param {Object[]} communityList - Array of community objects with { title, summary, findings }
+ * @param {string} preamble - Extraction preamble
+ * @param {string} outputLanguage - Output language setting
+ * @returns {Promise<string|null>} Global summary string, or null if all chunks fail
+ */
+export async function synthesizeInChunks(communityList, preamble, outputLanguage) {
+    if (communityList.length <= GLOBAL_SYNTHESIS_CHUNK_SIZE) {
+        // Small set: single-pass (current behavior)
+        const prompt = buildGlobalSynthesisPrompt(communityList, preamble, outputLanguage);
+        const response = await callLLM(prompt, LLM_CONFIGS.community, { structured: true });
+        return parseGlobalSynthesisResponse(response).global_summary;
+    }
+
+    // Map phase: chunk communities, get regional summaries
+    const chunks = [];
+    for (let i = 0; i < communityList.length; i += GLOBAL_SYNTHESIS_CHUNK_SIZE) {
+        chunks.push(communityList.slice(i, i + GLOBAL_SYNTHESIS_CHUNK_SIZE));
+    }
+
+    const regionalSummaries = [];
+    for (const chunk of chunks) {
+        try {
+            const prompt = buildGlobalSynthesisPrompt(chunk, preamble, outputLanguage);
+            const response = await callLLM(prompt, LLM_CONFIGS.community, { structured: true });
+            const parsed = parseGlobalSynthesisResponse(response);
+            regionalSummaries.push(parsed.global_summary);
+        } catch (err) {
+            logDebug(`Regional synthesis chunk failed, skipping: ${err.message}`);
+        }
+    }
+
+    if (regionalSummaries.length === 0) return null;
+
+    // Reduce phase: synthesize regional summaries into final global summary
+    const pseudoCommunities = regionalSummaries.map((summary, i) => ({
+        title: `Region ${i + 1}`,
+        summary,
+        findings: [],
+    }));
+    const reducePrompt = buildGlobalSynthesisPrompt(pseudoCommunities, preamble, outputLanguage);
+    const reduceResponse = await callLLM(reducePrompt, LLM_CONFIGS.community, { structured: true });
+    return parseGlobalSynthesisResponse(reduceResponse).global_summary;
+}
+
+/**
  * Generate global world state from all community summaries.
  * Called after community updates, only if 1+ communities changed.
  *
@@ -313,12 +361,10 @@ export async function generateGlobalWorldState(communities, preamble, outputLang
     const deps = getDeps();
 
     try {
-        const prompt = buildGlobalSynthesisPrompt(communityList, preamble, outputLanguage);
-        const response = await callLLM(prompt, LLM_CONFIGS.community, { structured: true });
-        const parsed = parseGlobalSynthesisResponse(response);
+        const summary = await synthesizeInChunks(communityList, preamble, outputLanguage);
 
         const result = {
-            summary: parsed.global_summary,
+            summary,
             last_updated: deps.Date.now(),
             community_count: communityList.length,
         };
