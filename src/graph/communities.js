@@ -18,10 +18,16 @@ import { getQueryEmbedding } from '../embeddings.js';
 import { parseCommunitySummaryResponse, parseGlobalSynthesisResponse } from '../extraction/structured.js';
 import { callLLM, LLM_CONFIGS } from '../llm.js';
 import { record } from '../perf/store.js';
-import { buildCommunitySummaryPrompt, buildGlobalSynthesisPrompt, resolveExtractionPreamble, resolveExtractionPrefill, resolveOutputLanguage } from '../prompts/index.js';
+import {
+    buildCommunitySummaryPrompt,
+    buildGlobalSynthesisPrompt,
+    resolveExtractionPreamble,
+    resolveExtractionPrefill,
+    resolveOutputLanguage,
+} from '../prompts/index.js';
 import { hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
-import { yieldToMain } from '../utils/st-helpers.js';
+import { createLadderQueue } from '../utils/queue.js';
 
 /**
  * Convert flat graph data to a graphology instance.
@@ -219,8 +225,10 @@ export async function updateCommunitySummaries(
     // Track how many communities were actually updated
     let updatedCount = 0;
 
+    const ladderQueue = await createLadderQueue(settings.maxConcurrency);
+    const promises = [];
+
     for (const [communityId, group] of Object.entries(communityGroups)) {
-        await yieldToMain();
         // Skip solo nodes - they don't form a meaningful community
         if (group.nodeKeys.length < 2) continue;
 
@@ -240,44 +248,51 @@ export async function updateCommunitySummaries(
         // Special case: if only one community, always re-summarize at staleness interval
         const singleCommunityForceRefresh = isSingleCommunity && isStale;
 
-        // Skip if membership hasn't changed AND not stale AND not missing embedding (unless single community forcing refresh)
+        // Skip if membership hasn't changed AND not stale AND not missing embedding
         if (!membershipChanged && !isStale && !missingEmbedding && !singleCommunityForceRefresh) {
             updatedCommunities[key] = existing;
             continue;
         }
 
-        // Generate new summary
-        try {
-            const prompt = buildCommunitySummaryPrompt(group.nodeLines, group.edgeLines, preamble, outputLanguage, prefill);
-            const response = await callLLM(prompt, LLM_CONFIGS.community, { structured: true });
-            const parsed = parseCommunitySummaryResponse(response);
-
-            // Embed the summary for retrieval
-            const embedding = await getQueryEmbedding(parsed.summary);
-
-            const community = {
-                nodeKeys: group.nodeKeys,
-                title: parsed.title,
-                summary: parsed.summary,
-                findings: parsed.findings,
-                lastUpdated: deps.Date.now(),
-                lastUpdatedMessageCount: currentMessageCount,
-            };
-            if (embedding) {
-                setEmbedding(community, embedding);
-            }
-            updatedCommunities[key] = community;
-            updatedCount++;
-
-            logDebug(`Community ${key}: "${parsed.title}" (${group.nodeKeys.length} nodes)`);
-        } catch (error) {
-            logDebug(`Community ${key} summarization failed: ${error.message}`);
-            // Keep existing if available, otherwise skip
-            if (existing) {
-                updatedCommunities[key] = existing;
-            }
-        }
+        // Queue the LLM summarization
+        promises.push(
+            ladderQueue
+                .add(async () => {
+                    const prompt = buildCommunitySummaryPrompt(
+                        group.nodeLines,
+                        group.edgeLines,
+                        preamble,
+                        outputLanguage,
+                        prefill
+                    );
+                    const response = await callLLM(prompt, LLM_CONFIGS.community, { structured: true });
+                    const parsed = parseCommunitySummaryResponse(response);
+                    const embedding = await getQueryEmbedding(parsed.summary);
+                    const community = {
+                        nodeKeys: group.nodeKeys,
+                        title: parsed.title,
+                        summary: parsed.summary,
+                        findings: parsed.findings,
+                        lastUpdated: deps.Date.now(),
+                        lastUpdatedMessageCount: currentMessageCount,
+                    };
+                    if (embedding) {
+                        setEmbedding(community, embedding);
+                    }
+                    updatedCommunities[key] = community;
+                    updatedCount++;
+                    logDebug(`Community ${key}: "${parsed.title}" (${group.nodeKeys.length} nodes)`);
+                })
+                .catch((error) => {
+                    logDebug(`Community ${key} summarization failed: ${error.message}`);
+                    if (existing) {
+                        updatedCommunities[key] = existing;
+                    }
+                })
+        );
     }
+
+    await Promise.all(promises);
 
     const communityCount = Object.keys(updatedCommunities).length;
     record('llm_communities', performance.now() - t0, `${communityCount} communities`);

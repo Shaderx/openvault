@@ -331,7 +331,7 @@ describe('updateCommunitySummaries', () => {
         const graphData = {
             nodes: {},
             edges: {},
-            _edgesNeedingConsolidation: ['test__edge']
+            _edgesNeedingConsolidation: ['test__edge'],
         };
 
         // The community detection flow should call consolidateEdges
@@ -346,9 +346,9 @@ vi.mock('../../src/prompts/index.js', async () => {
     const actual = await vi.importActual('../../src/prompts/index.js');
     return {
         ...actual,
-        buildGlobalSynthesisPrompt: vi.fn((communities, preamble, outputLanguage) => [
+        buildGlobalSynthesisPrompt: vi.fn((communities, _preamble, _outputLanguage) => [
             { role: 'system', content: 'You are a narrative synthesist.' },
-            { role: 'user', content: `Communities: ${communities.map(c => c.title).join(', ')}` },
+            { role: 'user', content: `Communities: ${communities.map((c) => c.title).join(', ')}` },
         ]),
     };
 });
@@ -426,11 +426,13 @@ describe('updateCommunitySummaries with global synthesis', () => {
                 return Promise.resolve('{"global_summary": "Synthesized narrative..."}');
             }
             // Community summary call
-            return Promise.resolve(JSON.stringify({
-                title: 'Test Community',
-                summary: 'Test community summary...',
-                findings: ['Test finding'],
-            }));
+            return Promise.resolve(
+                JSON.stringify({
+                    title: 'Test Community',
+                    summary: 'Test community summary...',
+                    findings: ['Test finding'],
+                })
+            );
         });
     });
 
@@ -452,7 +454,7 @@ describe('updateCommunitySummaries with global synthesis', () => {
 
         const result = await updateCommunitySummaries(
             graphData,
-            { '0': { nodeKeys: ['n1', 'n2'], nodeLines: [], edgeLines: [] } },
+            { 0: { nodeKeys: ['n1', 'n2'], nodeLines: [], edgeLines: [] } },
             existingCommunities,
             100,
             100,
@@ -487,7 +489,7 @@ describe('updateCommunitySummaries with global synthesis', () => {
         // Same membership, not stale - no update expected
         const result = await updateCommunitySummaries(
             graphData,
-            { '0': { nodeKeys: ['n1'], nodeLines: [], edgeLines: [] } },
+            { 0: { nodeKeys: ['n1'], nodeLines: [], edgeLines: [] } },
             existingCommunities,
             100, // currentMessageCount
             100, // stalenessThreshold
@@ -501,7 +503,7 @@ describe('updateCommunitySummaries with global synthesis', () => {
         // Community with only 1 node should be skipped, so no global synthesis
         const result = await updateCommunitySummaries(
             {},
-            { '0': { nodeKeys: ['n1'], nodeLines: [], edgeLines: [] } },
+            { 0: { nodeKeys: ['n1'], nodeLines: [], edgeLines: [] } },
             {},
             100,
             100,
@@ -638,5 +640,44 @@ describe('synthesizeInChunks', () => {
         expect(result).toBe('Final 11');
         // 11 communities / 10 per chunk = 2 map calls + 1 reduce call = 3
         expect(mockCallLLM).toHaveBeenCalledTimes(3);
+    });
+});
+
+describe('updateCommunitySummaries with queue', () => {
+    beforeEach(() => {
+        setupTestContext({
+            settings: { maxConcurrency: 3 },
+        });
+        mockCallLLM.mockReset();
+    });
+
+    afterEach(() => {
+        resetDeps();
+        vi.restoreAllMocks();
+    });
+
+    it('should process all communities correctly with maxConcurrency > 1', async () => {
+        mockCallLLM.mockResolvedValue(
+            JSON.stringify({
+                title: 'Test Community',
+                summary: 'A test summary',
+                findings: ['Finding 1'],
+            })
+        );
+
+        const groups = {
+            0: { nodeKeys: ['a', 'b'], nodeLines: ['- A', '- B'], edgeLines: ['- A→B'] },
+            1: { nodeKeys: ['c', 'd'], nodeLines: ['- C', '- D'], edgeLines: ['- C→D'] },
+            2: { nodeKeys: ['e', 'f'], nodeLines: ['- E', '- F'], edgeLines: ['- E→F'] },
+        };
+
+        const result = await updateCommunitySummaries(null, groups, {}, 100, 100, false);
+
+        expect(Object.keys(result.communities)).toHaveLength(3);
+        expect(result.communities.C0).toBeDefined();
+        expect(result.communities.C1).toBeDefined();
+        expect(result.communities.C2).toBeDefined();
+        // 3 community summaries + 1 global synthesis call
+        expect(mockCallLLM).toHaveBeenCalledTimes(4);
     });
 });
