@@ -5,7 +5,16 @@
 export const UNIFIED_REFLECTION_RULES = `1. Generate 1-3 salient high-level questions about the character's psychological state, relationships, goals, or unresolved conflicts.
 2. For each question, provide a deep insight that synthesizes patterns across multiple memories.
 3. Cite specific memory IDs as evidence for each insight. You MUST use IDs exactly as shown in the input.
-4. Quality over quantity — generate only as many reflections as you can support with strong evidence.`;
+4. Quality over quantity — generate only as many reflections as you can support with strong evidence.
+
+<thinking_process>
+Follow these steps IN ORDER. Write your work inside <thinking> tags BEFORE outputting the JSON:
+
+Step 1: Pattern scan — Identify recurring themes, emotional patterns, and behavioral clusters across the memories. Tag memory indices.
+Step 2: Causal chains — Trace cause-effect sequences linking memories together.
+Step 3: Synthesis — For each question, formulate a high-level insight that connects multiple memories.
+Step 4: Evidence — Assign specific memory IDs as evidence for each insight.
+</thinking_process>`;
 
 export const QUESTIONS_RULES = `1. Questions should be answerable from the provided memory stream.
 2. Focus on patterns, changes, and emotional arcs — not individual events.
