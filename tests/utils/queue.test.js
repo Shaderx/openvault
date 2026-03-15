@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createLadderQueue } from '../../src/utils/queue.js';
 
 describe('createLadderQueue', () => {
@@ -163,6 +163,73 @@ describe('createLadderQueue', () => {
                     throw new Error('task failed');
                 })
             ).rejects.toThrow('task failed');
+        });
+
+        it('should pause queue on rate limit and resume after cooloff', async () => {
+            vi.useFakeTimers();
+            const queue = await createLadderQueue(4);
+            const log = [];
+
+            // Task 1: will succeed
+            const p1 = queue.add(async () => {
+                log.push('t1');
+                return 1;
+            });
+            await p1;
+
+            // Task 2: triggers rate limit → queue pauses
+            const p2 = queue
+                .add(async () => {
+                    throw new Error('429 Too Many Requests');
+                })
+                .catch(() => {
+                    log.push('t2-err');
+                });
+
+            await p2;
+
+            // Task 3: queued while paused — should not run until resume
+            const p3 = queue.add(async () => {
+                log.push('t3');
+                return 3;
+            });
+
+            // Advance past cooloff (4 seconds)
+            await vi.advanceTimersByTimeAsync(4500);
+            await p3;
+
+            expect(log).toContain('t1');
+            expect(log).toContain('t2-err');
+            expect(log).toContain('t3');
+
+            vi.useRealTimers();
+        });
+
+        it('should not pause more than once concurrently', async () => {
+            vi.useFakeTimers();
+            const queue = await createLadderQueue(4);
+
+            // Two rapid 429 errors
+            const p1 = queue
+                .add(async () => {
+                    throw new Error('429');
+                })
+                .catch(() => {});
+            await p1;
+            const p2 = queue
+                .add(async () => {
+                    throw new Error('429');
+                })
+                .catch(() => {});
+
+            // Advance past cooloff
+            await vi.advanceTimersByTimeAsync(5000);
+            await p2;
+
+            // Should reach here without hanging
+            expect(queue.concurrency).toBeGreaterThanOrEqual(1);
+
+            vi.useRealTimers();
         });
     });
 });

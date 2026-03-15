@@ -61,6 +61,15 @@ export async function createLadderQueue(maxConcurrency = 1) {
                     currentLimit = Math.max(1, Math.floor(currentLimit / 2));
                     queue.concurrency = Math.floor(currentLimit);
                     console.warn(`[LadderQueue] Rate limit hit. Dropping concurrency to ${queue.concurrency}`);
+
+                    // Pause queue to let the API breathe
+                    if (!queue.isPaused) {
+                        queue.pause();
+                        setTimeout(() => {
+                            console.debug('[LadderQueue] Resuming ladder queue after cooloff');
+                            queue.start();
+                        }, _RATE_LIMIT_COOLOFF_MS);
+                    }
                 }
 
                 throw error;
