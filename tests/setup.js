@@ -67,6 +67,7 @@ const CDN_SPECS = {
     'graphology-communities-louvain': () => import('graphology-communities-louvain'),
     'graphology-operators': () => import('graphology-operators'),
     'gpt-tokenizer/encoding/o200k_base': () => import('gpt-tokenizer/encoding/o200k_base'),
+    'p-queue': () => import('p-queue'),
 };
 
 // Initial registration (setup.js module instance of cdn.js)

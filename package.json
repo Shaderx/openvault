@@ -25,6 +25,7 @@
         "graphology-operators": "^1.6.1",
         "jsdom": "^27.4.0",
         "jsonrepair": "^3.13.2",
+        "p-queue": "^8.0.0",
         "repomix": "^0.3.2",
         "snowball-stemmers": "^0.6.0",
         "vitest": "^4.0.16"
