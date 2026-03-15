@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { extensionName, defaultSettings } from '../../src/constants.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { defaultSettings, extensionName } from '../../src/constants.js';
 import { consolidateEdges, createEmptyGraph } from '../../src/graph/graph.js';
 
 // Mock dependencies
@@ -37,25 +37,55 @@ describe('Edge Consolidation (BM25-only mode)', () => {
     });
 
     it('consolidates without embeddings when disabled', async () => {
-        mockCallLLM.mockResolvedValue(
-            JSON.stringify({ consolidated_description: 'Consolidated relationship' })
-        );
+        mockCallLLM.mockResolvedValue(JSON.stringify({ consolidated_description: 'Consolidated relationship' }));
 
         const graph = createEmptyGraph();
         graph.nodes.alice = { name: 'Alice', type: 'PERSON', description: 'test', mentions: 1 };
         graph.nodes.bob = { name: 'Bob', type: 'PERSON', description: 'test', mentions: 1 };
-        graph.edges['alice__bob'] = {
+        graph.edges.alice__bob = {
             source: 'alice',
             target: 'bob',
             description: 'Seg1 | Seg2 | Seg3 | Seg4 | Seg5 | Seg6',
             weight: 6,
-            _descriptionTokens: 600
+            _descriptionTokens: 600,
         };
         graph._edgesNeedingConsolidation = ['alice__bob'];
 
         const result = await consolidateEdges(graph, {});
         expect(result).toBe(1);
-        expect(graph.edges['alice__bob'].description).toBe('Consolidated relationship');
+        expect(graph.edges.alice__bob.description).toBe('Consolidated relationship');
+        expect(graph._edgesNeedingConsolidation).toHaveLength(0);
+    });
+
+    it('consolidates multiple edges in parallel with maxConcurrency > 1', async () => {
+        mockCallLLM
+            .mockResolvedValueOnce(JSON.stringify({ consolidated_description: 'Relationship A' }))
+            .mockResolvedValueOnce(JSON.stringify({ consolidated_description: 'Relationship B' }));
+
+        const graph = createEmptyGraph();
+        graph.nodes.alice = { name: 'Alice', type: 'PERSON', description: 'test', mentions: 1 };
+        graph.nodes.bob = { name: 'Bob', type: 'PERSON', description: 'test', mentions: 1 };
+        graph.nodes.carol = { name: 'Carol', type: 'PERSON', description: 'test', mentions: 1 };
+        graph.edges.alice__bob = {
+            source: 'alice',
+            target: 'bob',
+            description: 'Seg1 | Seg2 | Seg3 | Seg4 | Seg5 | Seg6',
+            weight: 6,
+            _descriptionTokens: 600,
+        };
+        graph.edges.alice__carol = {
+            source: 'alice',
+            target: 'carol',
+            description: 'Seg1 | Seg2 | Seg3 | Seg4 | Seg5',
+            weight: 5,
+            _descriptionTokens: 500,
+        };
+        graph._edgesNeedingConsolidation = ['alice__bob', 'alice__carol'];
+
+        const result = await consolidateEdges(graph, {});
+        expect(result).toBe(2);
+        expect(graph.edges.alice__bob.description).toBe('Relationship A');
+        expect(graph.edges.alice__carol.description).toBe('Relationship B');
         expect(graph._edgesNeedingConsolidation).toHaveLength(0);
     });
 });

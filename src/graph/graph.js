@@ -5,19 +5,25 @@
  * All data stored in chatMetadata.openvault.graph as { nodes, edges }.
  */
 
+import { CONSOLIDATION, extensionName } from '../constants.js';
+import { getDeps } from '../deps.js';
 import { getDocumentEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
-import { callLLM, LLM_CONFIGS } from '../llm.js';
 import { parseConsolidationResponse } from '../extraction/structured.js';
-import { buildEdgeConsolidationPrompt, resolveExtractionPreamble, resolveExtractionPrefill, resolveOutputLanguage } from '../prompts/index.js';
-import { logError, logDebug } from '../utils/logging.js';
+import { callLLM, LLM_CONFIGS } from '../llm.js';
+import {
+    buildEdgeConsolidationPrompt,
+    resolveExtractionPreamble,
+    resolveExtractionPrefill,
+    resolveOutputLanguage,
+} from '../prompts/index.js';
+import { cosineSimilarity } from '../retrieval/math.js';
+import { getEmbedding, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
+import { logDebug, logError } from '../utils/logging.js';
+import { createLadderQueue } from '../utils/queue.js';
 import { yieldToMain } from '../utils/st-helpers.js';
 import { stemWord } from '../utils/stemmer.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
 import { countTokens } from '../utils/tokens.js';
-import { CONSOLIDATION, extensionName } from '../constants.js';
-import { cosineSimilarity } from '../retrieval/math.js';
-import { getEmbedding, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
-import { getDeps } from '../deps.js';
 
 /**
  * Resolve a raw entity name to its final graph key, accounting for merge redirects.
@@ -321,7 +327,7 @@ export function hasSufficientTokenOverlap(tokensA, tokensB, minOverlapRatio = 0.
  */
 export function shouldMergeEntities(cosine, threshold, tokensA, keyA, keyB) {
     if (cosine >= threshold) return true;
-    const greyZoneFloor = threshold - 0.10;
+    const greyZoneFloor = threshold - 0.1;
     if (cosine >= greyZoneFloor) {
         const tokensB = new Set(keyB.split(/\s+/));
         return hasSufficientTokenOverlap(tokensA, tokensB, 0.5, keyA, keyB);
@@ -560,52 +566,60 @@ export async function consolidateGraph(graphData, settings) {
  * @param {Object} settings - Extension settings
  * @returns {Promise<number>} Number of edges consolidated
  */
-export async function consolidateEdges(graphData, settings) {
+export async function consolidateEdges(graphData, _settings) {
     if (!graphData._edgesNeedingConsolidation?.length) {
         return 0;
     }
 
-    const toProcess = graphData._edgesNeedingConsolidation
-        .slice(0, CONSOLIDATION.MAX_CONSOLIDATION_BATCH);
+    const toProcess = graphData._edgesNeedingConsolidation.slice(0, CONSOLIDATION.MAX_CONSOLIDATION_BATCH);
 
     const deps = getDeps();
     const extensionSettings = deps.getExtensionSettings()?.[extensionName] || {};
     const preamble = resolveExtractionPreamble(extensionSettings);
     const outputLanguage = resolveOutputLanguage(extensionSettings);
     const prefill = resolveExtractionPrefill(extensionSettings);
-    const successfulKeys = [];
+    const maxConcurrency = extensionSettings.maxConcurrency;
+    const ladderQueue = await createLadderQueue(maxConcurrency);
 
-    for (const edgeKey of toProcess) {
-        const edge = graphData.edges[edgeKey];
-        if (!edge) continue;
+    const results = await Promise.all(
+        toProcess.map((edgeKey) =>
+            ladderQueue
+                .add(async () => {
+                    const edge = graphData.edges[edgeKey];
+                    if (!edge) return null;
 
-        try {
-            const prompt = buildEdgeConsolidationPrompt(edge, preamble, outputLanguage, prefill);
-            const response = await callLLM(prompt, LLM_CONFIGS.edge_consolidation, { structured: true });
+                    const prompt = buildEdgeConsolidationPrompt(edge, preamble, outputLanguage, prefill);
+                    const response = await callLLM(prompt, LLM_CONFIGS.edge_consolidation, { structured: true });
 
-            const result = parseConsolidationResponse(response);
-            if (result.consolidated_description) {
-                edge.description = result.consolidated_description;
-                edge._descriptionTokens = countTokens(result.consolidated_description);
+                    const result = parseConsolidationResponse(response);
+                    if (result.consolidated_description) {
+                        edge.description = result.consolidated_description;
+                        edge._descriptionTokens = countTokens(result.consolidated_description);
 
-                // Re-embed for accurate RAG (only if embeddings enabled)
-                if (isEmbeddingsEnabled()) {
-                    const newEmbedding = await getDocumentEmbedding(
-                        `relationship: ${edge.source} - ${edge.target}: ${edge.description}`
-                    );
-                    setEmbedding(edge, newEmbedding);
-                }
+                        // Re-embed for accurate RAG (only if embeddings enabled)
+                        if (isEmbeddingsEnabled()) {
+                            const newEmbedding = await getDocumentEmbedding(
+                                `relationship: ${edge.source} - ${edge.target}: ${edge.description}`
+                            );
+                            setEmbedding(edge, newEmbedding);
+                        }
 
-                successfulKeys.push(edgeKey);
-            }
-        } catch (err) {
-            logError(`Failed to consolidate edge ${edgeKey}`, err);
-        }
-    }
+                        return edgeKey;
+                    }
+                    return null;
+                })
+                .catch((err) => {
+                    logError(`Failed to consolidate edge ${edgeKey}`, err);
+                    return null;
+                })
+        )
+    );
+
+    const successfulKeys = results.filter((k) => k !== null);
 
     // Remove only successfully processed edges from queue
     graphData._edgesNeedingConsolidation = graphData._edgesNeedingConsolidation.filter(
-        key => !successfulKeys.includes(key)
+        (key) => !successfulKeys.includes(key)
     );
 
     return successfulKeys.length;
