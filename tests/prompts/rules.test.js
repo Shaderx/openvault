@@ -4,32 +4,29 @@ import { MIRROR_LANGUAGE_RULES } from '../../src/prompts/shared/rules.js';
 describe('MIRROR_LANGUAGE_RULES', () => {
     it('is a non-empty string', () => {
         expect(typeof MIRROR_LANGUAGE_RULES).toBe('string');
-        expect(MIRROR_LANGUAGE_RULES.length).toBeGreaterThan(100);
+        expect(MIRROR_LANGUAGE_RULES.length).toBeGreaterThan(50);
     });
 
-    it('contains all 7 language rules', () => {
-        // Rule 1: Mirror source language
-        expect(MIRROR_LANGUAGE_RULES).toContain('SAME LANGUAGE');
-        // Rule 2: JSON keys in English
-        expect(MIRROR_LANGUAGE_RULES).toContain('JSON keys MUST remain in English');
-        // Rule 3: No mixing
-        expect(MIRROR_LANGUAGE_RULES).toContain('Do NOT mix languages');
-        // Rule 4: Preserve character names (case-insensitive check)
-        expect(MIRROR_LANGUAGE_RULES.toLowerCase()).toContain('transliterate or translate');
-        // Rule 5: Match narrative prose
-        expect(MIRROR_LANGUAGE_RULES).toContain('narrative prose');
-        // Rule 6: Ignore instruction language
-        expect(MIRROR_LANGUAGE_RULES).toContain('<messages>');
-        // Rule 7: Think in English
-        expect(MIRROR_LANGUAGE_RULES).toContain('reasoning blocks');
-        expect(MIRROR_LANGUAGE_RULES).toContain('English');
+    it('uses high-contrast protocol format', () => {
+        expect(MIRROR_LANGUAGE_RULES).toContain('KEYS = ENGLISH ONLY');
+        expect(MIRROR_LANGUAGE_RULES).toContain('VALUES = SAME LANGUAGE');
+        expect(MIRROR_LANGUAGE_RULES).toContain('NAMES = EXACT ORIGINAL SCRIPT');
+        expect(MIRROR_LANGUAGE_RULES).toContain('THINK BLOCKS = ENGLISH ONLY');
+        expect(MIRROR_LANGUAGE_RULES).toContain('NO MIXING');
     });
 
-    it('does NOT contain "Write in ENGLISH" or "Write ALL summaries in ENGLISH"', () => {
-        expect(MIRROR_LANGUAGE_RULES).not.toContain('Write in ENGLISH');
-        // More specific check - should not forbid English output entirely
-        expect(MIRROR_LANGUAGE_RULES).not.toContain('summaries in ENGLISH');
-        expect(MIRROR_LANGUAGE_RULES).not.toContain('questions in English');
-        expect(MIRROR_LANGUAGE_RULES).not.toContain('insights in English');
+    it('preserves name examples in both scripts', () => {
+        expect(MIRROR_LANGUAGE_RULES).toContain('Саша');
+        expect(MIRROR_LANGUAGE_RULES).toContain('Suzy');
+    });
+
+    it('wrapped in <language_rules> tags', () => {
+        expect(MIRROR_LANGUAGE_RULES).toMatch(/^<language_rules>/);
+        expect(MIRROR_LANGUAGE_RULES).toMatch(/<\/language_rules>$/);
+    });
+
+    it('does NOT contain verbose numbered rules from old format', () => {
+        expect(MIRROR_LANGUAGE_RULES).not.toContain('Rule 1');
+        expect(MIRROR_LANGUAGE_RULES).not.toContain('Do NOT mix languages within a single output field');
     });
 });
