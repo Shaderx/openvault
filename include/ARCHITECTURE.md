@@ -118,7 +118,7 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 - *Mirror Language Rule*: All prompts auto-detect input language and mirror it in output string values. JSON keys remain English.
 - *User-Message Reinforcement*: `buildLanguageReminder()` detects non-Latin script in input and injects an explicit "do NOT translate to English" reminder into the user message of all 5 prompts. Fires only for non-English content. Includes explicit exception for character names (must stay in original script).
 - *Character Name Enforcement*: Prompt instruction injects canonical names directly (`Use EXACT character names: X, Y`). If a transliteration slips through, the graph's Semantic Merge (`mergeOrInsertEntity`) catches it via cosine similarity + token overlap, adding the variant to `aliases`.
-- *Bilingual Examples*: Every prompt includes paired EN/RU few-shot examples (events: 10, graph: 8, questions: 6, insights: 6, communities: 6). All non-event examples use think-then-JSON pattern (`<thinking>` reasoning block before JSON output).
+- *Bilingual Examples*: Every prompt includes paired EN/RU few-shot examples (events: 10, graph: 8, questions: 6, insights: 6, communities: 6). All examples use think-then-JSON pattern via `thinking` property (wrapped in `<thinking>` tags by `format-examples.js`).
 - *SFW→Kink Gradient*: Examples progress from safe to explicit content, calibrating model compliance.
 - *Graph Normalization*: Entity names extracted in nominative/base form to prevent morphological duplicates. Names preserved in original script (Suzy stays Latin, Саша stays Cyrillic).
 - *Stem-Augmented Overlap*: `hasSufficientTokenOverlap()` uses `stemWord()` to catch Russian inflected variants (Check 4).
