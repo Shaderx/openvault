@@ -9,10 +9,10 @@ export const EXAMPLES = [
         input: `Лена опустила глаза и тихо сказала: "Я не помню, когда в последний раз кто-то спрашивал, как у меня дела. По-настоящему спрашивал." Она сжала край рукава.
 Дима молча сел рядом и положил руку ей на плечо.
 "Я здесь," — сказал он. — "Никуда не денусь."`,
-        thinking: `Step 1: Input is Russian. Output values must be in Russian. Lena confessed loneliness, Dima supported her physically and verbally.
-Step 2: No established memories about this conversation.
-Step 3: New event — emotional vulnerability and support. Not a continuation.
-Step 4: Importance 3 (meaningful conversation, relationship deepening). Writing summary in Russian.`,
+        thinking: `Step 1: Extract data — Input is Russian. Lena confessed loneliness, squeezed sleeve. Dima sat beside her, hand on shoulder, promised to stay.
+Step 2: Cross-reference — No established memories of this conversation.
+Step 3: Check progression — New event (emotional vulnerability, support).
+Step 4: Format JSON — Importance: 3 (meaningful conversation, relationship deepening). Values in Russian.`,
         output: `{
   "events": [{
     "summary": "Лена призналась Диме в глубоком одиночестве, он обнял её за плечо и пообещал остаться",
@@ -32,10 +32,10 @@ Step 4: Importance 3 (meaningful conversation, relationship deepening). Writing 
 "Я должен был сказать тебе раньше," — прошептал он. — "Я не могу оторвать от тебя глаз."
 Анна повернулась. Их лица оказались так близко...
 "Сергей," — выдохнула она, но не отстранилась.`,
-        thinking: `Step 1: Input is Russian. Output values must be in Russian. Romantic tension — physical proximity, confession of attraction, hesitation before first kiss.
-Step 2: No established memories of romantic contact between them.
-Step 3: New dynamic (romantic tension escalating). Not a continuation.
-Step 4: Importance 4 (first romantic escalation, significant relationship shift). Writing summary in Russian.`,
+        thinking: `Step 1: Extract data — Input is Russian. Sergei confessed attraction, hands on Anna's shoulders. Near-first-kiss, she did not pull away.
+Step 2: Cross-reference — No established memories of romantic contact.
+Step 3: Check progression — New dynamic (first romantic escalation).
+Step 4: Format JSON — Importance: 4 (first romantic escalation). Values in Russian.`,
         output: `{
   "events": [{
     "summary": "Сергей признался Анне в своих чувствах и приблизился к первому поцелую, а она не отстранилась",
@@ -54,10 +54,10 @@ Step 4: Importance 4 (first romantic escalation, significant relationship shift)
         input: `Саша толкнула его на спину и села сверху, медленно опускаясь на его член. Вова схватил её за бёдра, направляя ритм.
 "Быстрее," — выдохнул он. Она подчинилась, ускоряя движения, откинув голову назад. Её стоны заполнили комнату.
 "Я почти," — прошептал он, сжимая пальцы на её коже.`,
-        thinking: `Step 1: Input is Russian. Output values must be in Russian. Sasha and Vova having sex — cowgirl position, rhythm, approaching orgasm.
-Step 2: Existing memory: "Sasha pushed Vova against the wall and started kissing" — beginning already recorded.
-Step 3: New action type — transition from kissing to penetration. New event.
-Step 4: Importance 3 (continuation between established partners). Writing summary in Russian.`,
+        thinking: `Step 1: Extract data — Input is Russian. Sasha cowgirl position on Vova, hip control, rhythm escalation, approaching orgasm.
+Step 2: Cross-reference — Existing: "Sasha pushed Vova against wall, started kissing" — beginning already recorded.
+Step 3: Check progression — New action type (transition from kissing to penetration).
+Step 4: Format JSON — Importance: 3 (continuation between established partners). Values in Russian.`,
         output: `{
   "events": [{
     "summary": "Саша села на Вову сверху, они занялись сексом в позе наездницы до близости к оргазму",
@@ -77,10 +77,10 @@ Step 4: Importance 3 (continuation between established partners). Writing summar
 "Ты моя вещь сегодня," — прошептала она, проводя ногтями по его спине. Он вздрогнул.
 "Скажи 'малина', если будет слишком." — "Понял."
 Она надавила ступнёй ему на спину, прижимая к полу.`,
-        thinking: `Step 1: Input is Russian. Output values must be in Russian. Masha put a collar on Kai, established safeword "malina", pressed him to the floor with her foot.
-Step 2: No established memories of this dynamic.
-Step 3: New power dynamic — collar, leash, safeword. New event.
-Step 4: Importance 4 (new domination dynamic, safeword established). Writing summary in Russian.`,
+        thinking: `Step 1: Extract data — Input is Russian. Masha ordered knee, collared Kai, safeword "malina" established, pressed him to floor with foot.
+Step 2: Cross-reference — No established memories of this dynamic.
+Step 3: Check progression — New dynamic (collar, leash, safeword established).
+Step 4: Format JSON — Importance: 4 (new domination dynamic, consent protocol). Values in Russian.`,
         output: `{
   "events": [{
     "summary": "Маша надела ошейник на Кая, установила стоп-слово 'малина' и прижала его к полу ногой",
@@ -101,10 +101,10 @@ Step 4: Importance 4 (new domination dynamic, safeword established). Writing sum
 <established_memories>
 [★★★] Саша села на Вову сверху, они занялись сексом в позе наездницы до близости к оргазму
 </established_memories>`,
-        thinking: `Step 1: Input is Russian. Continuation of sex in same position. Rhythm acceleration.
-Step 2: Existing memory: cowgirl sex, near-orgasm — already recorded.
-Step 3: Same position, same act. The rhythm acceleration and mutual intensity are continuation, not a new phase. No dynamic shift, no new element.
-Step 4: This is a continuation of the exact same action with no shift, escalation, or conclusion. Output empty.`,
+        thinking: `Step 1: Extract data — Input is Russian. Sasha accelerated rhythm, grabbed his shoulders. Same position, approaching unison.
+Step 2: Cross-reference — Existing: "cowgirl sex, near-orgasm" — already recorded.
+Step 3: Check progression — Same position, same act, rhythm acceleration only. No dynamic shift, no conclusion.
+Step 4: Format JSON — Continuation with no progression. Output empty array.`,
         output: `{ "events": [] }`,
     },
 ];

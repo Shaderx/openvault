@@ -13,7 +13,10 @@ export const EXAMPLES = [
 Extracted events:
 1. [★★★] Лена призналась Диме в глубоком одиночестве, он обнял её за плечо и пообещал остаться`,
         output: `<thinking>
-Сцена эмоциональной близости между двумя персонажами. Лена и Дима — это PERSON. Взаимодействие показывает глубокую эмоциональную связь: Лена выражает одиночество, Дима предлагает физический комфорт и устное обещание. Это отношения поддержки и доверия. Описание должно отражать эмоциональную динамику, а не просто физические действия.
+Step 1: Entity scan — Лена (PERSON), Дима (PERSON).
+Step 2: Type validation — All types valid.
+Step 3: Relationship map — Дима→Лена (emotional support, physical comfort, verbal promise).
+Step 4: Output — 2 entities, 1 relationship.
 </thinking>
 {"entities":[{"name":"Лена","type":"PERSON","description":"Одинокая девушка, признавшаяся в том, что никто давно не интересовался её состоянием"},{"name":"Дима","type":"PERSON","description":"Поддерживающий друг, пообещавший быть рядом с Леной"}],"relationships":[{"source":"Дима","target":"Лена","description":"Эмоциональная поддержка — обнял за плечо, пообещал не уходить"}]}`,
     },
@@ -27,7 +30,10 @@ Extracted events:
 Extracted events:
 1. [★★★★] Саша и Вова впервые поцеловались, он обнял её за талию и притянул к себе`,
         output: `<thinking>
-Романтическая сцена первого поцелуя. Саша и Вова — PERSON. Это первый физический контакт такого рода, эмоционально значимый для обоих. Описания должны отражать романтическую природу взаимодействия: осторожность, затем смелость, физическая близость. Отношения двунаправленные — оба участника активно вовлечены.
+Step 1: Entity scan — Саша (PERSON), Вова (PERSON).
+Step 2: Type validation — All types valid.
+Step 3: Relationship map — Саша→Вова (first kiss, romantic initiative), Вова→Саша (reciprocated, embraced).
+Step 4: Output — 2 entities, 2 relationships.
 </thinking>
 {"entities":[{"name":"Саша","type":"PERSON","description":"Девушка, решившаяся на первый поцелуй с Вовой"},{"name":"Вова","type":"PERSON","description":"Парень, ответивший на поцелуй и обнявший Сашу за талию"}],"relationships":[{"source":"Саша","target":"Вова","description":"Первый поцелуй — зарождающиеся романтические чувства, сердечное волнение"},{"source":"Вова","target":"Саша","description":"Ответил на поцелуй, обнял за талию, проявил взаимность"}]}`,
     },
@@ -41,7 +47,10 @@ Extracted events:
 Extracted events:
 1. [★★★] Саша села на Вову сверху, они занялись сексом в позе наездницы до близости к оргазму`,
         output: `<thinking>
-Сексуальная сцена с активной ролью женщины. Саша и Вова — PERSON. Это продолжение их романтической истории с переходом к сексу. Саша в доминантной позиции (наездница), Вова направляет ритм. Описания должны отражать сексуальную динамику и взаимное удовольствие. Оба партнёра активны и согласованы.
+Step 1: Entity scan — Саша (PERSON), Вова (PERSON).
+Step 2: Type validation — All types valid.
+Step 3: Relationship map — Саша→Вова (cowgirl position, active role), Вова→Саша (hip control, rhythm direction).
+Step 4: Output — 2 entities, 2 relationships.
 </thinking>
 {"entities":[{"name":"Саша","type":"PERSON","description":"Женщина, инициировавшая секс в позе наездницы"},{"name":"Вова","type":"PERSON","description":"Мужчина, активно участвующий в сексе, направляющий ритм движений"}],"relationships":[{"source":"Саша","target":"Вова","description":"Сексуальные отношения — позиция наездницы, взаимное удовольствие, близость к оргазму"},{"source":"Вова","target":"Саша","description":"Активное участие — схватил за бёдра, направлял ритм, выражал приближение оргазма"}]}`,
     },
@@ -56,7 +65,10 @@ Extracted events:
 Extracted events:
 1. [★★★★] Маша надела ошейник на Кая, установила стоп-слово 'малина' и прижала его к полу ногой`,
         output: `<thinking>
-BDSM сцена с выраженной динамикой власти. Маша и Кай — PERSON. Ошейник — это OBJECT для контроля. 'Малина' — это CONCEPT (стоп-слово). Динамика D/s с ясным согласием (стоп-слово установлено). Маша в роли доминанта, Кай подчиняется. Нужно зафиксировать ошейник как инструмент власти и стоп-слово как элемент безопасности.
+Step 1: Entity scan — Маша (PERSON), Кай (PERSON), Ошейник (OBJECT), Малина (CONCEPT).
+Step 2: Type validation — All types valid.
+Step 3: Relationship map — Маша→Кай (D/s: commands, collar, foot on back), Маша→Ошейник (applies to Kai), Кай→Малина (knows safeword).
+Step 4: Output — 4 entities, 3 relationships.
 </thinking>
 {"entities":[{"name":"Маша","type":"PERSON","description":"Доминант — командует, надевает ошейник, прижимает партнёра к полу"},{"name":"Кай","type":"PERSON","description":"Сабмиссив — подчиняется командам, принимает ошейник и поводок"},{"name":"Ошейник","type":"OBJECT","description":"Кожаный ошейник с поводком, используемый для контроля над Каем"},{"name":"Малина","type":"CONCEPT","description":"Стоп-слово, установленное для прекращения сцены при необходимости"}],"relationships":[{"source":"Маша","target":"Кай","description":"Динамика доминирования — командует встать на колени, надевает ошейник, прижимает ногой"},{"source":"Маша","target":"Ошейник","description":"Застёгивает ошейник на шее Кая и тянет за поводок"},{"source":"Кай","target":"Малина","description":"Знает и принимает стоп-слово для обеспечения безопасности"}]}`,
     },

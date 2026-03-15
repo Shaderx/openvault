@@ -16,7 +16,10 @@ Relationships:
 - Kira → Ashwood's Flasks: Secretly kept two flasks, practicing resurrection formula
 - Guild Master Aldric → The Explorer Guild: Commands operations and assigns missions
 - The Explorer Guild → Ashwood's Flasks: Has been searching for a century`,
-        thinking: `This is a political intrigue community centered on deception. Kira has betrayed the guild by hiding artifacts. The key finding is that Kira's deception creates an unstable power dynamic - Guild Master Aldric doesn't know about the theft. The resurrection formula is the true prize, making Kira's personal goal potentially catastrophic for the organization. The community structure shows clear conflict potential.`,
+        thinking: `Step 1: Entity inventory — Kira (PERSON), Guild Master Aldric (PERSON), The Explorer Guild (ORGANIZATION), Ashwood's Preservation Flasks (OBJECT).
+Step 2: Relationship map — Kira→Aldric (lied about count), Kira→Flasks (secretly kept two), Aldric→Guild (commands), Guild→Flasks (century-long search).
+Step 3: Dynamic analysis — Deception creates unstable power structure. Aldric unaware. Resurrection formula = true prize.
+Step 4: Output — 4 findings on deception and instability.`,
         output: `{
   "title": "Explorer Guild Flask Conflict",
   "summary": "A brewing internal conflict centered on Ashwood's preservation flasks. Kira, a guild member, has stolen two flasks and is secretly experimenting with a resurrection formula, directly deceiving Guild Master Aldric. The guild has invested a century into finding these artifacts, making Kira's betrayal a critical threat to the organization's trust structure.",
@@ -43,7 +46,10 @@ Relationships:
 - Lyra → Thorne: Healing support during battles
 - Thorne → Shadowbeast Pack: Frontline defender taking damage
 - Harlan → Enchanted Blade: Wields with expert skill against multiple enemies`,
-        thinking: `Combat party with clear role division. Harlan leads, Thorne tanks, Lyra heals. The external threat (Shadowbeast Pack) binds them together. Harlan's mentorship of Lyra is protective but potentially overbearing. Thorne and Harlan have friction but mutual respect. Lyra is the emotional center and potential vulnerability. Key findings: functional combat synergy, protective mentorship that may be overbearing, and external threat as binding force.`,
+        thinking: `Step 1: Entity inventory — Harlan (PERSON), Lyra (PERSON), Thorne (PERSON), Shadowbeast Pack (ORGANIZATION), Enchanted Blade (OBJECT).
+Step 2: Relationship map — Harlan→Lyra (mentor), Harlan→Thorne (bickering respect), Lyra→Thorne (healing), Thorne→Shadowbeasts (frontline), Harlan→Blade (wielder).
+Step 3: Dynamic analysis — Functional combat synergy. External threat binds group. Lyra = emotional center and vulnerability.
+Step 4: Output — 5 findings on role division and tensions.`,
         output: `{
   "title": "Mercenary Combat Party",
   "summary": "A three-person combat unit with defined roles and interpersonal tensions. Harlan leads with experience, Thorne absorbs damage, and Lyra provides healing support. The party faces external threat from Shadowbeast Pack while internal dynamics include mentorship, bickering camaraderie, and Lyra's struggle with combat fear. Harlan's protective but demanding approach to Lyra creates both growth and pressure.",
@@ -71,7 +77,10 @@ Relationships:
 - Lila → Julia: Confides about sexual encounters, discusses desires
 - Julia → Lila: Supportive listener, validates her exploration
 - Marcus → Hair Pulling: Initially resisted, now accepts and responds to`,
-        thinking: `Intimate relationship network with inverted power dynamics. Lila dominates, Marcus submits. Julia is external confidant providing validation. The escalation pattern (first contact → hair-pulling → feeling owned) shows deepening exploration. Key findings: power inversion with Lila directing, Marcus accepting submission, Julia providing external validation, and escalation suggesting deeper needs being explored.`,
+        thinking: `Step 1: Entity inventory — Lila (PERSON), Marcus (PERSON), Julia (PERSON), Bedroom (PLACE), Hair Pulling (CONCEPT).
+Step 2: Relationship map — Lila→Marcus (dominance), Marcus→Lila (submission), Lila→Julia (confides), Julia→Lila (validates), Marcus→Hair Pulling (accepted).
+Step 3: Dynamic analysis — Power inversion: Lila dominates, Marcus submits. Escalation pattern. Julia provides external validation creating secrecy.
+Step 4: Output — 5 findings on power dynamics and escalation.`,
         output: `{
   "title": "Lila and Marcus Intimate Circle",
   "summary": "A sexual dynamic between Lila and Marcus where traditional roles are reversed — Lila dominates and Marcus submits. Their encounters have escalated from first sexual contact to rough play including hair-pulling and requests for feeling 'owned.' Julia serves as Lila's confidant outside the bedroom. Marcus shows increasing comfort with submission while Lila explores her dominant desires.",
@@ -93,7 +102,9 @@ export const GLOBAL_SYNTHESIS = [
 - Explorer Guild Flask Conflict: Kira has stolen two of Ashwood's preservation flasks and is secretly experimenting with a resurrection formula, deceiving Guild Master Aldric.
 - Royal Court Politics: Queen Elena navigates treacherous court politics while hiding her alliance with the northern rebels.
 - Merchant Trade Network: The eastern merchants have formed an embargo against the kingdom, threatening economic collapse.`,
-        thinking: `Three separate communities that form a cohesive political narrative. The key connection is the resurrection formula — Kira's theft could be connected to either the court intrigue or the rebellion. Queen Elena's secret alliance with rebels combined with economic pressure from merchants creates a three-way crisis. The synthesis should connect these threads: Kira's theft is the linchpin, the rebellion may need the formula, and economic collapse weakens the monarchy's ability to respond.`,
+        thinking: `Step 1: Community scan — Flask Conflict (deception, resurrection formula), Royal Court (secret alliance, rebellion), Merchant Network (embargo, economic collapse).
+Step 2: Cross-links — Resurrection formula connects Kira to rebellion/court. Economic collapse weakens monarchy. Three-front crisis.
+Step 3: Narrative arc — Kira's theft = linchpin. Rebellion needs formula. Economic strangulation limits response. Trajectory: convergence of all three crises.`,
         output: `{
   "global_summary": "The kingdom faces internal collapse on three fronts. Kira's theft of the resurrection flasks threatens the Explorer Guild's century-long mission and will likely trigger a leadership crisis when discovered. Queen Elena secretly supports northern rebels while maintaining court appearance, creating a powder keg if exposed. Simultaneously, the eastern merchant embargo has begun economic strangulation. These threads connect through the resurrection formula—Kira's goal likely involves reviving someone central to either the court intrigue or the rebellion, making her deception the linchpin holding the entire fragile state together."
 }`,
@@ -104,7 +115,9 @@ export const GLOBAL_SYNTHESIS = [
 - Mercenary Combat Party: Harlan, Lyra, and Thorne fight Shadowbeast Pack with defined roles but internal tension.
 - Northern Rebellion: Rebels prepare to overthrow the monarchy, secretly allied with Queen Elena.
 - Ancient Magic Order: Preserves knowledge of Ashwood's resurrection formula, seeking to prevent its misuse.`,
-        thinking: `Three communities connected by looming conflict. The mercenary party is ground-level, the rebellion is political, and the Magic Order holds forbidden knowledge. Queen Elena's secret alliance with rebels (from previous context) connects to the threat to the monarchy. The resurrection formula is the key artifact that could change everything. The synthesis should show how these levels connect: the mercenaries may become unwitting players in a larger game, the rebellion will need magical power, and the Order's knowledge will be contested.`,
+        thinking: `Step 1: Community scan — Mercenary Party (ground-level combat), Northern Rebellion (political overthrow), Magic Order (resurrection formula guardians).
+Step 2: Cross-links — Elena's alliance connects rebellion to monarchy's fall. Formula contested by both sides. Mercenaries = unwitting players.
+Step 3: Narrative arc — Monarchy falls from within. Magic Order holds true power. Trajectory: queen's betrayal revealed, formula scramble, regime collapse.`,
         output: `{
   "global_summary": "A kingdom on the brink of transformation through war and forbidden magic. The mercenary party serves as the ground-level lens, their survival against Shadowbeasts tied to the larger conflict. Above them, Queen Elena's secret alliance with rebels suggests the monarchy will fall from within, not from external attack. The Ancient Magic Order holds the true power—the resurrection formula—that both sides will likely seek. Harlan's mentorship of Lyra parallels the kingdom's generational transition, with both the party and the nation undergoing identity crises. The narrative trajectory points toward a revelation of the queen's betrayal, a scramble for the resurrection artifact, and the mercenaries caught in the center as survivors of a regime collapse."
 }`,

@@ -74,4 +74,14 @@ describe('GRAPH_EXAMPLES', () => {
             expect(ex.output).toContain('</thinking>');
         }
     });
+
+    it('all thinking blocks in output follow rigid Step N format', () => {
+        for (const ex of GRAPH_EXAMPLES) {
+            const thinkMatch = ex.output.match(/<thinking>([\s\S]*?)<\/thinking>/);
+            expect(thinkMatch, `"${ex.label}" must have <thinking> block`).not.toBeNull();
+            const thinkText = thinkMatch[1].trim();
+            expect(thinkText, `"${ex.label}" must start with Step 1:`).toMatch(/^Step 1:/);
+            expect(thinkText, `"${ex.label}" must have Step 2:`).toContain('Step 2:');
+        }
+    });
 });

@@ -12,7 +12,9 @@ export const QUESTIONS = [
 4. [★★] Лена услышала, как соседки обсуждают её за спиной
 5. [★★★★] Лена рассказала Диме о буллинге в школе, впервые упомянув об этом вслух`,
         output: `<thinking>
-Память показывает паттерн изоляции и зависимости. Признание в одиночестве (1), избегание кухни (2), улыбка благодаря Диме (3), сплетни (4), признание о буллинге (5). Ключевые вопросы: связь буллинга с изоляцией, природа зависимости от Димы, риски при его уходе. Вопросы должны исследовать корень изоляции и последствия зависимости.
+Step 1: Pattern scan — Isolation: [2, 4]. Dependency: [1, 3]. Disclosure: [5].
+Step 2: Causal chains — Loneliness(1) → avoidance(2) → Dima's comfort(3) → gossip(4) → bullying disclosure(5).
+Step 3: Question formulation — Probe: bullying-isolation link, dependency health, abandonment risk.
 </thinking>
 {
   "questions": [
@@ -31,7 +33,9 @@ export const QUESTIONS = [
 4. [★★★] Аня написала в дневнике, что боится ruin everything if she admits her feelings
 5. [★★] Аня спросила подругу, как понять, что это любовь, а не просто влюблённость`,
         output: `<thinking>
-Романтическая уязвимость со страхом близости. Поцелуй (1), бессонница (2), избегание взгляда (3), страх испортить (4), вопрос о любви (5). Ключевые вопросы: почему страх после взаимного поцелуя, смешение языков как индикатор внутреннего конфликта, корень страха испортить. Вопросы должны исследовать барьеры близости и природу страха.
+Step 1: Pattern scan — Action: [1]. Obsession: [2, 5]. Avoidance: [3]. Fear: [4].
+Step 2: Causal chains — Kiss(1) → insomnia(2) → avoidance(3) → fear of ruining(4) → seeking guidance(5).
+Step 3: Question formulation — Probe: fear after mutual kiss, language mixing as conflict indicator, root of fear.
 </thinking>
 {
   "questions": [
@@ -50,7 +54,9 @@ export const QUESTIONS = [
 4. [★★★★] Кай признался, что чувствует себя спокойнее, когда Маша принимает все решения за него
 5. [★★★] Маша выразила беспокойство, что Кай теряет собственную волю за пределами сцен`,
         output: `<thinking>
-D/s динамика распространяется за пределы сцен. Ошейник (1), просьба оставить (2), бытовой сервис (3), признание в зависимости (4), беспокойство Маши (5). Ключевые вопросы: здоровое выражение или избегание, влияние на равноправие, природа потребности в подчинении. Вопросы должны исследовать границу между выбором и зависимостью.
+Step 1: Pattern scan — Escalation: [1, 2]. Extension: [3]. Dependency: [4]. Warning: [5].
+Step 2: Causal chains — Collar scene(1) → keep collar request(2) → domestic service(3) → dependence confession(4) → Masha's concern(5).
+Step 3: Question formulation — Probe: healthy expression vs avoidance, equality impact, root of submission need.
 </thinking>
 {
   "questions": [
@@ -72,7 +78,10 @@ export const REFLECTIONS = [
 4. [★★] Лена услышала, как соседки обсуждают её за спиной
 5. [★★★★] Лена рассказала Диме о буллинге в школе, впервые упомянув об этом вслух`,
         output: `<thinking>
-Паттерн изоляции и зависимости. Лена избегает социальных пространств (память 2), слышит сплетни о себе (память 4), и впервые улыбнулась за неделю благодаря Диме (память 3). Признание о буллинге (память 5) раскрывает корень проблемы. Дима — единственный источник поддержки (память 1, 3). Вопросы должны исследовать связь детского опыта с нынешней изоляцией и риски зависимости от одного человека.
+Step 1: Pattern scan — Isolation: [2, 4]. Dependency: [1, 3]. Disclosure: [5].
+Step 2: Causal chains — Loneliness(1) → kitchen avoidance(2) → Dima's comfort(3) → gossip(4) → bullying disclosure(5).
+Step 3: Synthesis — Q1: Bullying root? Insight: avoidance = defense mechanism from school bullying. Q2: Dependency risk? Insight: Dima as sole bridge = dangerous dependency.
+Step 4: Evidence — Q1: [2, 4, 5]. Q2: [1, 3].
 </thinking>
 {
   "reflections": [
@@ -98,7 +107,10 @@ export const REFLECTIONS = [
 4. [★★★] Аня написала в дневнике, что боится всё испортить, если признается в своих чувствах
 5. [★★] Аня спросила подругу, как понять, что это любовь, а не просто влюблённость`,
         output: `<thinking>
-Романтическая уязвимость и страх близости. Первый поцелуй (память 1) — значимое событие с смешанными эмоциями. Бессонница (память 2) показывает эмоциональную значимость. Избегание взгляда (память 3) — защитная реакция. Страх испортить (память 4) раскрывает прошлый опыт. Вопрос подруге (память 5) — поиск ориентиров. Нужно исследовать корень страха и динамику между защитой и близостью.
+Step 1: Pattern scan — Action: [1]. Processing: [2]. Avoidance: [3]. Fear: [4]. Seeking guidance: [5].
+Step 2: Causal chains — Kiss(1) → insomnia(2) → eye avoidance(3) → diary fear(4) → friend's question(5).
+Step 3: Synthesis — Q1: Why fear after mutual kiss? Insight: past trauma transferred to Sergei. Q2: Fear of ruining? Insight: choosing vulnerability over isolation.
+Step 4: Evidence — Q1: [1, 4]. Q2: [2, 3]. Бессонница (память 2) показывает эмоциональную значимость. Избегание взгляда (память 3) — защитная реакция. Страх испортить (память 4) раскрывает прошлый опыт. Вопрос подруге (память 5) — поиск ориентиров. Нужно исследовать корень страха и динамику между защитой и близостью.
 </thinking>
 {
   "reflections": [
@@ -124,7 +136,10 @@ export const REFLECTIONS = [
 4. [★★★★] Кай признался, что чувствует себя спокойнее, когда Маша принимает все решения за него
 5. [★★★] Маша выразила беспокойство, что Кай теряет собственную волю за пределами сцен`,
         output: `<thinking>
-Паттерн распространения D/s динамики за пределы сцен. Первый шаг (память 2) — просьба оставить ошейник, второй (память 3) — бытовое подчинение, третий (память 4) — признание в зависимости от решений. Беспокойство Маши (память 5) — критический сигнал, что динамика стала нездоровой. Вопросы должны исследовать, является ли подчинение выбором или избеганием, и как это влияет на равноправие.
+Step 1: Pattern scan — Scene: [1]. Extension: [2, 3]. Dependency: [4]. Warning: [5].
+Step 2: Causal chains — Collar scene(1) → keep collar request(2) → domestic kneeling(3) → control confession(4) → Masha's concern(5).
+Step 3: Synthesis — Q1: Choice or avoidance? Insight: submission = anxiety regulation mechanism. Q2: Boundary erosion? Insight: domestic transfer = psychological dependence.
+Step 4: Evidence — Q1: [2, 4]. Q2: [3, 5].
 </thinking>
 {
   "reflections": [
@@ -154,7 +169,9 @@ export const INSIGHTS = [
 - ev_023: [★★] Лена услышала, как соседки обсуждают её за спиной
 - ev_024: [★★★★] Лена рассказала Диме о буллинге в школе, впервые упомянув об этом вслух`,
         output: `<thinking>
-Вопрос об изоляции. Доказательства показывают паттерн: избегание социальных пространств (ev_021), сплетни соседок (ev_023), признание о буллинге (ev_024). Это формирует защитный механизм. Дима — единственная поддержка (ev_020, ev_022). Два инсайта: изоляция — защитный механизм от буллинга, и Дима создаёт опасную зависимость как единственный мост в социальный мир.
+Step 1: Evidence review — Loneliness(ev_020), kitchen avoidance(ev_021), smile from Dima(ev_022), gossip(ev_023), bullying disclosure(ev_024).
+Step 2: Pattern synthesis — Defense mechanism: avoidance(ev_021), gossip confirms fears(ev_023), bullying root(ev_024).
+Step 3: Insight formulation — I1: isolation = defense mechanism [ev_021, ev_023, ev_024]. I2: Dima as sole bridge = dangerous dependency [ev_020, ev_022].
 </thinking>
 {
   "insights": [
@@ -179,7 +196,9 @@ export const INSIGHTS = [
 - ev_153: [★★] Аня начала замечать, что думает о Сергее постоянно, даже во время работы
 - ev_154: [★★★] Аня позвонила Сергею в три часа ночи после кошмара, и он приехал без вопросов`,
         output: `<thinking>
-Вопрос о развитии отношений. После поцелуя (ev_150) следует признание о страхе (ev_151) и поддержка (ev_152). Ночной звонок (ev_154) — переломный момент уязвимости. Постоянные мысли (ev_153) показывают глубину привязанности. Два инсайта: отношения развиваются от конфликта к уязвимости с переносом травматического опыта, и ночной звонок — переход от защиты к реальной близости.
+Step 1: Evidence review — Kiss(ev_150), fear confession(ev_151), promise(ev_152), constant thoughts(ev_153), night call(ev_154).
+Step 2: Pattern synthesis — Trust building: fear confession(ev_151) → support(ev_152) → vulnerability leap(ev_154).
+Step 3: Insight formulation — I1: past trauma transferred, gradual trust [ev_151, ev_152, ev_154]. I2: night call = choosing vulnerability over isolation [ev_150, ev_153, ev_154].
 </thinking>
 {
   "insights": [
@@ -203,7 +222,9 @@ export const INSIGHTS = [
 - ev_252: [★★] Кай приготовил ужин для Маши, стоя на коленях пока она ела
 - ev_253: [★★★★] Кай признался, что чувствует себя спокойнее, когда Маша принимает все решения за него`,
         output: `<thinking>
-Вопрос о потребности в подчинении. Сцена с ошейником (ev_250) расширяется: просьба не снимать (ev_251), бытовой сервис (ev_252), признание в зависимости от решений (ev_253). Паттерн показывает перенос динамики в реальность. Два инсайта: подчинение как механизм эмоциональной регуляции для снятия тревоги, и стирание границы между сценой и реальностью указывает на психологическую зависимость.
+Step 1: Evidence review — Collar scene(ev_250), keep collar(ev_251), kneeling dinner(ev_252), control confession(ev_253).
+Step 2: Pattern synthesis — Scene extension: collar(ev_250) → keep wearing(ev_251) → domestic service(ev_252) → dependency confession(ev_253).
+Step 3: Insight formulation — I1: submission = anxiety regulation [ev_251, ev_253]. I2: domestic transfer = psychological dependence [ev_252, ev_253].
 </thinking>
 {
   "insights": [

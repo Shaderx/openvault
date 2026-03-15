@@ -13,7 +13,9 @@ export const QUESTIONS = [
 4. [★★★] Kira decoded ancient text on the flask labels revealing a resurrection formula
 5. [★★] Kira practiced the formula alone at night, burning her fingertips on failed attempts`,
         output: `<thinking>
-The memories reveal a clear deception pattern. The discovery (1), argument (2), lie (3), secret formula (4), and self-harming practice (5) form a narrative about betrayal for personal goals. Key questions should probe: why the deception (loyalty vs personal goal), the resurrection motive (unresolved grief), and consequences (discovery impact). Questions should connect the deception to the undisclosed personal goal and explore the emotional stakes.
+Step 1: Pattern scan — Deception: [1, 3]. Obsession: [4, 5]. Conflict: [2].
+Step 2: Causal chains — Discovery(1) → argument(2) → lie(3) → formula(4) → practice(5).
+Step 3: Question formulation — Probe: deception motivation, resurrection urgency, discovery consequences.
 </thinking>
 {
   "questions": [
@@ -32,7 +34,9 @@ The memories reveal a clear deception pattern. The discovery (1), argument (2), 
 4. [★★★] Mara flinched when a merchant reached for her sword arm
 5. [★★★] Mara confessed to her companion that she feels numb during fights, not brave`,
         output: `<thinking>
-Combat trauma with classic symptoms. The killing and wound (1), self-binding (2), nightmares (3), flinch response (4), combat numbness confession (5). Questions should probe: resilience vs trauma (self-isolation), impact on relationships (numbness), processing vs suppression (nightmare trigger). The numbness during fights and refusal of healing suggest deeper issues.
+Step 1: Pattern scan — Violence: [1]. Self-isolation: [2]. Trauma symptoms: [3, 4]. Emotional disclosure: [5].
+Step 2: Causal chains — Combat(1) → refused healing(2) → nightmares(3) → flinch response(4) → numbness confession(5).
+Step 3: Question formulation — Probe: resilience vs trauma, impact on relationships, processing vs suppression.
 </thinking>
 {
   "questions": [
@@ -51,7 +55,9 @@ Combat trauma with classic symptoms. The killing and wound (1), self-binding (2)
 4. [★★★★] Lila broke down crying after an intense session, saying she doesn't know why
 5. [★★★] Lila refused to discuss the crying incident the next morning, deflecting with humor`,
         output: `<thinking>
-Escalating intimacy with emotional breakthrough. First time (1), hair-pulling request (2), wanting to feel owned (3), breakdown (4), deflection (5). Questions should probe: the psychological need behind intensity, whether breakdown signals trauma or overwhelm, sustainability of avoidance. The pattern shows using intensity to cope with something unprocessed.
+Step 1: Pattern scan — Escalation: [1, 2, 3]. Emotional break: [4]. Avoidance: [5].
+Step 2: Causal chains — First time(1) → hair-pulling(2) → feel owned(3) → breakdown(4) → deflection(5).
+Step 3: Question formulation — Probe: psychological need behind intensity, trauma vs overwhelm, sustainability.
 </thinking>
 {
   "questions": [
@@ -73,7 +79,10 @@ export const REFLECTIONS = [
 4. [★★★] Kira decoded ancient text on the flask labels revealing a resurrection formula
 5. [★★] Kira practiced the formula alone at night, burning her fingertips on failed attempts`,
         output: `<thinking>
-This pattern shows clear deception: Kira discovered valuable artifacts, lied about the quantity, and is secretly experimenting. The deception (memory 3) combined with secret practice (memory 5) suggests a personal agenda. The resurrection formula (memory 4) explains the motivation. The argument with guild master (memory 2) shows tension around disclosure. The burned fingertips (memory 5) indicate desperation and personal risk. Questions should probe why she's lying and what she wants to resurrect.
+Step 1: Pattern scan — Deception: [1, 3]. Obsession: [4, 5]. Conflict: [2].
+Step 2: Causal chains — Discovery(1) → lie about quantity(3) → formula decoded(4) → secret practice with burns(5).
+Step 3: Synthesis — Q1: Why betray guild? Insight: resurrection formula drives theft. Q2: Grief link? Insight: secrecy + self-harm = emotional urgency.
+Step 4: Evidence — Q1: [1, 3, 4]. Q2: [4, 5].
 </thinking>
 {
   "reflections": [
@@ -99,7 +108,10 @@ This pattern shows clear deception: Kira discovered valuable artifacts, lied abo
 4. [★★★] Mara flinched when a merchant reached for her sword arm
 5. [★★★] Mara confessed to her companion that she feels numb during fights, not brave`,
         output: `<thinking>
-Combat trauma pattern with classic PTSD symptoms. The killing and wound (memory 1) is the traumatic event. Refusal of healing (memory 2) suggests need for control or self-punishment. Nightmares (memory 3) are intrusion symptoms. The flinch response (memory 4) shows hypervigilance. The confession about numbness (memory 5) reveals dissociation during combat. Questions should probe whether her coping mechanisms are healthy or signs of deepening trauma.
+Step 1: Pattern scan — Traumatic event: [1]. Isolation: [2]. Intrusion: [3]. Hypervigilance: [4]. Dissociation: [5].
+Step 2: Causal chains — Combat killing(1) → refused healing(2) → nightmares(3) → flinch(4) → numbness confession(5).
+Step 3: Synthesis — Q1: Resilience or trauma? Insight: pain as control mechanism. Q2: Numbness impact? Insight: displacement risk.
+Step 4: Evidence — Q1: [2, 3, 5]. Q2: [4, 5].
 </thinking>
 {
   "reflections": [
@@ -125,7 +137,10 @@ Combat trauma pattern with classic PTSD symptoms. The killing and wound (memory 
 4. [★★★★] Lila broke down crying after an intense session, saying she doesn't know why
 5. [★★★] Lila refused to discuss the crying incident the next morning, deflecting with humor`,
         output: `<thinking>
-Pattern of using sexual intensity to cope with unprocessed emotions. The escalation from first time (memory 1) to hair-pulling (memory 2) to wanting to feel owned (memory 3) shows increasing intensity. The breakdown (memory 4) is the key indicator of emotional overwhelm. Refusing to discuss (memory 5) shows avoidance of processing. Questions should probe what psychological need the intensity serves and why she can't process the emotions that surface.
+Step 1: Pattern scan — Escalation: [1, 2, 3]. Emotional break: [4]. Avoidance: [5].
+Step 2: Causal chains — First time(1) → hair-pulling(2) → "feel owned"(3) → breakdown(4) → deflection(5).
+Step 3: Synthesis — Q1: Why escalate? Insight: physical intensity bypasses emotional defenses. Q2: Breakdown = trauma? Insight: emotional threshold approached, fear of losing coping mechanism.
+Step 4: Evidence — Q1: [1, 2, 3]. Q2: [4, 5].
 </thinking>
 {
   "reflections": [
@@ -154,7 +169,9 @@ Relevant memories:
 - ev_004: [★★★] Kira decoded ancient text revealing a resurrection formula
 - ev_005: [★★] Kira practiced the formula alone at night, burning her fingertips`,
         output: `<thinking>
-The question asks about deception. The evidence shows a clear pattern: discovery (ev_001), deception (ev_003), and the motivation (ev_004) — the resurrection formula. The secret practice with self-harm (ev_005) suggests emotional urgency. Two key insights emerge: the theft is driven by an undisclosed personal goal related to the resurrection formula, and the self-harm pattern suggests unresolved grief or desperation connected to someone she wants to resurrect.
+Step 1: Evidence review — Discovery(ev_001), lie(ev_003), formula(ev_004), practice(ev_005).
+Step 2: Pattern synthesis — Deception chain: discovery → lie → motivation = resurrection formula. Self-harm(ev_005) = emotional urgency.
+Step 3: Insight formulation — I1: theft driven by formula [ev_003, ev_004, ev_005]. I2: secrecy + self-harm = unresolved grief [ev_004, ev_005].
 </thinking>
 {
   "insights": [
@@ -179,7 +196,9 @@ Relevant memories:
 - ev_103: [★★★] Mara has formed an intense attachment to the new recruit, Theron, who reminds her of her fallen lieutenant
 - ev_104: [★★] Mara trains with her sword until her hands bleed, refusing to stop until exhaustion`,
         output: `<thinking>
-Question about trauma processing. The traumatic event (ev_100) leads to classic PTSD symptoms: nightmares (ev_101), hypervigilance (ev_102), and displacement (ev_103). The physical self-harm through training (ev_104) suggests using pain for control. Two insights: hyper-vigilance and compulsion to exhaustion suggest using pain to feel in control, and the attachment to Theron is displacement of grief for the fallen lieutenant.
+Step 1: Evidence review — Squad death(ev_100), nightmares(ev_101), exposed sleeping(ev_102), Theron attachment(ev_103), bleeding hands(ev_104).
+Step 2: Pattern synthesis — PTSD: hypervigilance(ev_102), intrusion(ev_101), displacement(ev_103), compulsive training(ev_104).
+Step 3: Insight formulation — I1: pain as control [ev_101, ev_102, ev_104]. I2: Theron = displacement for fallen lieutenant [ev_100, ev_103].
 </thinking>
 {
   "insights": [
@@ -204,7 +223,9 @@ Relevant memories:
 - ev_203: [★★★★] Lila broke down crying after an intense session, saying she doesn't know why
 - ev_204: [★★★] Lila refused to discuss the crying incident the next morning, deflecting with humor`,
         output: `<thinking>
-Question about psychological needs behind escalating intensity. The pattern shows progression: first time (ev_200), hair-pulling (ev_201), wanting to feel owned (ev_202). The breakdown (ev_203) is key — emotions surfacing that she can't process. Refusal to discuss (ev_204) shows avoidance. Two insights: using physical intensity to bypass emotional defenses, and the breakdown indicates approaching an emotional threshold she's avoiding.
+Step 1: Evidence review — First time(ev_200), hair-pulling(ev_201), "feel owned"(ev_202), breakdown(ev_203), deflection(ev_204).
+Step 2: Pattern synthesis — Escalation: first contact → rough play → dominance request → emotional break → avoidance.
+Step 3: Insight formulation — I1: intensity bypasses defenses [ev_200, ev_201, ev_202]. I2: breakdown = approaching threshold [ev_203, ev_204].
 </thinking>
 {
   "insights": [

@@ -63,4 +63,11 @@ describe('COMMUNITY_EXAMPLES', () => {
             expect(ex.thinking.length).toBeGreaterThan(10);
         }
     });
+
+    it('all thinking fields follow rigid Step N format', () => {
+        for (const ex of COMMUNITY_EXAMPLES) {
+            expect(ex.thinking, `"${ex.label}" must start with Step 1:`).toMatch(/^Step 1:/);
+            expect(ex.thinking, `"${ex.label}" must have Step 2:`).toContain('Step 2:');
+        }
+    });
 });

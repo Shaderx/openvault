@@ -64,4 +64,11 @@ describe('EVENT_EXAMPLES', () => {
             expect(() => JSON.parse(ex.output), `Output in "${ex.label}" must be valid JSON`).not.toThrow();
         }
     });
+
+    it('all thinking blocks follow rigid Step N: LABEL format', () => {
+        for (const ex of EVENT_EXAMPLES) {
+            expect(ex.thinking, `"${ex.label}" must start with Step 1:`).toMatch(/^Step 1:/);
+            expect(ex.thinking, `"${ex.label}" must have Step 2:`).toContain('Step 2:');
+        }
+    });
 });
