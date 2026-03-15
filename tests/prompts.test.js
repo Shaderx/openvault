@@ -833,3 +833,74 @@ describe('buildGlobalSynthesisPrompt prefill parameter', () => {
         expect(result[2].content).toBe('<thinking>');
     });
 });
+
+describe('domain module structure', () => {
+    it('events/examples returns correct count per language', async () => {
+        const { getExamples } = await import('../src/prompts/events/examples/index.js');
+        expect(getExamples('en')).toHaveLength(5);
+        expect(getExamples('ru')).toHaveLength(5);
+        expect(getExamples('auto')).toHaveLength(10);
+    });
+
+    it('graph/examples returns correct count per language', async () => {
+        const { getExamples } = await import('../src/prompts/graph/examples/index.js');
+        expect(getExamples('en')).toHaveLength(4);
+        expect(getExamples('ru')).toHaveLength(4);
+        expect(getExamples('auto')).toHaveLength(8);
+    });
+
+    it('reflection/examples returns correct count per type and language', async () => {
+        const { getExamples } = await import('../src/prompts/reflection/examples/index.js');
+        expect(getExamples('REFLECTIONS', 'en')).toHaveLength(3);
+        expect(getExamples('REFLECTIONS', 'ru')).toHaveLength(3);
+        expect(getExamples('REFLECTIONS', 'auto')).toHaveLength(6);
+        expect(getExamples('QUESTIONS', 'en')).toHaveLength(3);
+        expect(getExamples('INSIGHTS', 'ru')).toHaveLength(3);
+    });
+
+    it('communities/examples returns correct count per type and language', async () => {
+        const { getExamples } = await import('../src/prompts/communities/examples/index.js');
+        expect(getExamples('COMMUNITIES', 'en')).toHaveLength(3);
+        expect(getExamples('COMMUNITIES', 'ru')).toHaveLength(3);
+        expect(getExamples('COMMUNITIES', 'auto')).toHaveLength(6);
+        expect(getExamples('GLOBAL_SYNTHESIS', 'en')).toHaveLength(2);
+        expect(getExamples('GLOBAL_SYNTHESIS', 'ru')).toHaveLength(2);
+        expect(getExamples('GLOBAL_SYNTHESIS', 'auto')).toHaveLength(4);
+    });
+
+    it('all example objects have required fields', async () => {
+        const events = await import('../src/prompts/events/examples/index.js');
+        const graph = await import('../src/prompts/graph/examples/index.js');
+        const reflection = await import('../src/prompts/reflection/examples/index.js');
+        const communities = await import('../src/prompts/communities/examples/index.js');
+
+        const allExamples = [
+            ...events.getExamples(),
+            ...graph.getExamples(),
+            ...reflection.getExamples('REFLECTIONS'),
+            ...reflection.getExamples('QUESTIONS'),
+            ...reflection.getExamples('INSIGHTS'),
+            ...communities.getExamples('COMMUNITIES'),
+            ...communities.getExamples('GLOBAL_SYNTHESIS'),
+        ];
+
+        for (const ex of allExamples) {
+            expect(ex).toHaveProperty('label');
+            expect(ex).toHaveProperty('input');
+            expect(ex).toHaveProperty('output');
+            expect(typeof ex.label).toBe('string');
+            expect(typeof ex.input).toBe('string');
+            expect(typeof ex.output).toBe('string');
+        }
+    });
+
+    it('EN examples only have EN labels, RU examples only have RU labels', async () => {
+        const { getExamples } = await import('../src/prompts/events/examples/index.js');
+        for (const ex of getExamples('en')) {
+            expect(ex.label).toContain('(EN/');
+        }
+        for (const ex of getExamples('ru')) {
+            expect(ex.label).toContain('(RU/');
+        }
+    });
+});
