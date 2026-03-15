@@ -6,6 +6,7 @@ import {
     consolidateGraph,
     createEmptyGraph,
     expandMainCharacterKeys,
+    findCrossScriptCharacterKeys,
     initGraphState,
     markEdgeForConsolidation,
     mergeOrInsertEntity,
@@ -871,5 +872,73 @@ describe('shouldMergeEntities', () => {
         expect(shouldMergeEntities(0.75, 0.8, tokensA, 'castle', 'fortress')).toBe(false); // no overlap
         // cosine=0.65 → below 0.70 floor → false
         expect(shouldMergeEntities(0.65, 0.8, tokensA, 'castle', 'castle')).toBe(false);
+    });
+});
+
+describe('findCrossScriptCharacterKeys', () => {
+    it('finds Cyrillic character node matching English base key', () => {
+        const graphNodes = {
+            suzy: { name: 'Suzy', type: 'PERSON', description: 'Main char', mentions: 28 },
+            сузи: { name: 'Сузи', type: 'PERSON', description: 'Главная героиня', mentions: 59 },
+            'бордовый силиконовый дилдо': {
+                name: 'Бордовый силиконовый дилдо',
+                type: 'OBJECT',
+                description: 'An object',
+                mentions: 14,
+            },
+        };
+        const result = findCrossScriptCharacterKeys(['suzy'], graphNodes);
+        expect(result).toContain('сузи');
+        expect(result).not.toContain('suzy');
+        expect(result).toHaveLength(1);
+    });
+
+    it('finds multiple Cyrillic character nodes', () => {
+        const graphNodes = {
+            suzy: { name: 'Suzy', type: 'PERSON', description: 'Main char', mentions: 28 },
+            vova: { name: 'Vova', type: 'PERSON', description: 'User', mentions: 28 },
+            сузи: { name: 'Сузи', type: 'PERSON', description: 'Героиня', mentions: 59 },
+            вова: { name: 'Вова', type: 'PERSON', description: 'Пользователь', mentions: 59 },
+        };
+        const result = findCrossScriptCharacterKeys(['suzy', 'vova'], graphNodes);
+        expect(result).toContain('сузи');
+        expect(result).toContain('вова');
+        expect(result).toHaveLength(2);
+    });
+
+    it('does not match non-PERSON nodes', () => {
+        const graphNodes = {
+            suzy: { name: 'Suzy', type: 'PERSON', description: 'Main char', mentions: 28 },
+            // Hypothetical Cyrillic OBJECT that transliterates near "suzy"
+            сузи: { name: 'Сузи', type: 'OBJECT', description: 'Not a person', mentions: 5 },
+        };
+        const result = findCrossScriptCharacterKeys(['suzy'], graphNodes);
+        expect(result).toHaveLength(0);
+    });
+
+    it('does not match Latin PERSON nodes', () => {
+        const graphNodes = {
+            suzy: { name: 'Suzy', type: 'PERSON', description: 'Main', mentions: 28 },
+            susan: { name: 'Susan', type: 'PERSON', description: 'NPC', mentions: 3 },
+        };
+        const result = findCrossScriptCharacterKeys(['suzy'], graphNodes);
+        expect(result).toHaveLength(0);
+    });
+
+    it('returns empty array when no matches', () => {
+        const graphNodes = {
+            замок: { name: 'Замок', type: 'PLACE', description: 'A castle', mentions: 5 },
+        };
+        const result = findCrossScriptCharacterKeys(['suzy'], graphNodes);
+        expect(result).toHaveLength(0);
+    });
+
+    it('tolerates Levenshtein distance ≤ 2 (Мина→mina vs mina)', () => {
+        const graphNodes = {
+            mina: { name: 'Mina', type: 'PERSON', description: 'Third char', mentions: 10 },
+            мина: { name: 'Мина', type: 'PERSON', description: 'Третий персонаж', mentions: 20 },
+        };
+        const result = findCrossScriptCharacterKeys(['mina'], graphNodes);
+        expect(result).toContain('мина');
     });
 });

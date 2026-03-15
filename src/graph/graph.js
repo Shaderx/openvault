@@ -24,6 +24,7 @@ import { yieldToMain } from '../utils/st-helpers.js';
 import { stemWord } from '../utils/stemmer.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
 import { countTokens } from '../utils/tokens.js';
+import { levenshteinDistance, transliterateCyrToLat } from '../utils/transliterate.js';
 
 /**
  * Resolve a raw entity name to its final graph key, accounting for merge redirects.
@@ -73,6 +74,39 @@ export function expandMainCharacterKeys(baseKeys, graphNodes) {
         }
     }
     return expanded;
+}
+
+/**
+ * Find graph node keys that are Cyrillic transliterations of known main character names.
+ * Used to expand mainCharacterKeys for community detection hairball prevention.
+ *
+ * Scans all PERSON-type nodes with Cyrillic names, transliterates them to Latin,
+ * and checks Levenshtein distance against each base key. Distance ≤ 2 is a match
+ * (handles minor transliteration variants like Сузи→Suzi vs Suzy).
+ *
+ * @param {string[]} baseKeys - Normalized English main character keys
+ * @param {Object} graphNodes - Graph nodes keyed by normalized name
+ * @returns {string[]} Cyrillic node keys matching main characters
+ */
+export function findCrossScriptCharacterKeys(baseKeys, graphNodes) {
+    const CYRILLIC_RE = /\p{Script=Cyrillic}/u;
+    const crossScriptKeys = [];
+
+    for (const [nodeKey, node] of Object.entries(graphNodes)) {
+        if (node.type !== 'PERSON') continue;
+        if (baseKeys.includes(nodeKey)) continue;
+        if (!CYRILLIC_RE.test(nodeKey)) continue;
+
+        const transliterated = transliterateCyrToLat(nodeKey);
+        for (const baseKey of baseKeys) {
+            if (levenshteinDistance(transliterated, baseKey) <= 2) {
+                crossScriptKeys.push(nodeKey);
+                break;
+            }
+        }
+    }
+
+    return crossScriptKeys;
 }
 
 /**
