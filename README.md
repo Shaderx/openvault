@@ -12,6 +12,8 @@ It runs entirely in the browser. No external databases, no cloud services, no se
 
 10.00 - || requests (optional)
 
+10.50 - fixed hairball cluster bug (ie 3 communities goes down to 1)
+
 ## What It Does
 
 During a conversation, OpenVault silently works in the background:
