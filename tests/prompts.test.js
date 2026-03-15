@@ -421,7 +421,7 @@ describe('defaultSettings preamble/prefill keys', () => {
         expect(defaultSettings.preambleLanguage).toBe('cn');
     });
 
-    it('has extractionPrefill defaulting to think_tag', () => {
+    it('has extractionPrefill defaulting to cn_compliance', () => {
         expect(defaultSettings.extractionPrefill).toBe('cn_compliance');
     });
 
