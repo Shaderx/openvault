@@ -10,6 +10,16 @@ import { SYSTEM_PREAMBLE_CN } from './preambles.js';
 import { MIRROR_LANGUAGE_RULES } from './rules.js';
 
 // =============================================================================
+// EXECUTION TRIGGER
+// =============================================================================
+
+/**
+ * Positive output format instruction placed at the end of every user prompt.
+ * Replaces negative "do not use tool calls" constraints with affirmative framing.
+ */
+export const EXECUTION_TRIGGER = `OUTPUT FORMAT: Write your reasoning in plain text inside <think> tags, then output a single raw JSON object immediately after. No tool calls, no function wrappers, no markdown code blocks.`;
+
+// =============================================================================
 // LANGUAGE RESOLUTION
 // =============================================================================
 
@@ -51,21 +61,39 @@ export function resolveLanguageInstruction(text, outputLanguage) {
 // =============================================================================
 
 /**
- * Assemble a system prompt with consistent section order:
- * <role> → <language_rules> → <output_schema> → <rules> → <examples>
+ * Assemble a system prompt with role and examples only.
+ * Schema, rules, and language constraints have moved to the user prompt
+ * (via assembleUserConstraints) to defeat recency bias in mid-tier models.
  *
  * @param {Object} opts
  * @param {string} opts.role - Role definition text
- * @param {string} opts.schema - Output schema text
- * @param {string} [opts.rules] - Task-specific rules (may contain sub-tags for complex prompts)
  * @param {Array} opts.examples - Few-shot example objects
  * @param {'auto'|'en'|'ru'} [opts.outputLanguage='auto'] - Language filter for examples
- * @returns {string} Complete system prompt
+ * @returns {string} System prompt (role + examples)
  */
-export function assembleSystemPrompt({ role, schema, rules, examples, outputLanguage = 'auto' }) {
-    const parts = [`<role>\n${role}\n</role>`, MIRROR_LANGUAGE_RULES, `<output_schema>\n${schema}\n</output_schema>`];
-    if (rules) parts.push(`<rules>\n${rules}\n</rules>`);
-    parts.push(`<examples>\n${formatExamples(examples, outputLanguage)}\n</examples>`);
+export function assembleSystemPrompt({ role, examples, outputLanguage = 'auto' }) {
+    const parts = [`<role>\n${role}\n</role>`];
+    const examplesStr = formatExamples(examples, outputLanguage);
+    if (examplesStr) parts.push(`<examples>\n${examplesStr}\n</examples>`);
+    return parts.join('\n\n');
+}
+
+/**
+ * Assemble the user-prompt constraint block (placed AFTER messages, before prefill).
+ * Orders: language_rules → dynamic instruction → task_rules → output_schema → execution_trigger.
+ *
+ * @param {Object} opts
+ * @param {string} opts.schema - Output schema text
+ * @param {string} [opts.rules] - Task-specific rules
+ * @param {string} [opts.languageInstruction=''] - Dynamic language instruction from resolveLanguageInstruction
+ * @returns {string} Constraint block to append to user prompt
+ */
+export function assembleUserConstraints({ schema, rules, languageInstruction = '' }) {
+    const parts = [MIRROR_LANGUAGE_RULES];
+    if (languageInstruction) parts.push(languageInstruction);
+    if (rules) parts.push(`<task_rules>\n${rules}\n</task_rules>`);
+    parts.push(`<output_schema>\n${schema}\n</output_schema>`);
+    parts.push(EXECUTION_TRIGGER);
     return parts.join('\n\n');
 }
 
