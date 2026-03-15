@@ -17,7 +17,7 @@ Step 4: Format JSON — Importance: 3 (notable discovery). Summary: factual, pre
     "summary": "Kira discovered a hidden chamber containing Ashwood's century-lost preservation flasks",
     "importance": 3,
     "characters_involved": ["Kira"],
-    "witnesses": [],
+    "witnesses": ["Kira"],
     "location": "Hidden chamber",
     "is_secret": false,
     "emotional_impact": { "Kira": "awe" },
@@ -39,7 +39,7 @@ Step 4: Format JSON — Importance: 3 (combat injury, weapon introduced).`,
     "summary": "A shadow beast injured Kira's shoulder with claw strikes before she drew her enchanted blade during combat",
     "importance": 3,
     "characters_involved": ["Kira", "Marcus"],
-    "witnesses": [],
+    "witnesses": ["Kira", "Marcus"],
     "location": null,
     "is_secret": false,
     "emotional_impact": { "Kira": "pain" },
@@ -60,7 +60,7 @@ Step 4: Format JSON — Importance: 4 (first sexual contact).`,
     "summary": "She undressed him and stroked his cock for the first time, referencing desire since the lake",
     "importance": 4,
     "characters_involved": ["Lila", "Marcus"],
-    "witnesses": [],
+    "witnesses": ["Lila", "Marcus"],
     "location": "Bedroom",
     "is_secret": false,
     "emotional_impact": { "Lila": "desire", "Marcus": "pleasure" },
@@ -82,7 +82,7 @@ Step 4: Format JSON — Importance: 4 (new power dynamic, consent system establi
     "summary": "She restrained him with leather cuffs and struck him with a riding crop after a green-light color check",
     "importance": 4,
     "characters_involved": ["Vera", "Daniel"],
-    "witnesses": [],
+    "witnesses": ["Vera", "Daniel"],
     "location": null,
     "is_secret": true,
     "emotional_impact": { "Vera": "control", "Daniel": "submission" },
@@ -92,16 +92,16 @@ Step 4: Format JSON — Importance: 4 (new power dynamic, consent system establi
     },
     {
         label: 'Dedup - progression extraction (EN/Edge)',
-        input: `The crop came down again — three, four, five. His thighs were crisscrossed with welts now. "Color?" she asked. "Green," he whispered, voice shaking.
+        input: `The crop came down again — three, four, five. Daniel's thighs were crisscrossed with welts now. "Color?" Vera asked. "Green," he whispered, voice shaking.
 She traced a welt with her fingertip, watching him shiver.
 
 <established_memories>
-[★★★★] She restrained him with leather cuffs and struck him with a riding crop after a green-light color check
+[★★★★] Vera restrained Daniel with leather cuffs and struck him with a riding crop after a green-light color check
 </established_memories>`,
-        thinking: `Step 1: Extract data — More crop strikes (3-5), welts accumulating, another color check, tracing welt with fingertip.
-Step 2: Cross-reference — Existing: "restrained with leather cuffs and struck with riding crop after green-light color check."
+        thinking: `Step 1: Extract data — More crop strikes (3-5), welts accumulating on Daniel, another color check, Vera tracing welt with fingertip.
+Step 2: Cross-reference — Existing: "Vera restrained Daniel with leather cuffs and struck with riding crop after green-light color check."
 Step 3: Check progression — Core action same (crop impact), but: voice shaking (emotional shift), welts accumulating (physical escalation). Genuine progression.
 Step 4: Format JSON — Importance: 2 (progression within established scene).`,
-        output: `{ "events": [{ "summary": "His thighs became crisscrossed with welts from repeated crop strikes; his voice shook during the color check", "importance": 2, "characters_involved": ["She", "He"], "witnesses": [], "location": null, "is_secret": false, "emotional_impact": { "He": "strained but consenting" }, "relationship_impact": {} }] }`,
+        output: `{ "events": [{ "summary": "Daniel's thighs became crisscrossed with welts from repeated crop strikes; his voice shook during the color check", "importance": 2, "characters_involved": ["Vera", "Daniel"], "witnesses": ["Vera", "Daniel"], "location": null, "is_secret": false, "emotional_impact": { "Daniel": "strained but consenting" }, "relationship_impact": {} }] }`,
     },
 ];

@@ -49,12 +49,20 @@ Rate each event from 1 (trivial) to 5 (critical):
 5 — Critical: Life-changing events — first "I love you", pregnancy discovery, major betrayal revealed, permanent relationship change, character death.
 </importance_scale>
 
+<field_instructions>
+characters_involved: Characters who actively participated in or were directly affected by this event (the main actors).
+
+witnesses: ALL characters who would know this event occurred — includes characters_involved PLUS any characters present in the scene, observing, or mentioned as being aware. In a 1-on-1 scene between User and Character, BOTH are witnesses. If you are unsure whether a character knows, include them — the system will filter appropriately.
+
+is_secret: Set to true ONLY if the event is explicitly hidden from the main character (e.g., user's internal thoughts, secret actions behind character's back, hidden plots). Most events are NOT secrets.
+</field_instructions>
+
 <thinking_process>
 Follow these steps IN ORDER. Write your work inside <think> tags BEFORE outputting the JSON:
 
 Step 1: List the specific actions, emotions, and facts in the new messages.
 Step 2: Check <established_memories>. Is any of this already recorded?
 Step 3: Apply dedup rules. If this is a continuation, look for the newest progression. If there is none at all, plan to output "events": [].
-Step 4: For genuinely NEW events, assign importance (1-5) and write a specific factual summary.
+Step 4: For genuinely NEW events, assign importance (1-5), write a specific factual summary, and identify ALL witnesses (not just participants).
 Step 5: Output the final JSON object with the "events" key.
 </thinking_process>`;

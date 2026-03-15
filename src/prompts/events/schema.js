@@ -10,7 +10,7 @@ export const EVENT_SCHEMA = `Output EXACTLY ONE JSON object with this structure:
       "summary": "8-25 word description of what happened, past tense",
       "importance": 3,
       "characters_involved": ["CharacterName"],
-      "witnesses": [],
+      "witnesses": ["CharacterName", "OtherCharacter"],
       "location": null,
       "is_secret": false,
       "emotional_impact": {"CharacterName": "emotion description"},
@@ -18,6 +18,11 @@ export const EVENT_SCHEMA = `Output EXACTLY ONE JSON object with this structure:
     }
   ]
 }
+
+FIELD DEFINITIONS:
+- characters_involved: Characters who actively participated or were directly affected (the main actors).
+- witnesses: ALL characters who would know this event occurred. MUST include characters_involved PLUS any present/observers. In a 1-on-1 scene, BOTH characters are witnesses.
+- is_secret: true ONLY for hidden actions (internal thoughts, secret plots). Most events are false.
 
 FORMAT RULES:
 1. Top level MUST be a JSON object { }, NEVER a bare array [ ].
