@@ -6,8 +6,31 @@
 
 import { CHARACTERS_KEY, MEMORIES_KEY } from './constants.js';
 import { getDeps } from './deps.js';
+import { normalizeKey } from './graph/graph.js';
 import { getOpenVaultData } from './utils/data.js';
 import { logDebug } from './utils/logging.js';
+
+/**
+ * Build an expanded set of lowercased names for POV matching.
+ * Includes canonical names plus any aliases discovered by graph entity merging,
+ * so cross-script variants (e.g. Cyrillic "Сузи" for Latin "Suzy") pass the filter.
+ * @param {string[]} povCharacters - Canonical POV character names
+ * @param {Object} graphNodes - Graph nodes keyed by normalizeKey'd name
+ * @returns {Set<string>} Lowercased name variants to match against
+ */
+function _expandPOVNames(povCharacters, graphNodes) {
+    const names = new Set(povCharacters.map((c) => c.toLowerCase()));
+    for (const charName of povCharacters) {
+        const key = normalizeKey(charName);
+        const node = graphNodes[key];
+        if (node?.aliases) {
+            for (const alias of node.aliases) {
+                names.add(alias.toLowerCase());
+            }
+        }
+    }
+    return names;
+}
 
 /**
  * Filter memories by POV accessibility
@@ -33,12 +56,12 @@ export function filterMemoriesByPOV(memories, povCharacters, data) {
     }
 
     // Filter memories by POV - memories that ANY of the POV characters know
-    const povCharactersLower = povCharacters.map((c) => c.toLowerCase());
+    const povNamesLower = _expandPOVNames(povCharacters, data.graph?.nodes || {});
     return memories.filter((m) => {
-        // Any POV character was a witness (case-insensitive)
-        if (m.witnesses?.some((w) => povCharactersLower.includes(w.toLowerCase()))) return true;
-        // Events that any POV character is involved in (participants know their own secrets)
-        if (m.characters_involved?.some((c) => povCharactersLower.includes(c.toLowerCase()))) return true;
+        // Any POV character (or alias) was a witness (case-insensitive)
+        if (m.witnesses?.some((w) => povNamesLower.has(w.toLowerCase()))) return true;
+        // Events that any POV character (or alias) is involved in
+        if (m.characters_involved?.some((c) => povNamesLower.has(c.toLowerCase()))) return true;
         // Explicitly in any POV character's known events
         if (knownEventIds.has(m.id)) return true;
         return false;

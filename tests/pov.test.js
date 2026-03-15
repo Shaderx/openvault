@@ -149,6 +149,52 @@ describe('pov', () => {
             const result = filterMemoriesByPOV(memories, ['Alice'], { [CHARACTERS_KEY]: {} });
             expect(result).toHaveLength(1);
         });
+
+        it('matches witness aliases from graph nodes (cross-script names)', () => {
+            const memories = [
+                { id: '1', witnesses: ['\u0421\u0443\u0437\u0438'], characters_involved: [] },
+                { id: '2', witnesses: ['Unknown'], characters_involved: [] },
+            ];
+            const data = {
+                [CHARACTERS_KEY]: {},
+                graph: {
+                    nodes: {
+                        suzy: { name: 'Suzy', aliases: ['\u0421\u0443\u0437\u0438'] },
+                    },
+                },
+            };
+            const result = filterMemoriesByPOV(memories, ['Suzy'], data);
+            expect(result).toHaveLength(1);
+            expect(result[0].id).toBe('1');
+        });
+
+        it('matches characters_involved aliases from graph nodes', () => {
+            const memories = [{ id: '1', witnesses: [], characters_involved: ['\u0412\u043e\u0432\u0430'] }];
+            const data = {
+                [CHARACTERS_KEY]: {},
+                graph: {
+                    nodes: {
+                        vova: { name: 'Vova', aliases: ['\u0412\u043e\u0432\u0430'] },
+                    },
+                },
+            };
+            const result = filterMemoriesByPOV(memories, ['Vova'], data);
+            expect(result).toHaveLength(1);
+        });
+
+        it('falls back to exact matching when graph has no aliases', () => {
+            const memories = [
+                { id: '1', witnesses: ['Alice'] },
+                { id: '2', witnesses: ['\u0410\u043b\u0438\u0441\u0430'] },
+            ];
+            const data = {
+                [CHARACTERS_KEY]: {},
+                graph: { nodes: { alice: { name: 'Alice' } } },
+            };
+            const result = filterMemoriesByPOV(memories, ['Alice'], data);
+            expect(result).toHaveLength(1);
+            expect(result[0].id).toBe('1');
+        });
     });
 
     describe('getActiveCharacters', () => {
