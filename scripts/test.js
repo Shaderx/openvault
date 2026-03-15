@@ -22,4 +22,4 @@ for (const cmd of commands) {
     });
 }
 
-console.log('OK');
+console.log('All tests pass');
