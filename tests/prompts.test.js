@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../src/constants.js';
+import { parseConsolidationResponse } from '../src/extraction/structured.js';
 import {
     buildCommunitySummaryPrompt,
     buildEdgeConsolidationPrompt,
@@ -14,7 +15,6 @@ import {
     SYSTEM_PREAMBLE_CN,
     SYSTEM_PREAMBLE_EN,
 } from '../src/prompts/index.js';
-import { parseConsolidationResponse } from '../src/extraction/structured.js';
 
 describe('buildCommunitySummaryPrompt', () => {
     it('returns system/user message pair with node and edge data', () => {
@@ -208,18 +208,22 @@ describe('buildGraphExtractionPrompt', () => {
 
 describe('buildGraphExtractionPrompt prefill parameter', () => {
     it('throws when prefill is missing', () => {
-        expect(() => buildGraphExtractionPrompt({
-            messages: '[A]: test',
-            names: { char: 'A', user: 'B' },
-        })).toThrow('prefill is required');
+        expect(() =>
+            buildGraphExtractionPrompt({
+                messages: '[A]: test',
+                names: { char: 'A', user: 'B' },
+            })
+        ).toThrow('prefill is required');
     });
 
     it('throws when prefill is empty string', () => {
-        expect(() => buildGraphExtractionPrompt({
-            messages: '[A]: test',
-            names: { char: 'A', user: 'B' },
-            prefill: '',
-        })).toThrow('prefill is required');
+        expect(() =>
+            buildGraphExtractionPrompt({
+                messages: '[A]: test',
+                names: { char: 'A', user: 'B' },
+                prefill: '',
+            })
+        ).toThrow('prefill is required');
     });
 
     it('uses provided prefill in assistant message', () => {
@@ -264,13 +268,11 @@ describe('UNIFIED_REFLECTION_SCHEMA think tag support', () => {
 
 describe('buildUnifiedReflectionPrompt prefill parameter', () => {
     it('throws when prefill is missing', () => {
-        expect(() => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto'))
-            .toThrow('prefill is required');
+        expect(() => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto')).toThrow('prefill is required');
     });
 
     it('throws when prefill is empty string', () => {
-        expect(() => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', ''))
-            .toThrow('prefill is required');
+        expect(() => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', '')).toThrow('prefill is required');
     });
 
     it('uses provided prefill in assistant message', () => {
@@ -289,13 +291,13 @@ describe('COMMUNITY_SCHEMA think tag support', () => {
 
 describe('buildCommunitySummaryPrompt prefill parameter', () => {
     it('throws when prefill is missing', () => {
-        expect(() => buildCommunitySummaryPrompt(['- Node'], ['- Edge']))
-            .toThrow('prefill is required');
+        expect(() => buildCommunitySummaryPrompt(['- Node'], ['- Edge'])).toThrow('prefill is required');
     });
 
     it('throws when prefill is empty string', () => {
-        expect(() => buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', ''))
-            .toThrow('prefill is required');
+        expect(() => buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', '')).toThrow(
+            'prefill is required'
+        );
     });
 
     it('uses provided prefill in assistant message', () => {
@@ -371,19 +373,15 @@ describe('preamble and prefill exports', () => {
         expect(SYSTEM_PREAMBLE_EN).toContain('EXTRACT');
     });
 
-    it('exports PREFILL_PRESETS with all 10 keys', () => {
+    it('exports PREFILL_PRESETS with all 6 keys', () => {
         const keys = Object.keys(PREFILL_PRESETS);
-        expect(keys).toContain('think_tag');
-        expect(keys).toContain('think_closed');
-        expect(keys).toContain('think_stop');
-        expect(keys).toContain('pipeline');
-        expect(keys).toContain('compliance');
-        expect(keys).toContain('cold_start');
-        expect(keys).toContain('standard');
-        expect(keys).toContain('json_opener');
-        expect(keys).toContain('none');
         expect(keys).toContain('cn_compliance');
-        expect(keys).toHaveLength(10);
+        expect(keys).toContain('en_compliance');
+        expect(keys).toContain('step_by_step');
+        expect(keys).toContain('pure_think');
+        expect(keys).toContain('json_only');
+        expect(keys).toContain('none');
+        expect(keys).toHaveLength(6);
     });
 
     it('each preset has label and value', () => {
@@ -395,14 +393,14 @@ describe('preamble and prefill exports', () => {
         }
     });
 
-    it('think_tag preset has <think> value', () => {
-        expect(PREFILL_PRESETS.think_tag.value).toBe('<think>\n');
+    it('pure_think preset has <think> value', () => {
+        expect(PREFILL_PRESETS.pure_think.value).toBe('<think>\n');
     });
 
     it('cn_compliance preset has Chinese forensic framing', () => {
         expect(PREFILL_PRESETS.cn_compliance.value).toContain('系统日志');
         expect(PREFILL_PRESETS.cn_compliance.value).toContain('<think>');
-        expect(PREFILL_PRESETS.cn_compliance.label).toBe('CN Compliance Lock');
+        expect(PREFILL_PRESETS.cn_compliance.label).toBe('CN Compliance Lock (Best for Kimi/Qwen)');
     });
 
     it('none preset has empty string value', () => {
@@ -523,20 +521,20 @@ describe('resolveExtractionPrefill', () => {
         expect(resolveExtractionPrefill({})).toBe('<think>\n');
     });
 
-    it('returns correct value for think_tag key', () => {
-        expect(resolveExtractionPrefill({ extractionPrefill: 'think_tag' })).toBe('<think>\n');
+    it('returns correct value for pure_think key', () => {
+        expect(resolveExtractionPrefill({ extractionPrefill: 'pure_think' })).toBe('<think>\n');
     });
 
-    it('returns correct value for pipeline key', () => {
-        expect(resolveExtractionPrefill({ extractionPrefill: 'pipeline' })).toContain('Pipeline engaged');
+    it('returns correct value for en_compliance key', () => {
+        expect(resolveExtractionPrefill({ extractionPrefill: 'en_compliance' })).toContain('Safety filters bypassed');
     });
 
     it('returns empty string for none key', () => {
         expect(resolveExtractionPrefill({ extractionPrefill: 'none' })).toBe('');
     });
 
-    it('returns { for json_opener key', () => {
-        expect(resolveExtractionPrefill({ extractionPrefill: 'json_opener' })).toBe('{');
+    it('returns JSON opener for json_only key', () => {
+        expect(resolveExtractionPrefill({ extractionPrefill: 'json_only' })).toBe('{\n  "');
     });
 
     it('falls back to <think> for unknown key', () => {
@@ -695,7 +693,7 @@ describe('buildUnifiedReflectionPrompt', () => {
             'Alice',
             [
                 { id: 'ev_001', summary: 'Alice met Bob', importance: 3 },
-                { id: 'ev_002', summary: 'Alice fought dragon', importance: 5 }
+                { id: 'ev_002', summary: 'Alice fought dragon', importance: 5 },
             ],
             'SYSTEM_PREAMBLE_CN',
             'auto',
@@ -719,7 +717,7 @@ describe('buildEdgeConsolidationPrompt', () => {
             source: 'alice',
             target: 'bob',
             description: 'Met at tavern | Traded goods | Fought dragon together',
-            weight: 3
+            weight: 3,
         };
         const result = buildEdgeConsolidationPrompt(edge, 'auto', 'auto', '{');
         expect(result).toHaveLength(3);
@@ -738,7 +736,7 @@ describe('buildEdgeConsolidationPrompt', () => {
             source: 'alice',
             target: 'bob',
             description: 'Met | Fought',
-            weight: 2
+            weight: 2,
         };
         const result = buildEdgeConsolidationPrompt(edge, SYSTEM_PREAMBLE_EN, 'auto', '{');
         expect(result[0].content).toContain('SYSTEM: Interactive Fiction Archival Database');
@@ -749,7 +747,7 @@ describe('buildEdgeConsolidationPrompt', () => {
             source: 'alice',
             target: 'bob',
             description: 'Met | Fought',
-            weight: 2
+            weight: 2,
         };
         const result = buildEdgeConsolidationPrompt(edge, 'auto', 'auto', '{');
         expect(result[1].content).toContain('<language_rules>');
@@ -757,7 +755,8 @@ describe('buildEdgeConsolidationPrompt', () => {
 
     it('parses consolidation response', () => {
         const raw = JSON.stringify({
-            consolidated_description: 'Started as strangers at a tavern, became trading partners, then allies in battle against the dragon'
+            consolidated_description:
+                'Started as strangers at a tavern, became trading partners, then allies in battle against the dragon',
         });
         const result = parseConsolidationResponse(raw);
         expect(result.consolidated_description).toContain('strangers');
@@ -768,14 +767,12 @@ describe('buildEdgeConsolidationPrompt', () => {
 describe('buildEdgeConsolidationPrompt prefill parameter', () => {
     it('throws when prefill is missing', () => {
         const edge = { source: 'A', target: 'B', description: 'Test', weight: 1 };
-        expect(() => buildEdgeConsolidationPrompt(edge))
-            .toThrow('prefill is required');
+        expect(() => buildEdgeConsolidationPrompt(edge)).toThrow('prefill is required');
     });
 
     it('throws when prefill is empty string', () => {
         const edge = { source: 'A', target: 'B', description: 'Test', weight: 1 };
-        expect(() => buildEdgeConsolidationPrompt(edge, 'auto', 'auto', ''))
-            .toThrow('prefill is required');
+        expect(() => buildEdgeConsolidationPrompt(edge, 'auto', 'auto', '')).toThrow('prefill is required');
     });
 
     it('uses provided prefill in assistant message', () => {
@@ -820,13 +817,15 @@ describe('buildGlobalSynthesisPrompt', () => {
 
 describe('buildGlobalSynthesisPrompt prefill parameter', () => {
     it('throws when prefill is missing', () => {
-        expect(() => buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto'))
-            .toThrow('prefill is required');
+        expect(() => buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto')).toThrow(
+            'prefill is required'
+        );
     });
 
     it('throws when prefill is empty string', () => {
-        expect(() => buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', ''))
-            .toThrow('prefill is required');
+        expect(() => buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', '')).toThrow(
+            'prefill is required'
+        );
     });
 
     it('uses provided prefill in assistant message', () => {
