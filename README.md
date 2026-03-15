@@ -45,6 +45,8 @@ OpenVault implements ideas from two papers:
 4. Reload SillyTavern.
 5. You should also pick one of "stable_XXX" branches when installing
 
+<img width="50%" alt="Screenshot 2026-03-08 160145" src="https://i.vgy.me/u1qEwx.png" />
+
 ## Setup
 
 1. Open the **OpenVault** panel in the Extensions tab.
