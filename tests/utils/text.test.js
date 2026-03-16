@@ -279,17 +279,42 @@ describe('text', () => {
     });
 
     describe('getMemoryPosition (moved from formatting.js)', () => {
+        const POSITION_CALC_CASES = [
+            { messageIds: [100, 200, 300], expected: 200, desc: 'simple average' },
+            { messageIds: [50, 150], expected: 100, desc: 'two values average' },
+            { messageIds: [500], expected: 500, desc: 'single value' },
+            { messageIds: [], expected: 0, desc: 'empty message_ids defaults to 0' },
+            { messageIds: [10, 20, 30, 40], expected: 25, desc: 'multiple values average' },
+            { messageIds: [1000, 2000, 3000, 4000, 5000], expected: 3000, desc: 'five values average' },
+        ];
+
+        it.each(POSITION_CALC_CASES)(
+            'calculates $desc',
+            async ({ messageIds, expected }) => {
+                const { getMemoryPosition } = await import('../../src/utils/text.js');
+                const memory = { message_ids: messageIds };
+                expect(getMemoryPosition(memory)).toBe(expected);
+            }
+        );
+
         it('should be exported from text.js', async () => {
             const { getMemoryPosition } = await import('../../src/utils/text.js');
             expect(typeof getMemoryPosition).toBe('function');
         });
 
-        it('should calculate position from message_ids', async () => {
-            const { getMemoryPosition } = await import('../../src/utils/text.js');
+        const SEQUENCE_FALLBACK_CASES = [
+            { sequence: 5000, expected: 5, desc: 'sequence divided by 1000' },
+            { sequence: 12345, expected: 12, desc: 'sequence floor division' },
+            { sequence: 999, expected: 0, desc: 'sequence less than 1000' },
+        ];
 
-            const memory = { message_ids: [100, 200, 300] };
-            const position = getMemoryPosition(memory);
-            expect(position).toBe(200); // Average
-        });
+        it.each(SEQUENCE_FALLBACK_CASES)(
+            'falls back to sequence: $desc',
+            async ({ sequence, expected }) => {
+                const { getMemoryPosition } = await import('../../src/utils/text.js');
+                const memory = { sequence };
+                expect(getMemoryPosition(memory)).toBe(expected);
+            }
+        );
     });
 });
