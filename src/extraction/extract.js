@@ -68,7 +68,7 @@ import {
     resolveOutputLanguage,
 } from '../prompts/index.js';
 import { accumulateImportance, generateReflections, shouldReflect } from '../reflection/reflect.js';
-import { cosineSimilarity, tokenize } from '../retrieval/math.js';
+import { cosineSimilarity, tokenize, calculateIDF } from '../retrieval/math.js';
 import { clearAllLocks } from '../state.js';
 import { refreshAllUI } from '../ui/render.js';
 import { setStatus } from '../ui/status.js';
@@ -260,6 +260,40 @@ export function cleanupCharacterStates(data, validCharNames = []) {
     if (removedEntries.length > 0) {
         logDebug(`Cleaned up ${removedEntries.length} invalid character states: ${removedEntries.join(', ')}`);
     }
+}
+
+/**
+ * Calculate and cache IDF map for BM25 scoring.
+ * Called after Phase 1 commit when memories are added.
+ * IDF only changes when corpus changes (new memories extracted), not during retrieval.
+ * @param {Object} data - OpenVault data object
+ * @param {Object} graphNodes - Graph nodes keyed by normalized name
+ */
+export function updateIDFCache(data, graphNodes = {}) {
+    const memories = data[MEMORIES_KEY] || [];
+    if (memories.length === 0) return;
+
+    // Build tokenized corpus from memory tokens
+    const tokenizedMemories = new Map();
+    for (let i = 0; i < memories.length; i++) {
+        const m = memories[i];
+        // Use pre-computed tokens if available, otherwise tokenize summary
+        tokenizedMemories.set(i, m.tokens || tokenize(m.summary || ''));
+    }
+
+    // Calculate IDF from memories only (graph descriptions don't have tokens stored)
+    const { idfMap, avgDL } = calculateIDF(memories, tokenizedMemories);
+
+    // Convert Map to plain object for JSON serialization
+    const idfCache = {
+        idfMap: Object.fromEntries(idfMap),
+        avgDL,
+        memoryCount: memories.length,
+        timestamp: Date.now(),
+    };
+
+    data.idf_cache = idfCache;
+    logDebug(`IDF cache updated: ${memories.length} memories, avgDL=${avgDL.toFixed(2)}`);
 }
 
 /**
@@ -634,6 +668,9 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         data[LAST_PROCESSED_KEY] = Math.max(data[LAST_PROCESSED_KEY] || -1, maxId);
         logDebug(`Phase 1 complete: ${events.length} events, ${processedIds.length} messages processed`);
 
+        // Update IDF cache after Phase 1 commit — corpus has changed
+        updateIDFCache(data, data.graph?.nodes);
+
         // Intermediate save — Phase 1 data is now persisted
         const phase1Saved = await saveOpenVaultData(targetChatId);
         if (!phase1Saved && targetChatId) {
@@ -738,6 +775,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             }
 
             // Final save — Phase 2 enrichment persisted
+            // Update IDF cache before save — reflections/communities may have been added
+            updateIDFCache(data, data.graph?.nodes);
             await saveOpenVaultData(targetChatId);
         } catch (phase2Error) {
             // AbortError must propagate — it's not a Phase 2 failure, it's a session cancel
@@ -862,6 +901,8 @@ export async function runPhase2Enrichment(data, settings, targetChatId) {
         }
 
         // Final save
+        // Update IDF cache before save — reflections may have been added
+        updateIDFCache(data, data.graph?.nodes);
         await saveOpenVaultData(targetChatId);
         logInfo('runPhase2Enrichment: Complete');
     } catch (error) {

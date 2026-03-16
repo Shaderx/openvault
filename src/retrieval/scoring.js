@@ -49,6 +49,8 @@ export function getScoringParams() {
  * @param {number} limit - Maximum results
  * @param {string|string[]} queryTokens - Query text or pre-tokenized array for BM25
  * @param {string[]} [characterNames] - Main character names to filter from query tokens
+ * @param {Object[]} [hiddenMemories] - Hidden memories for expanded corpus IDF
+ * @param {Object|null} [idfCache] - Pre-computed IDF cache
  * @returns {Promise<{memories: Object[], scoredResults: Array<{memory: Object, score: number, breakdown: Object}>}>}
  */
 async function scoreMemoriesDirect(
@@ -58,7 +60,8 @@ async function scoreMemoriesDirect(
     limit,
     queryTokens,
     characterNames = [],
-    hiddenMemories = [] // NEW: Optional parameter
+    hiddenMemories = [],
+    idfCache = null
 ) {
     const { constants, settings } = getScoringParams();
     const scored = await scoreMemories(
@@ -69,7 +72,8 @@ async function scoreMemoriesDirect(
         settings,
         queryTokens,
         characterNames,
-        hiddenMemories // NEW: Pass through
+        hiddenMemories,
+        idfCache
     );
     const topScored = scored.slice(0, limit);
     return {
@@ -87,9 +91,11 @@ async function scoreMemoriesDirect(
  * @param {string[]} ctx.activeCharacters - List of active characters for entity extraction
  * @param {number} ctx.chatLength - Current chat length (for distance calculation)
  * @param {number} limit - Maximum memories to return
+ * @param {Object[]} [allHiddenMemories] - All hidden memories for IDF corpus
+ * @param {Object|null} [idfCache] - Pre-computed IDF cache
  * @returns {Promise<{memories: Object[], scoredResults: Array<{memory: Object, score: number, breakdown: Object}>}>}
  */
-async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemories = []) {
+async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemories = [], idfCache = null) {
     const { recentContext, userMessages, activeCharacters, chatLength } = ctx;
 
     // Extract context from recent messages for enriched queries
@@ -147,7 +153,8 @@ async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemor
         limit,
         bm25Tokens,
         activeCharacters || [],
-        allHiddenMemories // NEW: Pass hidden memories for IDF
+        allHiddenMemories,
+        idfCache
     );
 }
 
@@ -242,7 +249,8 @@ export async function selectRelevantMemories(memories, ctx) {
         activeMemories,
         ctx,
         1000,
-        hiddenMemories
+        hiddenMemories,
+        ctx.idfCache || null
     );
     const finalResults = selectMemoriesWithSoftBalance(scoredResults, finalTokens, ctx.chatLength);
     const selectedIds = new Set(finalResults.map((m) => m.id));

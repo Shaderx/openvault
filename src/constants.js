@@ -115,6 +115,10 @@ export const GENERATION_LOCK_TIMEOUT_MS = 120000; // 2 minutes safety timeout
 // Pagination constants
 export const MEMORIES_PER_PAGE = 20;
 
+// Two-pass retrieval: maximum memories to calculate vector similarity on
+// After fast-pass (Base + BM25), only top N get expensive cosine similarity
+export const VECTOR_PASS_LIMIT = 200;
+
 // Query context extraction defaults
 export const QUERY_CONTEXT_DEFAULTS = {
     entityWindowSize: 10, // messages to scan for entities

@@ -61,11 +61,13 @@ Worker (`src/extraction/worker.js`) is single-instance, interruptible (checks `w
 ## 3. CORE SYSTEMS SAUCE
 
 **Retrieval Math (Alpha-Blend)**: `Score = (Base + (Alpha * VectorBonus) + ((1 - Alpha) * BM25Bonus)) × FrequencyFactor`
+- **Two-Pass Scoring**: Fast pass scores all memories with Base + BM25 only (cheap). Top `VECTOR_PASS_LIMIT` (200) candidates proceed to slow pass with cosine similarity (expensive typed-array math). Reduces vector calculations 10x with 2000 memories.
 - *Base (Forgetfulness)*: `Importance * e^(-Lambda * Distance)`. Lambda dampened by `hitDamping = max(0.5, 1/(1 + retrieval_hits × 0.1))` — frequently retrieved memories decay up to 50% slower. Imp 5 has soft floor of 1.0. Reflections > 750 msgs decay linearly to 0.25x. **Level Divisor**: Higher-level reflections decay 2x slower per level (`reflectionLevelMultiplier`).
 - *Frequency Factor*: `1 + ln(mentions) × 0.05`. Sublinear boost from event repetitions (dedup increments `mentions`). 10 mentions ≈ +11.5%, 50 mentions ≈ +20%.
 - *BM25*: IDF-aware using **expanded corpus** (candidates + hidden memories) to prevent common terms from getting artificially high scores. Dynamic Character Stopwords (names filtered out to prevent score inflation). **Four-Token-Tier System**: Layer 0 (exact phrase tokens, 10x via `hasExactPhrase`), Layer 1 (entities, 5x), Layer 2 (corpus-grounded, 3x), Layer 3 (non-grounded, 2x). **Event Gate**: BM25 skipped when no events in candidates (returns empty token array).
 
 **BM25 Token Construction** (`buildBM25Tokens` + `buildCorpusVocab`):
+- **IDF Caching**: IDF map calculated once during Phase 1 commit (`updateIDFCache()` in `extract.js`) and stored in `chatMetadata.openvault.idf_cache`. Retrieval loads pre-computed map for O(1) lookup instead of O(N) recalculation.
 - **Layer 0**: Multi-word entities (contain space) — added ONCE as exact phrase tokens. Boosted at scoring time via `hasExactPhrase()` check (`exactPhraseBoostWeight` = 10x).
 - **Layer 1**: Named entities from graph — stemmed, repeated at full boost (`entityBoostWeight` = 5x).
 - **Layer 2**: User-message stems that exist in corpus vocab — 60% boost (`ceil(entityBoostWeight * 0.6)` = 3x). High-signal tokens that match memory/graph content.

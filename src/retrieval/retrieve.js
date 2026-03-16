@@ -116,6 +116,7 @@ export function buildRetrievalContext(opts = {}) {
         graphNodes: data?.graph?.nodes || {},
         graphEdges: data?.graph?.edges || {},
         allAvailableMemories: data?.[MEMORIES_KEY] || [], // Full memory list for IDF
+        idfCache: data?.idf_cache || null, // Pre-computed IDF cache
     };
 }
 

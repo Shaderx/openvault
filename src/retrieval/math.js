@@ -5,6 +5,7 @@
  * Extracted for testability and reuse in both main thread and worker.
  */
 
+import { VECTOR_PASS_LIMIT } from '../constants.js';
 import { record } from '../perf/store.js';
 import { getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { yieldToMain } from '../utils/st-helpers.js';
@@ -312,6 +313,8 @@ export function calculateScore(memory, contextEmbedding, chatLength, constants, 
  * @param {Object} settings - Scoring settings
  * @param {string|string[]} [queryTokens] - Query text or pre-tokenized array for BM25 scoring
  * @param {string[]} [characterNames] - Main character names to filter from query tokens (dynamic stopwords)
+ * @param {Object[]} [hiddenMemories] - Hidden memories for IDF corpus expansion
+ * @param {Object|null} [idfCache] - Pre-computed IDF cache from chatMetadata.openvault.idf_cache
  * @returns {Promise<Array<{memory: Object, score: number, breakdown: Object}>>} Scored and sorted memories
  */
 export async function scoreMemories(
@@ -322,7 +325,8 @@ export async function scoreMemories(
     settings,
     queryTokens,
     characterNames = [],
-    hiddenMemories = [] // NEW: Optional hidden memories for IDF
+    hiddenMemories = [],
+    idfCache = null
 ) {
     const start = performance.now();
 
@@ -347,25 +351,40 @@ export async function scoreMemories(
         }
 
         if (tokens.length > 0) {
-            // Full IDF setup: tokenization + calculation (timed)
-            const idfStart = performance.now();
+            // Check if we have a valid cached IDF map
+            const totalCorpusSize = memories.length + hiddenMemories.length;
+            const cacheValid = idfCache &&
+                idfCache.memoryCount === totalCorpusSize &&
+                idfCache.idfMap &&
+                typeof idfCache.avgDL === 'number';
 
-            // Tokenize ALL memories in corpus (candidates + hidden)
-            const corpusMemoryTokens = idfCorpus.map((m) => m.tokens || tokenize(m.summary || ''));
+            if (cacheValid) {
+                // Use cached IDF map - O(1) lookup instead of O(N) calculation
+                idfMap = new Map(Object.entries(idfCache.idfMap));
+                avgDL = idfCache.avgDL;
+                // Use memory tokens directly (already tokenized at extraction time)
+                memoryTokensList = memories.map((m) => m.tokens || tokenize(m.summary || ''));
+            } else {
+                // Full IDF setup: tokenization + calculation (timed)
+                const idfStart = performance.now();
 
-            // Calculate IDF from expanded corpus
-            const tokenizedMap = new Map(corpusMemoryTokens.map((t, i) => [i, t]));
-            const idfData = calculateIDF(idfCorpus, tokenizedMap);
+                // Tokenize ALL memories in corpus (candidates + hidden)
+                const corpusMemoryTokens = idfCorpus.map((m) => m.tokens || tokenize(m.summary || ''));
 
-            record('idf_calculation', performance.now() - idfStart, `${idfCorpus.length} docs`);
-            idfMap = idfData.idfMap;
-            avgDL = idfData.avgDL;
+                // Calculate IDF from expanded corpus
+                const tokenizedMap = new Map(corpusMemoryTokens.map((t, i) => [i, t]));
+                const idfData = calculateIDF(idfCorpus, tokenizedMap);
 
-            // Only score candidate memories (not hidden ones)
-            memoryTokensList = corpusMemoryTokens.slice(0, memories.length);
+                record('idf_calculation', performance.now() - idfStart, `${idfCorpus.length} docs`);
+                idfMap = idfData.idfMap;
+                avgDL = idfData.avgDL;
+
+                // Only score candidate memories (not hidden ones)
+                memoryTokensList = corpusMemoryTokens.slice(0, memories.length);
+            }
 
             // IDF-aware query TF adjustment (existing)
-            tokens = adjustQueryTokensByIDF(tokens, idfMap, idfCorpus.length);
+            tokens = adjustQueryTokensByIDF(tokens, idfMap, totalCorpusSize);
         }
     }
 
@@ -403,25 +422,92 @@ export async function scoreMemories(
     const maxBM25 = Math.max(...rawBM25Scores, 1e-9);
     const normalizedBM25Scores = rawBM25Scores.map((s) => s / maxBM25);
 
-    const scored = [];
+    // ===== TWO-PASS RETRIEVAL OPTIMIZATION =====
+    // Fast Pass: Score all memories with Base + BM25 only (no embeddings)
+    // This avoids heavy typed-array cosine similarity on every memory
+    const fastPassScores = [];
     for (let i = 0; i < memories.length; i++) {
         if (i % 250 === 0 && i > 0) await yieldToMain();
         const memory = memories[i];
+
+        // Calculate Base + BM25 only (skip vector similarity)
         const breakdown = calculateScore(
             memory,
-            contextEmbedding,
+            null, // No context embedding
             chatLength,
             constants,
             settings,
             normalizedBM25Scores[i]
         );
+        fastPassScores.push({ memory, score: breakdown.total, breakdown, index: i });
+    }
+
+    // Sort by fast-pass score and take top N for vector scoring
+    fastPassScores.sort((a, b) => b.score - a.score);
+    const topCandidates = fastPassScores.slice(0, VECTOR_PASS_LIMIT);
+    const candidateSet = new Set(topCandidates.map((c) => c.memory.id));
+
+    // Slow Pass: Calculate vector similarity only on top candidates
+    const vectorScores = new Map();
+    if (contextEmbedding) {
+        for (let i = 0; i < topCandidates.length; i++) {
+            if (i % 50 === 0 && i > 0) await yieldToMain();
+            const candidate = topCandidates[i];
+            const memory = candidate.memory;
+
+            if (hasEmbedding(memory)) {
+                const similarity = cosineSimilarity(contextEmbedding, getEmbedding(memory));
+                vectorScores.set(memory.id, similarity);
+            }
+        }
+    }
+
+    // Final scoring: Re-calculate with vector similarity for top candidates
+    const scored = [];
+    for (let i = 0; i < memories.length; i++) {
+        const memory = memories[i];
+        const isTopCandidate = candidateSet.has(memory.id);
+
+        // Use cached vector similarity if available, null otherwise
+        const memoryContextEmbedding = isTopCandidate && vectorScores.has(memory.id)
+            ? contextEmbedding
+            : null;
+
+        // For top candidates, we need to pass the actual embedding and similarity
+        // For others, skip vector scoring entirely
+        let vectorSimilarity = null;
+        if (isTopCandidate && vectorScores.has(memory.id)) {
+            vectorSimilarity = vectorScores.get(memory.id);
+        }
+
+        const breakdown = calculateScore(
+            memory,
+            memoryContextEmbedding,
+            chatLength,
+            constants,
+            settings,
+            normalizedBM25Scores[i]
+        );
+
+        // If we have a pre-computed vector similarity, override the vectorBonus
+        if (vectorSimilarity !== null) {
+            const threshold = settings.vectorSimilarityThreshold;
+            if (vectorSimilarity > threshold) {
+                const normalizedSim = (vectorSimilarity - threshold) / (1 - threshold);
+                breakdown.vectorBonus = settings.alpha * settings.combinedBoostWeight * normalizedSim;
+                breakdown.vectorSimilarity = vectorSimilarity;
+                breakdown.total = breakdown.baseAfterFloor + breakdown.vectorBonus + breakdown.bm25Bonus;
+                breakdown.total *= breakdown.frequencyFactor;
+            }
+        }
+
         scored.push({ memory, score: breakdown.total, breakdown });
     }
 
     scored.sort((a, b) => b.score - a.score);
 
     const duration = performance.now() - start;
-    record('memory_scoring', duration, `${memories.length} memories`);
+    record('memory_scoring', duration, `${memories.length} memories (2-pass: ${topCandidates.length} vector)`);
 
     return scored;
 }

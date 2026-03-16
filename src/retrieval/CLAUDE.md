@@ -15,6 +15,14 @@ Selects optimal memories (events + reflections) and community summaries, then fo
 ## SCORING MATH (Alpha-Blend in `math.js`)
 **Formula**: `Total = Base + (Alpha * VectorBonus) + ((1 - Alpha) * BM25Bonus)`
 
+### Two-Pass Retrieval Optimization
+To keep retrieval fast with large memory corpora (2000+ memories), scoring uses a two-pass approach:
+1. **Fast Pass**: Calculate `Base + BM25` for ALL memories (no embeddings). This is O(N) with cheap arithmetic.
+2. **Cutoff**: Take top `VECTOR_PASS_LIMIT` (200) candidates from fast pass.
+3. **Slow Pass**: Calculate expensive `cosineSimilarity` (typed-array dot product) ONLY on the 200 candidates.
+
+**Performance**: With 2000 memories, vector calculations drop from 2000 to 200 (10x reduction). Critical path stays under 100ms.
+
 - **Forgetfulness Curve (Base)**: Exponential decay by narrative distance.
   - Higher importance = slower decay. Importance 5 has a soft floor of `1.0`.
   - *Reflection Decay*: Level-aware decay. Reflections older than 750 messages suffer linear penalty (floor 0.25x). **Level Divisor**: Each level above 1 decays 2x slower (`reflectionLevelMultiplier=2.0`). Level 2 reflections at 1000 msgs retain ~91% vs ~83% for level 1.

@@ -18,7 +18,8 @@ Background pipeline converting raw messages -> structured JSON -> Deduplicated M
 4. **Stage B (Graph)**: Contextualized by Stage A. Uses same resolved prefill. Returns `GraphExtractionSchema` (Entities + Relationships). **Schema enforces `.max(5)`** on both arrays — only most significant updates per batch.
 5. **Graph Upsert**: `mergeOrInsertEntity()` (Semantic + Token overlap) and `upsertRelationship()`.
 6. **Commit**: Pre-computes BM25 `tokens` (stemmed), updates `MEMORIES_KEY` & `PROCESSED_MESSAGES_KEY`.
-7. **Intermediate Save**: Persists Phase 1 to disk.
+7. **IDF Cache Update**: Calls `updateIDFCache()` to pre-compute BM25 IDF map from all memories. Stored in `chatMetadata.openvault.idf_cache` for O(1) retrieval lookup.
+8. **Intermediate Save**: Persists Phase 1 to disk.
 
 **Phase 2 (Enrichment - Non-critical, errors swallowed):**
 8. **Reflection**: Accumulates `importance_sum`. Triggers at 40.
