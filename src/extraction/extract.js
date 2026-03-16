@@ -93,7 +93,7 @@ import { parseEventExtractionResponse, parseGraphExtractionResponse } from './st
  * @param {string[]} contextNames - Known context character names (e.g., [characterName, userName])
  * @param {Object} graphNodes - Graph nodes keyed by normalized name
  */
-function canonicalizeEventCharNames(events, contextNames, graphNodes) {
+export function canonicalizeEventCharNames(events, contextNames, graphNodes) {
     // Build canonical name registry: context names + all PERSON graph node names
     const canonicalNames = [...contextNames];
     for (const [, node] of Object.entries(graphNodes || {})) {
@@ -268,7 +268,7 @@ export function cleanupCharacterStates(data, validCharNames = []) {
  * @param {Object} settings - Extension settings
  * @returns {Object[]} Selected memories sorted chronologically
  */
-function selectMemoriesForExtraction(data, settings) {
+export function selectMemoriesForExtraction(data, settings) {
     const allMemories = data[MEMORIES_KEY] || [];
     const totalBudget = settings.extractionRearviewTokens;
     const recencyBudget = Math.floor(totalBudget * 0.25);
