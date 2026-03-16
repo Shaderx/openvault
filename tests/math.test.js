@@ -343,78 +343,85 @@ describe('scoreMemories - dynamic character stopwords', () => {
     });
 });
 
-describe('cosineSimilarity - Float32Array and unrolling', () => {
-    it('handles Float32Array inputs', () => {
-        const a = new Float32Array([1, 0, 0]);
-        const b = new Float32Array([0, 1, 0]);
-        expect(cosineSimilarity(a, b)).toBe(0);
-    });
+describe('cosineSimilarity - parameterized', () => {
+  const COSINE_CASES = [
+    {
+      name: 'Float32Array orthogonal vectors',
+      a: new Float32Array([1, 0, 0]),
+      b: new Float32Array([0, 1, 0]),
+      expected: 0,
+    },
+    {
+      name: 'identical Float32Array vectors',
+      a: new Float32Array([0.5, 0.5, 0.5]),
+      b: null, // Will use 'a' (isSelf flag)
+      expected: 1.0,
+      isSelf: true,
+    },
+    {
+      name: 'mixed Float32Array + number[]',
+      a: new Float32Array([1, 0, 0]),
+      b: [1, 0, 0],
+      expected: 1.0,
+    },
+    {
+      name: 'vectors with length not divisible by 4',
+      a: new Float32Array([1, 2, 3, 4, 5]),
+      b: new Float32Array([1, 2, 3, 4, 5]),
+      expected: 1.0,
+    },
+    {
+      name: 'length=1 vector (all remainder)',
+      a: new Float32Array([1]),
+      b: new Float32Array([1]),
+      expected: 1.0,
+    },
+    {
+      name: 'length=4 vector (exact unrolled iteration)',
+      a: new Float32Array([1, 0, 0, 0]),
+      b: new Float32Array([0, 1, 0, 0]),
+      expected: 0,
+    },
+  ];
 
-    it('handles identical Float32Array vectors', () => {
-        const a = new Float32Array([0.5, 0.5, 0.5]);
-        expect(cosineSimilarity(a, a)).toBeCloseTo(1.0, 10);
-    });
+  it.each(COSINE_CASES)('$name', ({ a, b, expected, isSelf }) => {
+    const result = cosineSimilarity(a, isSelf ? a : b);
+    expect(result).toBeCloseTo(expected, 10);
+  });
 
-    it('handles mixed Float32Array + number[] inputs', () => {
-        const a = new Float32Array([1, 0, 0]);
-        const b = [1, 0, 0];
-        expect(cosineSimilarity(a, b)).toBeCloseTo(1.0, 10);
-    });
+  // High-dimension reference tests kept separate (computationally heavy)
+  it('produces identical results on 384-dim vs naive reference', () => {
+    const a = new Float32Array(384);
+    const b = new Float32Array(384);
+    for (let i = 0; i < 384; i++) {
+      a[i] = Math.sin(i * 0.1);
+      b[i] = Math.cos(i * 0.1);
+    }
+    // Naive reference
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < 384; i++) {
+      dot += a[i] * b[i];
+      na += a[i] * a[i];
+      nb += b[i] * b[i];
+    }
+    const expected = dot / (Math.sqrt(na) * Math.sqrt(nb));
+    expect(cosineSimilarity(a, b)).toBeCloseTo(expected, 10);
+  });
 
-    it('handles vectors with length not divisible by 4 (remainder)', () => {
-        const a = new Float32Array([1, 2, 3, 4, 5]);
-        const b = new Float32Array([1, 2, 3, 4, 5]);
-        expect(cosineSimilarity(a, b)).toBeCloseTo(1.0, 10);
-    });
-
-    it('handles length=1 vector (all remainder, no unrolled iterations)', () => {
-        const a = new Float32Array([1]);
-        const b = new Float32Array([1]);
-        expect(cosineSimilarity(a, b)).toBeCloseTo(1.0, 10);
-    });
-
-    it('handles length=4 vector (exactly one unrolled iteration, no remainder)', () => {
-        const a = new Float32Array([1, 0, 0, 0]);
-        const b = new Float32Array([0, 1, 0, 0]);
-        expect(cosineSimilarity(a, b)).toBe(0);
-    });
-
-    it('produces identical results on 384-dim vs naive reference', () => {
-        const a = new Float32Array(384);
-        const b = new Float32Array(384);
-        for (let i = 0; i < 384; i++) {
-            a[i] = Math.sin(i * 0.1);
-            b[i] = Math.cos(i * 0.1);
-        }
-        // Naive reference
-        let dot = 0,
-            na = 0,
-            nb = 0;
-        for (let i = 0; i < 384; i++) {
-            dot += a[i] * b[i];
-            na += a[i] * a[i];
-            nb += b[i] * b[i];
-        }
-        const expected = dot / (Math.sqrt(na) * Math.sqrt(nb));
-        expect(cosineSimilarity(a, b)).toBeCloseTo(expected, 10);
-    });
-
-    it('produces identical results on 768-dim vs naive reference', () => {
-        const a = new Float32Array(768);
-        const b = new Float32Array(768);
-        for (let i = 0; i < 768; i++) {
-            a[i] = Math.sin(i * 0.05);
-            b[i] = Math.cos(i * 0.05);
-        }
-        let dot = 0,
-            na = 0,
-            nb = 0;
-        for (let i = 0; i < 768; i++) {
-            dot += a[i] * b[i];
-            na += a[i] * a[i];
-            nb += b[i] * b[i];
-        }
-        const expected = dot / (Math.sqrt(na) * Math.sqrt(nb));
-        expect(cosineSimilarity(a, b)).toBeCloseTo(expected, 10);
-    });
+  it('produces identical results on 768-dim vs naive reference', () => {
+    const a = new Float32Array(768);
+    const b = new Float32Array(768);
+    for (let i = 0; i < 768; i++) {
+      a[i] = Math.sin(i * 0.05);
+      b[i] = Math.cos(i * 0.05);
+    }
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < 768; i++) {
+      dot += a[i] * b[i];
+      na += a[i] * a[i];
+      nb += b[i] * b[i];
+    }
+    const expected = dot / (Math.sqrt(na) * Math.sqrt(nb));
+    expect(cosineSimilarity(a, b)).toBeCloseTo(expected, 10);
+  });
 });
