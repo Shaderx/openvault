@@ -259,6 +259,7 @@ export function initGraphState(data) {
  * @param {string} description - Entity description
  * @param {number} cap - Description segment cap
  * @param {Object} settings - Extension settings
+ * @param {string[]} [mainCharacterNames=[]] - Known main character names for cross-script merge
  * @returns {Promise<string>} The key of the node (existing or new)
  */
 
@@ -374,13 +375,36 @@ export function shouldMergeEntities(cosine, threshold, tokensA, keyA, keyB) {
     return false;
 }
 
-export async function mergeOrInsertEntity(graphData, name, type, description, cap, settings) {
+export async function mergeOrInsertEntity(graphData, name, type, description, cap, settings, mainCharacterNames = []) {
     const key = normalizeKey(name);
 
     // Fast path: exact key match
     if (graphData.nodes[key]) {
         upsertEntity(graphData, name, type, description, cap);
         return key;
+    }
+
+    // Cross-script merge: if this is a PERSON entity and its transliterated name
+    // matches a known main character, force-merge to prevent character duplication.
+    // This happens BEFORE embedding lookup so it works even when embeddings are unavailable.
+    if (type === 'PERSON' && mainCharacterNames.length > 0) {
+        const transliterated = transliterateCyrToLat(key);
+        for (const mainName of mainCharacterNames) {
+            const mainKey = normalizeKey(mainName);
+            if (graphData.nodes[mainKey] && levenshteinDistance(transliterated, mainKey) <= 2) {
+                logDebug(
+                    `[graph] Cross-script merge: "${name}" (${key}) → "${graphData.nodes[mainKey].name}" (${mainKey}), transliterated: "${transliterated}"`
+                );
+                upsertEntity(graphData, graphData.nodes[mainKey].name, type, description, cap);
+                if (!graphData.nodes[mainKey].aliases) graphData.nodes[mainKey].aliases = [];
+                graphData.nodes[mainKey].aliases.push(name);
+                if (!graphData._mergeRedirects) graphData._mergeRedirects = {};
+                if (key !== mainKey) {
+                    graphData._mergeRedirects[key] = mainKey;
+                }
+                return mainKey;
+            }
+        }
     }
 
     // Slow path: semantic match

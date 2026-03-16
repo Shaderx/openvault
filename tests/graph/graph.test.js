@@ -431,6 +431,70 @@ describe('mergeOrInsertEntity', () => {
         // Fast path: same key, no alias needed
         expect(graphData.nodes.castle.aliases).toBeUndefined();
     });
+
+    it('force-merges Cyrillic PERSON name matching main character via transliteration', async () => {
+        // Setup: existing English character node
+        graphData.nodes.suzy = {
+            name: 'Suzy',
+            type: 'PERSON',
+            description: 'Main character',
+            mentions: 28,
+        };
+
+        // Act: insert Cyrillic variant with mainCharacterNames
+        const key = await mergeOrInsertEntity(
+            graphData,
+            'Сузи',
+            'PERSON',
+            'Главная героиня',
+            3,
+            { entityMergeSimilarityThreshold: 0.95 },
+            ['Suzy', 'Vova']
+        );
+
+        // Assert: merged into existing English node
+        expect(key).toBe('suzy');
+        expect(graphData.nodes.suzy.description).toContain('Главная героиня');
+        expect(graphData.nodes.suzy.aliases).toContain('Сузи');
+        expect(graphData.nodes.сузи).toBeUndefined();
+        // Redirect exists so edges referencing "сузи" resolve to "suzy"
+        expect(graphData._mergeRedirects?.сузи).toBe('suzy');
+    });
+
+    it('does not cross-script merge non-PERSON entities', async () => {
+        graphData.nodes.suzy = {
+            name: 'Suzy',
+            type: 'PERSON',
+            description: 'Main character',
+            mentions: 28,
+        };
+
+        // Insert a Cyrillic OBJECT — should NOT merge into Suzy even if name matches
+        const key = await mergeOrInsertEntity(
+            graphData,
+            'Сузи',
+            'OBJECT',
+            'Some object named Сузи',
+            3,
+            { entityMergeSimilarityThreshold: 0.95 },
+            ['Suzy']
+        );
+
+        // Should create a new node, not merge
+        expect(key).toBe('сузи');
+        expect(graphData.nodes.сузи).toBeDefined();
+    });
+
+    it('works without mainCharacterNames (backward compatible)', async () => {
+        // Existing behavior: no cross-script check when param not provided
+        const key = await mergeOrInsertEntity(graphData, 'Сузи', 'PERSON', 'Some person', 3, {
+            entityMergeSimilarityThreshold: 0.95,
+        });
+
+        // Creates new node since no embedding match and no cross-script names
+        expect(key).toBe('сузи');
+        expect(graphData.nodes.сузи).toBeDefined();
+    });
 });
 
 describe('redirectEdges', () => {

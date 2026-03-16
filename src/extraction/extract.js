@@ -527,7 +527,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                     entity.type,
                     entity.description,
                     entityCap,
-                    settings
+                    settings,
+                    [characterName, userName]
                 );
             }
             record(
