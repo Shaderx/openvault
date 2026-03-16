@@ -22,29 +22,16 @@ describe('constants', () => {
 
 describe('formatting', () => {
     describe('getMemoryPosition', () => {
-        it('returns midpoint of message_ids array', () => {
-            const memory = { message_ids: [100, 110, 120] };
-            expect(getMemoryPosition(memory)).toBe(110);
-        });
+        const POSITION_CASES = [
+            { memory: { message_ids: [100, 110, 120] }, expected: 110, desc: 'midpoint of message_ids array' },
+            { memory: { message_ids: [50] }, expected: 50, desc: 'single message_id when only one' },
+            { memory: { sequence: 5000 }, expected: 5, desc: 'sequence/1000 when no message_ids' },
+            { memory: {}, expected: 0, desc: '0 when no position data available' },
+            { memory: { message_ids: [], sequence: 3000 }, expected: 3, desc: 'empty message_ids array with sequence' },
+        ];
 
-        it('returns single message_id when only one', () => {
-            const memory = { message_ids: [50] };
-            expect(getMemoryPosition(memory)).toBe(50);
-        });
-
-        it('falls back to sequence/1000 when no message_ids', () => {
-            const memory = { sequence: 5000 };
-            expect(getMemoryPosition(memory)).toBe(5);
-        });
-
-        it('returns 0 when no position data available', () => {
-            const memory = {};
-            expect(getMemoryPosition(memory)).toBe(0);
-        });
-
-        it('handles empty message_ids array', () => {
-            const memory = { message_ids: [], sequence: 3000 };
-            expect(getMemoryPosition(memory)).toBe(3);
+        it.each(POSITION_CASES)('$desc', ({ memory, expected }) => {
+            expect(getMemoryPosition(memory)).toBe(expected);
         });
     });
 
@@ -270,161 +257,107 @@ describe('formatting', () => {
 
         // [Known] tag tests (inverted from [Secret])
         describe('[Known] tag (inverted from [Secret])', () => {
-            it('no tag for secret memories (default private)', () => {
-                const memories = [
-                    {
-                        id: '1',
-                        summary: 'Private event',
-                        message_ids: [450],
-                        sequence: 450000,
-                        importance: 3,
-                        is_secret: true,
-                    },
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 500);
+            const KNOWN_TAG_CASES = [
+                {
+                    desc: 'no tag for secret memories (default private)',
+                    memory: { id: '1', summary: 'Private event', message_ids: [450], sequence: 450000, importance: 3, is_secret: true },
+                    shouldHaveKnown: false,
+                },
+                {
+                    desc: 'no tag for non-secret with 2 or fewer witnesses (default private)',
+                    memory: { id: '1', summary: 'Semi-private event', message_ids: [450], sequence: 450000, importance: 3, is_secret: false, witnesses: ['Alice', 'Bob'] },
+                    shouldHaveKnown: false,
+                },
+                {
+                    desc: 'adds [Known] tag for non-secret with more than 2 witnesses',
+                    memory: { id: '1', summary: 'Public event', message_ids: [450], sequence: 450000, importance: 3, is_secret: false, witnesses: ['Alice', 'Bob', 'Charlie'] },
+                    shouldHaveKnown: true,
+                },
+                {
+                    desc: 'no tag when witnesses array is empty',
+                    memory: { id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3, is_secret: false, witnesses: [] },
+                    shouldHaveKnown: false,
+                },
+                {
+                    desc: 'no tag when witnesses field is missing',
+                    memory: { id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3, is_secret: false },
+                    shouldHaveKnown: false,
+                },
+            ];
 
-                expect(result).toContain('[★★★] Private event');
-                expect(result).not.toContain('[Secret]');
-                expect(result).not.toContain('[Known]');
-            });
-
-            it('no tag for non-secret with 2 or fewer witnesses (default private)', () => {
-                const memories = [
-                    {
-                        id: '1',
-                        summary: 'Semi-private event',
-                        message_ids: [450],
-                        sequence: 450000,
-                        importance: 3,
-                        is_secret: false,
-                        witnesses: ['Alice', 'Bob'],
-                    },
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 500);
-
-                expect(result).toContain('[★★★] Semi-private event');
-                expect(result).not.toContain('[Known]');
-            });
-
-            it('adds [Known] tag for non-secret with more than 2 witnesses', () => {
-                const memories = [
-                    {
-                        id: '1',
-                        summary: 'Public event',
-                        message_ids: [450],
-                        sequence: 450000,
-                        importance: 3,
-                        is_secret: false,
-                        witnesses: ['Alice', 'Bob', 'Charlie'],
-                    },
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 500);
-
-                expect(result).toContain('[★★★] [Known] Public event');
-            });
-
-            it('no tag when witnesses array is empty', () => {
-                const memories = [
-                    {
-                        id: '1',
-                        summary: 'Event',
-                        message_ids: [450],
-                        sequence: 450000,
-                        importance: 3,
-                        is_secret: false,
-                        witnesses: [],
-                    },
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 500);
-
-                expect(result).not.toContain('[Known]');
-            });
-
-            it('no tag when witnesses field is missing', () => {
-                const memories = [
-                    {
-                        id: '1',
-                        summary: 'Event',
-                        message_ids: [450],
-                        sequence: 450000,
-                        importance: 3,
-                        is_secret: false,
-                    },
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 500);
-
-                expect(result).not.toContain('[Known]');
+            it.each(KNOWN_TAG_CASES)('$desc', ({ memory, shouldHaveKnown }) => {
+                const result = formatContextForInjection([memory], [], null, 'Alice', 10000, 500);
+                if (shouldHaveKnown) {
+                    expect(result).toContain('[Known]');
+                } else {
+                    expect(result).not.toContain('[Known]');
+                }
             });
         });
 
         // Emotional trajectory in Current Scene
         describe('emotional trajectory in Current Scene', () => {
-            it('shows character emotions in simplified format', () => {
-                const memories = [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }];
-                const presentCharacters = ['Bob'];
-                const emotionalInfo = {
-                    emotion: 'anxious',
-                    characterEmotions: { Alice: 'anxious', Bob: 'caring' },
-                };
-                const result = formatContextForInjection(
-                    memories,
-                    presentCharacters,
-                    emotionalInfo,
-                    'Alice',
-                    10000,
-                    500
-                );
-
-                expect(result).toContain('## Current Scene');
-                expect(result).toContain('Emotions: Alice anxious, Bob caring');
-            });
-
-            it('omits emotions line when no character emotions', () => {
-                const memories = [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }];
-                const emotionalInfo = { emotion: 'neutral' };
-                const result = formatContextForInjection(memories, [], emotionalInfo, 'Alice', 10000, 500);
-
-                expect(result).not.toContain('Emotions:');
-            });
-
-            it('omits neutral emotions from trajectory', () => {
-                const memories = [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }];
-                const emotionalInfo = {
-                    emotion: 'happy',
-                    characterEmotions: { Alice: 'happy', Bob: 'neutral' },
-                };
-                const result = formatContextForInjection(memories, [], emotionalInfo, 'Alice', 10000, 500);
-
-                expect(result).toContain('Emotions: Alice happy');
-                expect(result).not.toContain('Bob');
-            });
-
-            it('limits emotions to 5 characters', () => {
-                const memories = [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }];
-                const emotionalInfo = {
-                    emotion: 'happy',
-                    characterEmotions: {
-                        Alice: 'happy',
-                        Bob: 'sad',
-                        Charlie: 'angry',
-                        Dave: 'excited',
-                        Eve: 'calm',
-                        Frank: 'worried',
+            const EMOTION_CASES = [
+                {
+                    desc: 'shows character emotions in simplified format',
+                    memories: [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }],
+                    presentCharacters: ['Bob'],
+                    emotionalInfo: { emotion: 'anxious', characterEmotions: { Alice: 'anxious', Bob: 'caring' } },
+                    expectedContains: 'Emotions: Alice anxious, Bob caring',
+                },
+                {
+                    desc: 'omits emotions line when no character emotions',
+                    memories: [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }],
+                    presentCharacters: [],
+                    emotionalInfo: { emotion: 'neutral' },
+                    expectedContains: null,
+                },
+                {
+                    desc: 'omits neutral emotions from trajectory',
+                    memories: [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }],
+                    presentCharacters: [],
+                    emotionalInfo: { emotion: 'happy', characterEmotions: { Alice: 'happy', Bob: 'neutral' } },
+                    expectedContains: 'Emotions: Alice happy',
+                },
+                {
+                    desc: 'limits emotions to 5 characters',
+                    memories: [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }],
+                    presentCharacters: [],
+                    emotionalInfo: {
+                        emotion: 'happy',
+                        characterEmotions: {
+                            Alice: 'happy',
+                            Bob: 'sad',
+                            Charlie: 'angry',
+                            Dave: 'excited',
+                            Eve: 'calm',
+                            Frank: 'worried',
+                        },
                     },
-                };
-                const result = formatContextForInjection(memories, [], emotionalInfo, 'Alice', 10000, 500);
+                    expectedContains: 'Emotions:',
+                    checkCommaCount: 4,
+                },
+                {
+                    desc: 'omits emotions line when emotionalInfo is string (legacy format)',
+                    memories: [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }],
+                    presentCharacters: [],
+                    emotionalInfo: 'excited',
+                    expectedContains: null,
+                },
+            ];
 
-                // Should have exactly 5 characters, not 6
-                const emotionsLine = result.match(/Emotions: (.+)/)?.[1] || '';
-                const commaCount = (emotionsLine.match(/,/g) || []).length;
-                expect(commaCount).toBe(4); // 5 items = 4 commas
-            });
-
-            it('omits emotions line when emotionalInfo is string (legacy format)', () => {
-                const memories = [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }];
-                const result = formatContextForInjection(memories, [], 'excited', 'Alice', 10000, 500);
-
-                expect(result).not.toContain('Emotions:');
+            it.each(EMOTION_CASES)('$desc', ({ memories, presentCharacters, emotionalInfo, expectedContains, checkCommaCount }) => {
+                const result = formatContextForInjection(memories, presentCharacters, emotionalInfo, 'Alice', 10000, 500);
+                if (expectedContains === null) {
+                    expect(result).not.toContain('Emotions:');
+                } else if (checkCommaCount !== undefined) {
+                    expect(result).toContain(expectedContains);
+                    const emotionsLine = result.match(/Emotions: (.+)/)?.[1] || '';
+                    const commaCount = (emotionsLine.match(/,/g) || []).length;
+                    expect(commaCount).toBe(checkCommaCount);
+                } else {
+                    expect(result).toContain(expectedContains);
+                }
             });
         });
 
@@ -513,64 +446,61 @@ describe('formatting', () => {
 
         // Gap separators tests
         describe('gap separators', () => {
-            it('adds "..." separator for gaps 15-99 messages', () => {
-                const memories = [
-                    { id: '1', summary: 'Event A', message_ids: [100], sequence: 100000, importance: 3 },
-                    { id: '2', summary: 'Event B', message_ids: [150], sequence: 150000, importance: 3 }, // gap = 50
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 5000);
+            const GAP_SEPARATOR_CASES = [
+                {
+                    desc: 'gaps 15-99 messages shows "..."',
+                    memories: [
+                        { id: '1', summary: 'Event A', message_ids: [100], sequence: 100000, importance: 3 },
+                        { id: '2', summary: 'Event B', message_ids: [150], sequence: 150000, importance: 3 },
+                    ],
+                    chatLength: 5000,
+                    expectedSeparator: '...\n',
+                },
+                {
+                    desc: 'gaps 100-499 messages shows "...Later..."',
+                    memories: [
+                        { id: '1', summary: 'Event A', message_ids: [100], sequence: 100000, importance: 3 },
+                        { id: '2', summary: 'Event B', message_ids: [350], sequence: 350000, importance: 3 },
+                    ],
+                    chatLength: 5000,
+                    expectedSeparator: '...Later...',
+                },
+                {
+                    desc: 'gaps >= 500 messages shows "...Much later..."',
+                    memories: [
+                        { id: '1', summary: 'Event A', message_ids: [100], sequence: 100000, importance: 3 },
+                        { id: '2', summary: 'Event B', message_ids: [700], sequence: 700000, importance: 3 },
+                    ],
+                    chatLength: 5000,
+                    expectedSeparator: '...Much later...',
+                },
+                {
+                    desc: 'gaps < 15 messages shows no separator',
+                    memories: [
+                        { id: '1', summary: 'Event A', message_ids: [100], sequence: 100000, importance: 3 },
+                        { id: '2', summary: 'Event B', message_ids: [110], sequence: 110000, importance: 3 },
+                    ],
+                    chatLength: 5000,
+                    expectedSeparator: null,
+                },
+                {
+                    desc: 'only adds separators in Story So Far bucket',
+                    memories: [
+                        { id: '1', summary: 'Mid A', message_ids: [4550], sequence: 455000, importance: 3 },
+                        { id: '2', summary: 'Mid B', message_ids: [4900], sequence: 490000, importance: 3 },
+                    ],
+                    chatLength: 5000,
+                    expectedSeparator: null,
+                },
+            ];
 
-                expect(result).toContain('Event A');
-                expect(result).toMatch(/\.\.\.\n/);
-                expect(result).toContain('Event B');
-                // Verify order
-                const aIndex = result.indexOf('Event A');
-                const sepIndex = result.indexOf('...\n');
-                const bIndex = result.indexOf('Event B');
-                expect(aIndex).toBeLessThan(sepIndex);
-                expect(sepIndex).toBeLessThan(bIndex);
-            });
-
-            it('adds "...Later..." separator for gaps 100-499 messages', () => {
-                const memories = [
-                    { id: '1', summary: 'Event A', message_ids: [100], sequence: 100000, importance: 3 },
-                    { id: '2', summary: 'Event B', message_ids: [350], sequence: 350000, importance: 3 }, // gap = 250
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 5000);
-
-                expect(result).toContain('...Later...');
-            });
-
-            it('adds "...Much later..." separator for gaps >= 500 messages', () => {
-                const memories = [
-                    { id: '1', summary: 'Event A', message_ids: [100], sequence: 100000, importance: 3 },
-                    { id: '2', summary: 'Event B', message_ids: [700], sequence: 700000, importance: 3 }, // gap = 600
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 5000);
-
-                expect(result).toContain('...Much later...');
-            });
-
-            it('no separator for gaps < 15 messages', () => {
-                const memories = [
-                    { id: '1', summary: 'Event A', message_ids: [100], sequence: 100000, importance: 3 },
-                    { id: '2', summary: 'Event B', message_ids: [110], sequence: 110000, importance: 3 }, // gap = 10
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 5000);
-
-                expect(result).not.toMatch(/\.\.\.[^<]/); // Avoid matching </scene_memory>
-                expect(result).not.toContain('Later');
-            });
-
-            it('only adds separators in Story So Far bucket', () => {
-                // Two memories in "mid" bucket with large gap - should NOT have separator
-                const memories = [
-                    { id: '1', summary: 'Mid A', message_ids: [4550], sequence: 455000, importance: 3 },
-                    { id: '2', summary: 'Mid B', message_ids: [4900], sequence: 490000, importance: 3 }, // gap = 350
-                ];
-                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, 5000);
-
-                expect(result).not.toContain('...Later...');
+            it.each(GAP_SEPARATOR_CASES)('$desc', ({ memories, chatLength, expectedSeparator }) => {
+                const result = formatContextForInjection(memories, [], null, 'Alice', 10000, chatLength);
+                if (expectedSeparator === null) {
+                    expect(result).not.toMatch(/\.\.\.[^<]/);
+                } else {
+                    expect(result).toContain(expectedSeparator);
+                }
             });
         });
 
