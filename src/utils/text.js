@@ -6,6 +6,50 @@ import { logError, logWarn } from './logging.js';
 import { countTokens } from './tokens.js';
 
 /**
+ * Calculate Jaccard similarity between two token sets.
+ * Returns ratio of intersection / union (0.0 to 1.0).
+ *
+ * @param {Set<string>|string[]} setA - First token set (or string to tokenize)
+ * @param {Set<string>|string[]} setB - Second token set (or string to tokenize)
+ * @param {Function|null} tokenizeFn - Optional tokenizer for string inputs
+ * @returns {number} Jaccard similarity score (0.0 - 1.0)
+ */
+export function jaccardSimilarity(setA, setB, tokenizeFn = null) {
+    // Convert strings to sets if tokenizer provided
+    const toSet = (x) => {
+        if (typeof x === 'string') {
+            if (!tokenizeFn) {
+                // Default tokenizer: simple, fast
+                return new Set(
+                    x
+                        .toLowerCase()
+                        .split(/[^\p{L}\p{N}]+/u)
+                        .filter((t) => t.length >= 2)
+                );
+            }
+            return new Set(tokenizeFn(x));
+        }
+        return x instanceof Set ? x : new Set(x);
+    };
+
+    const a = toSet(setA);
+    const b = toSet(setB);
+
+    if (a.size === 0 || b.size === 0) return 0;
+
+    // Calculate intersection
+    let intersection = 0;
+    for (const token of a) {
+        if (b.has(token)) intersection++;
+    }
+
+    // Calculate union
+    const union = a.size + b.size - intersection;
+
+    return union === 0 ? 0 : intersection / union;
+}
+
+/**
  * Slice memories array to fit within a token budget
  * @param {Object[]} memories - Array of memory objects with summary field
  * @param {number} tokenBudget - Maximum tokens to include

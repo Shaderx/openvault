@@ -39,6 +39,7 @@
 ### `text.js`
 - `stripThinkingTags()`: Strips `<think>`, `<reasoning>`, `<tool_call>`, `<search>`, etc. (Case insensitive). Handles tag attributes (`<tool_call name="extract">`). Also strips bracket variants (`[TOOL_CALL]...[/TOOL_CALL]`). Handles orphaned closing tags (e.g., `</think>`, `</tool_call>` without opening) from assistant prefill continuations — strips everything before and including the orphaned tag.
 - `safeParseJSON()`: Multi-layer recovery. Extracts markdown codeblocks -> bracket-balances to isolate LAST JSON block (LLMs output noise before payload) -> fixes string concatenation hallucinations (`" + "` -> merged string) -> applies `jsonrepair`. Wraps bare arrays in an `{ events: [] }` object if the LLM forgot the root key.
+- `jaccardSimilarity(setA, setB, tokenizeFn?)`: Computes Jaccard index (intersection/union) between two token sets. Accepts strings, Sets, or arrays. Optional custom tokenizer. Used for deduplication: event dedup in extraction, edge description dedup in graph. Default tokenizer filters single-char letters but preserves single-digit numbers.
 - `getMemoryPosition(memory)`: Returns average position from `message_ids` for bucket assignment.
 - `assignMemoriesToBuckets(memories, chatLength)`: Assigns memories to old/mid/recent buckets. Old: < (len-500), Mid: (len-500) to (len-100), Recent: >= (len-100). Used by soft balance budgeting.
 

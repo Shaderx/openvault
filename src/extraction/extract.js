@@ -78,7 +78,7 @@ import { getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { logDebug, logError, logInfo } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
-import { sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
+import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 import { countTokens, getMessageTokenCount } from '../utils/tokens.js';
 import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
 import { getBackfillMessageIds, getExtractedMessageIds, getNextBatch } from './scheduler.js';
@@ -343,9 +343,7 @@ export async function filterSimilarEvents(newEvents, existingMemories, cosineThr
                     // (events with same actors + similar structure but different actions)
                     const eventTokens = new Set(tokenize(event.summary || ''));
                     const memoryTokens = new Set(tokenize(memory.summary || ''));
-                    const intersection = [...eventTokens].filter((t) => memoryTokens.has(t)).length;
-                    const union = new Set([...eventTokens, ...memoryTokens]).size;
-                    const jaccard = union > 0 ? intersection / union : 0;
+                    const jaccard = jaccardSimilarity(eventTokens, memoryTokens);
 
                     if (jaccard < jaccardThreshold * 0.5) {
                         logDebug(
@@ -376,9 +374,7 @@ export async function filterSimilarEvents(newEvents, existingMemories, cosineThr
         let isDuplicate = false;
         for (const keptEvent of kept) {
             const keptTokens = new Set(tokenize(keptEvent.summary || ''));
-            const intersection = [...eventTokens].filter((t) => keptTokens.has(t)).length;
-            const union = new Set([...eventTokens, ...keptTokens]).size;
-            const jaccard = union > 0 ? intersection / union : 0;
+            const jaccard = jaccardSimilarity(eventTokens, keptTokens);
             if (jaccard >= jaccardThreshold) {
                 logDebug(
                     `Dedup: Skipping new event:\n  "${event.summary}"\n  (Jaccard ${(jaccard * 100).toFixed(1)}% with kept event:\n  "${keptEvent.summary}")`

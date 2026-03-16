@@ -10,7 +10,8 @@ Flat-JSON entity and relationship storage with rigorous semantic deduplication, 
 
 ## EDGE CONSOLIDATION
 - **Token Tracking**: Each edge stores `_descriptionTokens` count (updated on every `upsertRelationship` call).
-- **Trigger**: When `_descriptionTokens > CONSOLIDATION.TOKEN_THRESHOLD` (250), edge marked for consolidation via `_edgesNeedingConsolidation` queue.
+- **Trigger**: When `_descriptionTokens > CONSOLIDATION.TOKEN_THRESHOLD` (`150`), edge marked for consolidation via `_edgesNeedingConsolidation` queue.
+- **Jaccard Guard (Append-time)**: Before appending `old | new`, `upsertRelationship` computes Jaccard similarity between existing and new descriptions. If similarity >= `0.6`, the new description is dropped (considered duplicate), but weight still increments. Only sufficiently distinct descriptions (< 60% overlap) are appended.
 - **Batch Processing**: During community detection, `consolidateEdges()` processes up to `MAX_CONSOLIDATION_BATCH` (10) edges per run.
 - **LLM Consolidation**: Uses `LLM_CONFIGS.edge_consolidation` and `buildEdgeConsolidationPrompt()` (standard `buildMessages()` pattern with preamble + prefill). Bloated pipe-separated descriptions synthesized into single coherent summary (<100 tokens), re-embedded for RAG accuracy.
 
@@ -37,5 +38,5 @@ Prevents duplicate nodes (e.g., "The King" vs "King Aldric"). Uses `shouldMergeE
 ## GOTCHAS & RULES
 - **Embedding Storage**: Embeddings are stored as Base64-encoded `Float32Array` strings (`embedding_b64`) via the codec in `src/utils/embedding-codec.js`. Legacy `number[]` format (`embedding`) is read transparently but never written.
 - **Orphaned Edges**: `upsertRelationship` quietly skips if source/target nodes don't exist.
-- **CONSOLIDATION Constants**: `TOKEN_THRESHOLD: 250`, `MAX_CONSOLIDATION_BATCH: 10` defined in `src/constants.js`.
+- **CONSOLIDATION Constants**: `TOKEN_THRESHOLD: 150`, `MAX_CONSOLIDATION_BATCH: 10` defined in `src/constants.js`.
 - **ESM Libraries**: Relies on `https://esm.sh/graphology`. Mapped in `vitest.config.js`.

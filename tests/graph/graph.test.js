@@ -246,14 +246,24 @@ describe('upsertRelationship', () => {
     });
 
     it('uses default cap of 5 for edge descriptions when not specified', () => {
-        for (let i = 1; i <= 7; i++) {
-            upsertRelationship(graphData, 'King Aldric', 'Castle', `Desc ${i}`);
+        // Use sufficiently different descriptions to avoid Jaccard deduplication
+        const descriptions = [
+            'Rules the kingdom from his castle',
+            'Imprisoned in the dungeon during the coup',
+            'Negotiates peace treaties with neighboring realms',
+            'Hosts grand feasts for visiting nobility',
+            'Trains with his knights in the courtyard',
+            'Studies ancient tomes in the library',
+            'Inspects the castle defenses at dawn',
+        ];
+        for (let i = 0; i < 7; i++) {
+            upsertRelationship(graphData, 'King Aldric', 'Castle', descriptions[i]);
         }
         const edge = graphData.edges['king aldric__castle'];
         const segments = edge.description.split(' | ');
         expect(segments).toHaveLength(5);
-        expect(segments[0]).toBe('Desc 3');
-        expect(segments[4]).toBe('Desc 7');
+        expect(segments[0]).toBe(descriptions[2]); // First 2 were evicted by FIFO cap
+        expect(segments[4]).toBe(descriptions[6]);
     });
 
     it('prevents self-loop edges (same source and target)', () => {

@@ -18,6 +18,7 @@ import {
 } from '../prompts/index.js';
 import { cosineSimilarity } from '../retrieval/math.js';
 import { getEmbedding, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
+import { jaccardSimilarity } from '../utils/text.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { yieldToMain } from '../utils/st-helpers.js';
@@ -177,9 +178,15 @@ export function upsertRelationship(graphData, source, target, description, cap =
 
     if (existing) {
         existing.weight += 1;
-        if (!existing.description.includes(description)) {
+
+        // Jaccard guard: only append if description is sufficiently different (>60% new content)
+        const JACCARD_DUPLICATE_THRESHOLD = 0.6;
+        const jaccard = jaccardSimilarity(existing.description, description);
+        if (jaccard < JACCARD_DUPLICATE_THRESHOLD && !existing.description.includes(description)) {
             existing.description = existing.description + ' | ' + description;
         }
+        // If jaccard >= threshold, this is a near-duplicate; drop the new description
+        // but still increment weight (already done above)
 
         // Cap description segments (FIFO eviction)
         const segments = existing.description.split(' | ');
