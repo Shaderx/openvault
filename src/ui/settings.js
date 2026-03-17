@@ -263,32 +263,82 @@ async function handleDeleteChatData() {
     }
 }
 
-async function handleResetSettings() {
-    if (!confirm('Are you sure you want to reset all settings to their default values? This cannot be undone.')) {
+// Define keys that should be preserved during settings reset
+const PRESERVED_KEYS = [
+    'extractionProfile',
+    'backupProfile',
+    'preambleLanguage',
+    'outputLanguage',
+    'extractionPrefill',
+    'embeddingSource',
+    'ollamaUrl',
+    'embeddingModel',
+    'embeddingQueryPrefix',
+    'embeddingDocPrefix',
+    'maxConcurrency',
+    'backfillMaxRPM',
+    'debugMode',
+    'requestLogging',
+];
+
+// Define fine-tune keys that should be reset to defaults
+const RESETTABLE_KEYS = [
+    'extractionTokenBudget',
+    'extractionRearviewTokens',
+    'retrievalFinalTokens',
+    'visibleChatBudget',
+    'worldContextBudget',
+    'reflectionThreshold',
+    'maxInsightsPerReflection',
+    'maxReflectionsPerCharacter',
+    'alpha',
+    'forgetfulnessBaseLambda',
+    'vectorSimilarityThreshold',
+    'dedupSimilarityThreshold',
+    'dedupJaccardThreshold',
+    'autoHideEnabled',
+    'entityWindowSize',
+    'embeddingWindowSize',
+    'topEntitiesCount',
+    'entityBoostWeight',
+    'communityDetectionInterval',
+    'combinedBoostWeight',
+    'entityMergeSimilarityThreshold',
+    'edgeDescriptionCap',
+    'reflectionDedupThreshold',
+    'forgetfulnessImportance5Floor',
+    'reflectionDecayThreshold',
+    'entityDescriptionCap',
+    'communityStalenessThreshold',
+];
+
+export async function handleResetSettings() {
+    if (!confirm('Restore default math and threshold values? Your connection profiles and chat data will not be affected.')) {
         return;
     }
 
     const extension_settings = getDeps().getExtensionSettings();
     const currentSettings = extension_settings[extensionName] || {};
 
-    // Preserve all connection settings as they are environment-specific
-    const preservedConnectionSettings = {
-        extractionProfile: currentSettings.extractionProfile || '',
-        backupProfile: currentSettings.backupProfile || '',
-        embeddingSource: currentSettings.embeddingSource,
-        ollamaUrl: currentSettings.ollamaUrl,
-        embeddingModel: currentSettings.embeddingModel,
-        embeddingQueryPrefix: currentSettings.embeddingQueryPrefix,
-        embeddingDocPrefix: currentSettings.embeddingDocPrefix,
-    };
+    // Save preserved values
+    const preserved = {};
+    for (const key of PRESERVED_KEYS) {
+        if (key in currentSettings) {
+            preserved[key] = currentSettings[key];
+        }
+    }
 
-    // Reset to defaults
-    Object.assign(extension_settings[extensionName], defaultSettings);
+    // Reset each fine-tune setting to default
+    for (const key of RESETTABLE_KEYS) {
+        if (key in defaultSettings) {
+            extension_settings[extensionName][key] = defaultSettings[key];
+        }
+    }
 
-    // Restore connection settings
-    Object.assign(extension_settings[extensionName], preservedConnectionSettings);
+    // Restore preserved values
+    Object.assign(extension_settings[extensionName], preserved);
 
-    // Force debug mode ON after reset
+    // Always enable debug after reset
     extension_settings[extensionName].debugMode = true;
 
     // Save
@@ -297,7 +347,7 @@ async function handleResetSettings() {
     // Update UI
     updateUI();
 
-    showToast('success', 'Settings reset to default values (Connection settings preserved, Debug Mode enabled)');
+    showToast('success', 'Fine-tune values restored to defaults. Connection settings preserved.');
 }
 
 async function backfillEmbeddings() {
