@@ -449,15 +449,28 @@
             </div>
 
             <!-- ================================================================
-                 TAB 4: ADVANCED
+                 TAB 4: ADVANCED (Expert Math)
                  ================================================================ -->
             <div class="openvault-tab-content" data-tab="advanced">
+
+                <!-- Warning Banner -->
+                <div class="openvault-warning-banner">
+                    <div class="openvault-warning-icon">⚠️</div>
+                    <div class="openvault-warning-content">
+                        <div class="openvault-warning-title">Expert Tuning</div>
+                        <div class="openvault-warning-text">
+                            These values are pre-calibrated for optimal AI performance.
+                            Change them only if you understand cosine similarity and BM25 math.
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Scoring & Weights -->
                 <details class="openvault-details">
                     <summary><i class="fa-solid fa-scale-balanced"></i> Scoring & Weights</summary>
                     <div class="openvault-settings-group">
                         <label for="openvault_alpha">
-                            Vector vs Keyword Balance: <span id="openvault_alpha_value">0.7</span>
+                            Alpha (Vector vs Keyword Balance): <span id="openvault_alpha_value">0.7</span>
                             <small class="openvault-default-hint" data-default-key="alpha"></small>
                         </label>
                         <input type="range" id="openvault_alpha" min="0" max="1" step="0.01" />
@@ -501,7 +514,7 @@
                     <summary><i class="fa-solid fa-bullseye"></i> Similarity Thresholds</summary>
                     <div class="openvault-settings-group">
                         <label for="openvault_vector_threshold">
-                            Semantic Threshold: <span id="openvault_vector_threshold_value">0.5</span>
+                            Vector Threshold: <span id="openvault_vector_threshold_value">0.5</span>
                             <small class="openvault-default-hint" data-default-key="vectorSimilarityThreshold"></small>
                         </label>
                         <input type="range" id="openvault_vector_threshold" min="0" max="1" step="0.01" />
@@ -560,11 +573,13 @@
                             These actions cannot be undone.
                         </p>
                         <button id="openvault_reset_settings_btn" class="menu_button danger wide">
-                            <i class="fa-solid fa-rotate-left"></i> Reset Settings to Default
+                            <i class="fa-solid fa-rotate-left"></i> Restore Default Math & Thresholds
                         </button>
-                        <button id="openvault_delete_chat_btn" class="menu_button danger wide" style="margin-top: 8px;">
+                        <small class="openvault-hint">Reset fine-tuning values to defaults. Your chat memories and connection profiles will not be touched</small>
+                        <button id="openvault_delete_chat_btn" class="menu_button danger wide" style="margin-top: 15px;">
                             <i class="fa-solid fa-trash"></i> Delete Current Chat Memories
                         </button>
+                        <small class="openvault-hint">Permanently remove all OpenVault data for this chat</small>
                     </div>
                 </div>
 
