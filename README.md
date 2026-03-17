@@ -1,8 +1,77 @@
-# OpenVault — Agentic Memory for SillyTavern
+# OpenVault: Agentic Memory for SillyTavern
 
-OpenVault is a memory extension for [SillyTavern](https://github.com/SillyTavern/SillyTavern) (v1.13.0+) that gives AI characters persistent, POV-aware recall across long conversations.
+Long-term roleplays inevitably hit a wall. Context windows fill up, manual lorebooks become tedious to maintain, and characters start forgetting critical plot points. Worse, when you try to use standard vector databases, characters suddenly become omniscient—knowing secrets they were never present for simply because the text was retrieved into the prompt.
 
-It runs entirely in the browser. No external databases, no cloud services, no setup beyond installing the extension. All data is stored inside your SillyTavern chat files.
+OpenVault is an autonomous, POV-aware memory extension for SillyTavern. It runs in the background while you chat, extracting events, mapping relationships, and generating psychological insights, all without requiring any external databases or complex local server setups.
+
+## Images
+
+<p align="center">
+  <img width="32%" alt="Screenshot 2026-03-08 160107" src="https://github.com/user-attachments/assets/ae81565e-8745-4d86-b6d1-5b73d65d355a" />
+  <img width="32%" alt="Screenshot 2026-03-08 160132" src="https://github.com/user-attachments/assets/34427dcf-1e5b-4342-a2c2-269faec722e8" />
+  <img width="32%" alt="Screenshot 2026-03-08 160145" src="https://github.com/user-attachments/assets/792826e8-2855-44c5-853c-de9c614fb38f" />
+</p>
+
+## Core Features for Roleplayers
+
+*   **Strict Point-of-View (POV):** Characters only remember what they witnessed, participated in, or were explicitly told. A secret conversation between you and character A will not be retrieved when you are talking alone with character B.
+*   **Autonomous World Building:** OpenVault continuously extracts entities (People, Places, Organizations, Objects, Concepts) and the evolving relationships between them. It replaces the need to manually update lorebooks.
+*   **Agentic Reflection Engine:** Inspired by the Stanford "Smallville" Generative Agents paper. When enough events happen to a character, OpenVault pauses to reflect, synthesizing raw memories into high-level psychological insights, subconscious drives, and shifting relationship dynamics.
+*   **GraphRAG Communities:** The system periodically analyzes the relationship web, detecting social circles and summarizing the global state of the world to keep macro-level plots moving forward.
+*   **Zero External Databases:** No ChromaDB, no Docker containers, no Python scripts. Everything is stored directly inside SillyTavern's native `chatMetadata`. Your data stays with your chat.
+*   **100% Local Embeddings:** Semantic search is powered entirely in your browser via WebGPU/WASM (Transformers.js) or routed through your local Ollama instance.
+
+## How It Works in Practice
+
+OpenVault operates asynchronously. When you send a message, the extension doesn't freeze your UI. Instead, a background worker processes the chat history in batches:
+
+1.  **Event Extraction:** Identifies specific actions, emotional shifts, and revelations. It rates their narrative importance (1 to 5 stars) and tracks exact witnesses.
+2.  **Knowledge Graph:** Updates the state of the world. If two characters go from enemies to allies, the relationship edge is updated and consolidated.
+3.  **Smart Retrieval:** Before the AI generates a response, OpenVault scores all memories using a custom algorithm. It blends an exponential forgetfulness curve (old trivial memories fade, critical memories stick), BM25 keyword matching, and Vector Similarity.
+4.  **Context Injection:** Memories are woven seamlessly into the prompt context, chronologically sorted into:
+    *   *The Story So Far*
+    *   *Leading Up To This Moment*
+    *   *Current Scene* (including present characters and current emotional states)
+    *   *Subconscious Drives* (Hidden psychological truths that influence the character without them explicitly speaking about it).
+
+## Interface & Controls
+
+OpenVault integrates directly into the SillyTavern extensions menu with a clean, progressive UI designed around user intent rather than technical jargon.
+
+*   **Dashboard:** Your control center. View extraction progress, system health, and a live Payload Calculator that tells you exactly how many tokens your background extraction model needs.
+*   **Memories:** A fully searchable memory bank. View character states, filter events vs. reflections, and manually edit the importance or summary of any extracted memory.
+*   **World:** A read-only viewer for your Knowledge Graph. Browse automatically detected communities, factions, and all extracted entities currently tracked in your roleplay.
+*   **Advanced:** Expert tuning for the retrieval math. Adjust the Alpha-blend (vector vs. keyword bias), decay rates, and deduplication thresholds. 
+*   **Perf:** Real-time performance metrics to ensure background extractions aren't bottlenecking your browser.
+
+## Requirements & Setup
+
+*   **SillyTavern 1.13.0+**
+*   **Main RP Model:** Any model with a decent context window (handling the injected memories).
+*   **Extraction Model:** You need an LLM to process the background memories. Mid-tier models work exceptionally well. OpenVault is optimized for structured JSON output and uses specific "prefills" to force compliance.
+*   **Embeddings:** By default, OpenVault downloads a lightweight, multilingual embedding model (`multilingual-e5-small`) that runs directly in your browser. Alternatively, you can point it to a local Ollama embedding model.
+
+## Multilingual Support
+
+OpenVault is built from the ground up to support non-English roleplay without breaking JSON extraction. It features heuristic script detection, custom stemming algorithms, and cross-script character deduplication (automatically recognizing that a character's name written in different alphabets refers to the same entity in the Knowledge Graph). 
+
+## Note on Privacy
+
+Because OpenVault relies on your SillyTavern client and optionally your local Ollama instance, your roleplay data remains entirely on your machine unless you explicitly configure the extraction profile to use a cloud API. The in-browser vector database ensures no text is ever sent to third-party embedding services.
+
+## License
+
+GNU AGPL v3.0
+
+## Research Foundations
+
+OpenVault implements ideas from two papers:
+
+- **GraphRAG** — Community detection and hierarchical summarization for query-focused retrieval.
+  Park et al., *"From Local to Global: A Graph RAG Approach to Query-Focused Summarization"* ([arXiv:2404.16130](https://arxiv.org/abs/2404.16130))
+
+- **Generative Agents** — Importance-weighted memory streams, reflection triggers, and the observation → reflection → retrieval loop.
+  Park et al., *"Generative Agents: Interactive Simulacra of Human Behavior"* ([arXiv:2304.03442](https://arxiv.org/abs/2304.03442))
 
 ## History
 
@@ -19,131 +88,3 @@ It runs entirely in the browser. No external databases, no cloud services, no se
 11.50 - fixed memory balance (old / mid / new memories distribution), faster graph generation, less delay after send before llm answers 
 
 12.00 - UI revamp, need to protect users from themselves. I can see oneguy changes the Jaccard threshold to 0.1, their graph will turn to mush, and they will submit a bug report saying "your extension sucks."
-
-## What It Does
-
-During a conversation, OpenVault silently works in the background:
-
-1. **Extracts** structured events from new messages — who was there, what happened, how important it was.
-2. **Builds a knowledge graph** of entities (people, places, objects) and their relationships.
-3. **Generates reflections** — high-level psychological insights synthesized from accumulated events.
-4. **Detects communities** — clusters of related entities (e.g., "The Royal Court", "The Rebel Camp") summarized as dynamic world context.
-5. **Retrieves and injects** the most relevant memories into the prompt before each AI response.
-
-Characters only remember what they witnessed or were told about. No meta-gaming.
-
-## Images
-
-<p align="center">
-  <img width="32%" alt="Screenshot 2026-03-08 160107" src="https://github.com/user-attachments/assets/ae81565e-8745-4d86-b6d1-5b73d65d355a" />
-  <img width="32%" alt="Screenshot 2026-03-08 160132" src="https://github.com/user-attachments/assets/34427dcf-1e5b-4342-a2c2-269faec722e8" />
-  <img width="32%" alt="Screenshot 2026-03-08 160145" src="https://github.com/user-attachments/assets/792826e8-2855-44c5-853c-de9c614fb38f" />
-</p>
-
-## Research Foundations
-
-OpenVault implements ideas from two papers:
-
-- **GraphRAG** — Community detection and hierarchical summarization for query-focused retrieval.
-  Park et al., *"From Local to Global: A Graph RAG Approach to Query-Focused Summarization"* ([arXiv:2404.16130](https://arxiv.org/abs/2404.16130))
-
-- **Generative Agents** — Importance-weighted memory streams, reflection triggers, and the observation → reflection → retrieval loop.
-  Park et al., *"Generative Agents: Interactive Simulacra of Human Behavior"* ([arXiv:2304.03442](https://arxiv.org/abs/2304.03442))
-
-## Installation
-
-1. Open SillyTavern.
-2. Go to **Extensions** (puzzle icon).
-3. Click **Install Extension** and paste:
-   ```
-   https://github.com/vadash/openvault
-   ```
-4. Reload SillyTavern.
-5. You should also pick one of "stable_XXX" branches when installing
-
-<img width="50%" alt="Screenshot 2026-03-08 160145" src="https://i.vgy.me/u1qEwx.png" />
-
-## Setup
-
-1. Open the **OpenVault** panel in the Extensions tab.
-2. Select an **Extraction Profile** — this is the SillyTavern Connection Manager profile used for background event extraction. A mid-tier model works well; it doesn't need to be your main RP model.
-3. Select a **Retrieval Profile** (usually the same profile).
-4. Under **Embeddings**, pick a provider:
-   - **WebGPU** (`multilingual-e5-small`) — runs locally on your GPU. Zero configuration.
-   - **WASM** — CPU fallback if WebGPU is unavailable.
-   - **Ollama** — connect to a local Ollama server with your preferred embedding model.
-5. Start chatting. OpenVault activates automatically.
-
-For main model you can pick nvidia nim free qwen and keep as backup cheap one. 
-
-For existing chats, click **Backfill Chat History** to generate memories for past messages.
-
-## How Retrieval Works
-
-Before each AI response, OpenVault scores every candidate memory using three signals:
-
-| Signal | What it measures |
-|---|---|
-| **Forgetfulness Curve** | Exponential decay by narrative distance. Higher-importance events decay slower. Importance-5 events have a soft floor so they never fully vanish. |
-| **Vector Similarity** | Semantic closeness between the memory and recent conversation (last 3 user messages + extracted entities). Uses cosine similarity with a configurable threshold. |
-| **BM25 Keywords** | TF-IDF keyword matching. Character names are automatically filtered as stopwords since they appear in nearly every memory. |
-
-These are combined via an alpha-blend formula:
-
-```
-Score = Base + (α × VectorBonus) + ((1 - α) × BM25Bonus)
-```
-
-The top-scoring memories are formatted into temporal buckets ("The Story So Far", "Leading Up To This Moment") and injected into the prompt. Community summaries are injected separately as world context, higher in the prompt.
-
-## Features
-
-### POV-Aware Recall
-Each memory tracks its witnesses. During retrieval, memories are filtered to only what the active character could know. Switch characters, and the available memory set changes.
-
-### Character State Tracking
-OpenVault tracks each character's current emotion and emotional intensity based on recent events. This is injected into the prompt alongside memories.
-
-### Reflection Engine
-Inspired by the Generative Agents paper. When enough important events accumulate for a character (importance sum ≥ 40), OpenVault triggers a reflection cycle:
-- The LLM generates salient questions about recent events.
-- For each question, it retrieves relevant memories and extracts insights.
-- New insights are deduplicated against existing reflections (reject ≥90% similar, replace 80-89%, add <80%).
-
-Reflections appear in the memory stream tagged with `❘insight❙` and are scored alongside regular events.
-
-### GraphRAG Communities
-Entity relationships are analyzed using the Louvain algorithm to detect clusters. Each community gets an LLM-generated summary injected as dynamic world context — giving the AI a high-level view of factions, locations, and social structures without consuming the memory budget.
-
-### Semantic Entity Merging
-When the LLM extracts "The King" and "King Aldric" as separate entities, OpenVault detects they're the same via embedding similarity (≥0.94) plus a token overlap guard that prevents false merges like "Burgundy panties" and "Burgundy candle".
-
-### Local Embeddings
-Runs `Transformers.js` with WebGPU acceleration directly in your browser. Falls back to WASM if GPU is unavailable. If embeddings fail entirely, retrieval degrades gracefully to BM25-only keyword matching.
-
-## Slash Commands
-
-| Command | Description |
-|---|---|
-| `/openvault-extract` | Manually trigger memory extraction on unprocessed messages |
-| `/openvault-retrieve` | Manually fetch and inject context into the prompt |
-| `/openvault-status` | Print current status and memory count |
-
-## Architecture Overview
-
-```
-Background Path (on AI reply):
-  MESSAGE_RECEIVED → Worker → Extract Events → Build Graph → Reflect → Detect Communities → Save
-
-Critical Path (on Generate):
-  Auto-hide old messages → Retrieve & score memories → Inject into prompt → Return to SillyTavern
-```
-
-All state lives in `chatMetadata.openvault` — memories, graph, communities, character states, and processing checkpoints. The extraction pipeline saves intermediate results after each phase, so a crash during reflection doesn't lose extracted events.
-
-For full technical details, see [`include/ARCHITECTURE.md`](include/ARCHITECTURE.md).
-
-## License
-
-GNU AGPL v3.0
-
