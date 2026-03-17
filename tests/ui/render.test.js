@@ -11,17 +11,21 @@ describe('renderGraphStats', () => {
                 chatMetadata: {
                     [METADATA_KEY]: {
                         graph: {
-                            nodes: [
-                                { id: '1', name: 'Alice', type: 'PERSON' },
-                                { id: '2', name: 'Bob', type: 'PERSON' },
-                                { id: '3', name: 'Castle', type: 'PLACE' },
-                            ],
-                            edges: [
-                                { source: '1', target: '2', relation: 'knows' },
-                                { source: '1', target: '3', relation: 'owns' },
-                            ],
+                            // Graph stores nodes/edges as objects (keyed by normalized name)
+                            nodes: {
+                                'alice': { id: '1', name: 'Alice', type: 'PERSON' },
+                                'bob': { id: '2', name: 'Bob', type: 'PERSON' },
+                                'castle': { id: '3', name: 'Castle', type: 'PLACE' },
+                            },
+                            edges: {
+                                'alice__bob': { source: 'alice', target: 'bob', relation: 'knows' },
+                                'alice__castle': { source: 'alice', target: 'castle', relation: 'owns' },
+                            },
                         },
-                        communities: [{ id: 'c1', summary: 'Test community' }],
+                        // Communities stored as object (keyed by ID)
+                        communities: {
+                            'c1': { id: 'c1', summary: 'Test community' },
+                        },
                         lastCommunityDetection: 100,
                     },
                 },

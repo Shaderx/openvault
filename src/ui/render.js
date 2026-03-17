@@ -406,14 +406,15 @@ export function renderGraphStats() {
     const context = getDeps().getContext?.();
     const currentMessageId = context?.chat?.length || 0;
 
-    const graph = data?.graph || { nodes: [], edges: [] };
-    const communities = data?.communities || [];
+    // Graph stores nodes/edges as objects (keyed by normalized name), not arrays
+    const graph = data?.graph || { nodes: {}, edges: {} };
+    const communities = data?.communities || {};
     const lastDetection = data?.lastCommunityDetection || 0;
 
     const stats = {
-        entities: graph.nodes?.length || 0,
-        relationships: graph.edges?.length || 0,
-        communities: communities.length,
+        entities: Object.keys(graph.nodes || {}).length,
+        relationships: Object.keys(graph.edges || {}).length,
+        communities: Object.keys(communities || {}).length,
         lastClustered: currentMessageId - lastDetection,
     };
 
