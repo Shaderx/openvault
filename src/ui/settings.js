@@ -83,18 +83,6 @@ function updateWordsDisplay(tokens, wordsElementId) {
     $(`#${wordsElementId}`).text(tokensToWords(tokens));
 }
 
-function updateReflectionDedupDisplay(rejectThreshold) {
-    const replaceThreshold = (rejectThreshold - 0.1).toFixed(2);
-    const rejectDisplay = rejectThreshold.toFixed(2);
-    const replaceHigh = (rejectThreshold - 0.01).toFixed(2);
-    const addDisplay = replaceThreshold;
-
-    $('#openvault_reflection_reject_display').text(rejectDisplay);
-    $('#openvault_reflection_replace_low').text(replaceThreshold);
-    $('#openvault_reflection_replace_high').text(replaceHigh);
-    $('#openvault_reflection_add_display').text(addDisplay);
-}
-
 /**
  * Update the payload calculator readout.
  * Reads current slider values, adds PAYLOAD_CALC.OVERHEAD, sets emoji + color class.
@@ -314,14 +302,6 @@ const RESETTABLE_KEYS = [
     'topEntitiesCount',
     'entityBoostWeight',
     'communityDetectionInterval',
-    'combinedBoostWeight',
-    'entityMergeSimilarityThreshold',
-    'edgeDescriptionCap',
-    'reflectionDedupThreshold',
-    'forgetfulnessImportance5Floor',
-    'reflectionDecayThreshold',
-    'entityDescriptionCap',
-    'communityStalenessThreshold',
 ];
 
 export async function handleResetSettings() {
@@ -526,11 +506,8 @@ function bindUIElements() {
 
     // Scoring weights (alpha-blend)
     bindSetting('alpha', 'alpha', 'float');
-    bindSetting('combined_weight', 'combinedBoostWeight', 'float');
     bindSetting('vector_threshold', 'vectorSimilarityThreshold', 'float');
     bindSetting('dedup_threshold', 'dedupSimilarityThreshold', 'float');
-    bindSetting('entity_merge_threshold', 'entityMergeSimilarityThreshold', 'float');
-    bindSetting('edge_description_cap', 'edgeDescriptionCap');
 
     // Query context enhancement settings
     bindSetting('entity_window', 'entityWindowSize');
@@ -640,9 +617,6 @@ function bindUIElements() {
     // Feature settings
     bindSetting('reflection_threshold', 'reflectionThreshold');
     bindSetting('max_insights', 'maxInsightsPerReflection');
-    bindSetting('reflection_dedup_threshold', 'reflectionDedupThreshold', 'float', (v) =>
-        updateReflectionDedupDisplay(v)
-    );
     bindSetting('world_context_budget', 'worldContextBudget', 'int', (v) =>
         updateWordsDisplay(v, 'openvault_world_context_budget_words')
     );
@@ -650,19 +624,9 @@ function bindUIElements() {
 
     // Forgetfulness curve settings
     bindSetting('forgetfulness_lambda', 'forgetfulnessBaseLambda', 'float');
-    bindSetting('importance5_floor', 'forgetfulnessImportance5Floor');
-
-    // Reflection decay threshold
-    bindSetting('reflection_decay_threshold', 'reflectionDecayThreshold');
-
-    // Entity description cap
-    bindSetting('entity_description_cap', 'entityDescriptionCap');
 
     // Max reflections per character
     bindSetting('max_reflections', 'maxReflectionsPerCharacter');
-
-    // Community staleness threshold
-    bindSetting('community_staleness', 'communityStalenessThreshold');
 
     // Jaccard dedup threshold
     bindSetting('dedup_jaccard', 'dedupJaccardThreshold', 'float');
@@ -745,20 +709,11 @@ export function updateUI() {
     $('#openvault_alpha').val(settings.alpha);
     $('#openvault_alpha_value').text(settings.alpha);
 
-    $('#openvault_combined_weight').val(settings.combinedBoostWeight);
-    $('#openvault_combined_weight_value').text(settings.combinedBoostWeight);
-
     $('#openvault_vector_threshold').val(settings.vectorSimilarityThreshold);
     $('#openvault_vector_threshold_value').text(settings.vectorSimilarityThreshold);
 
     $('#openvault_dedup_threshold').val(settings.dedupSimilarityThreshold);
     $('#openvault_dedup_threshold_value').text(settings.dedupSimilarityThreshold);
-
-    $('#openvault_entity_merge_threshold').val(settings.entityMergeSimilarityThreshold);
-    $('#openvault_entity_merge_threshold_value').text(settings.entityMergeSimilarityThreshold);
-
-    $('#openvault_edge_description_cap').val(settings.edgeDescriptionCap);
-    $('#openvault_edge_description_cap_value').text(settings.edgeDescriptionCap);
 
     // Query context enhancement settings
     $('#openvault_entity_window').val(settings.entityWindowSize);
@@ -804,10 +759,6 @@ export function updateUI() {
     $('#openvault_max_insights').val(settings.maxInsightsPerReflection);
     $('#openvault_max_insights_value').text(settings.maxInsightsPerReflection);
 
-    $('#openvault_reflection_dedup_threshold').val(settings.reflectionDedupThreshold);
-    $('#openvault_reflection_dedup_threshold_value').text(settings.reflectionDedupThreshold);
-    updateReflectionDedupDisplay(settings.reflectionDedupThreshold);
-
     $('#openvault_world_context_budget').val(settings.worldContextBudget);
     $('#openvault_world_context_budget_value').text(settings.worldContextBudget);
     updateWordsDisplay(settings.worldContextBudget, 'openvault_world_context_budget_words');
@@ -825,25 +776,9 @@ export function updateUI() {
     $('#openvault_forgetfulness_lambda').val(settings.forgetfulnessBaseLambda);
     $('#openvault_forgetfulness_lambda_value').text(settings.forgetfulnessBaseLambda);
 
-    // Importance-5 floor — minimum score for max-importance memories
-    $('#openvault_importance5_floor').val(settings.forgetfulnessImportance5Floor);
-    $('#openvault_importance5_floor_value').text(settings.forgetfulnessImportance5Floor);
-
-    // Reflection decay threshold — messages before reflections start decaying
-    $('#openvault_reflection_decay_threshold').val(settings.reflectionDecayThreshold);
-    $('#openvault_reflection_decay_threshold_value').text(settings.reflectionDecayThreshold);
-
-    // Entity description cap — max description segments per entity
-    $('#openvault_entity_description_cap').val(settings.entityDescriptionCap);
-    $('#openvault_entity_description_cap_value').text(settings.entityDescriptionCap);
-
     // Max reflections per character — prevents reflection memory bloat
     $('#openvault_max_reflections').val(settings.maxReflectionsPerCharacter);
     $('#openvault_max_reflections_value').text(settings.maxReflectionsPerCharacter);
-
-    // Community staleness threshold — messages before re-summarization
-    $('#openvault_community_staleness').val(settings.communityStalenessThreshold);
-    $('#openvault_community_staleness_value').text(settings.communityStalenessThreshold);
 
     // Jaccard dedup threshold — token-overlap filter for near-duplicates
     $('#openvault_dedup_jaccard').val(settings.dedupJaccardThreshold);

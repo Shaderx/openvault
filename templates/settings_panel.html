@@ -476,14 +476,6 @@
                         <input type="range" id="openvault_alpha" min="0" max="1" step="0.01" />
                         <small class="openvault-hint">Balance between 'find similar meaning' (1.0) and 'find exact words' (0.0). Default 0.7 works for most RPs</small>
 
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_combined_weight">
-                            Retrieval Boost Strength: <span id="openvault_combined_weight_value">15</span>
-                            <small class="openvault-default-hint" data-default-key="combinedBoostWeight"></small>
-                        </label>
-                        <input type="range" id="openvault_combined_weight" min="1" max="30" step="1" />
-                        <small class="openvault-hint">Maximum boost points for semantic+keyword matching</small>
                     </div>
                 </details>
 
@@ -498,14 +490,6 @@
                         <input type="range" id="openvault_forgetfulness_lambda" min="0.01" max="0.20" step="0.01" />
                         <small class="openvault-hint">How quickly old memories fade in relevance. Higher = forgets faster. Lower = remembers longer. Default 0.05 is highly recommended</small>
 
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_importance5_floor">
-                            Importance-5 Floor: <span id="openvault_importance5_floor_value">5</span>
-                            <small class="openvault-default-hint" data-default-key="forgetfulnessImportance5Floor"></small>
-                        </label>
-                        <input type="range" id="openvault_importance5_floor" min="1" max="20" step="1" />
-                        <small class="openvault-hint">Minimum score for max-importance memories. Higher = critical memories stay relevant.</small>
                     </div>
                 </details>
 
@@ -538,14 +522,6 @@
                         <input type="range" id="openvault_dedup_jaccard" min="0.30" max="0.90" step="0.01" />
                         <small class="openvault-hint">Word-level duplicate detection. Backup filter when semantic similarity is borderline</small>
 
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_entity_merge_threshold">
-                            Entity Merge Threshold: <span id="openvault_entity_merge_threshold_value">0.80</span>
-                            <small class="openvault-default-hint" data-default-key="entityMergeSimilarityThreshold"></small>
-                        </label>
-                        <input type="range" id="openvault_entity_merge_threshold" min="0.5" max="1" step="0.01" />
-                        <small class="openvault-hint">Semantic similarity to merge entities. Higher = fewer merges.</small>
                     </div>
                 </details>
 
