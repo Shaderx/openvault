@@ -48,7 +48,6 @@ export const defaultSettings = {
     embeddingDocPrefix: '', // Empty by default — e5-small works best without prefixes
     // Alpha-blend scoring
     alpha: 0.7, // Vector vs keyword blend: 1.0 = vector only, 0.0 = BM25 only
-    combinedBoostWeight: 15, // Max boost points for retrieval (BM25 + vector)
     vectorSimilarityThreshold: 0.5,
     // Deduplication settings
     // Cosine similarity threshold for filtering duplicate events (0-1).
@@ -58,18 +57,13 @@ export const defaultSettings = {
     dedupJaccardThreshold: 0.6, // Token-overlap (Jaccard index) threshold for near-duplicate filtering
     // Forgetfulness curve settings (scoring)
     forgetfulnessBaseLambda: 0.05, // Base decay rate for exponential curve
-    forgetfulnessImportance5Floor: 5, // Minimum score for importance-5 memories
     // Reflection settings
     reflectionThreshold: 40,
     maxInsightsPerReflection: 3,
-    reflectionDedupThreshold: 0.9,
     // World context settings
     worldContextBudget: 2000,
     communityDetectionInterval: 100,
     // Entity settings
-    entityDescriptionCap: 3,
-    edgeDescriptionCap: 5,
-    entityMergeSimilarityThreshold: 0.95,
     // Query context settings (previously only in QUERY_CONTEXT_DEFAULTS)
     entityWindowSize: 10, // messages to scan for entities
     embeddingWindowSize: 5, // messages for embedding query
@@ -80,15 +74,12 @@ export const defaultSettings = {
     // Reflection decay settings
     // Reflections older than this many messages get a linear penalty (down to 0.25x).
     // 750 gives medium-length chats (~700 msgs) breathing room before decay kicks in.
-    reflectionDecayThreshold: 750,
     maxReflectionsPerCharacter: 50,
     maxReflectionLevel: 3, // Maximum reflection tree depth
     reflectionLevelMultiplier: 2.0, // Decay slows by 2x per level
     // Bucket balance settings (score-first budgeting with soft chronological balancing)
     bucketMinRepresentation: 0.2, // 20% minimum per bucket
     bucketSoftBalanceBudget: 0.05, // 5% budget for soft balancing
-    // Community staleness settings
-    communityStalenessThreshold: 100,
     // Preamble & prefill settings
     preambleLanguage: 'cn',
     extractionPrefill: 'cn_compliance',
@@ -191,7 +182,6 @@ export const UI_DEFAULT_HINTS = {
 
     // Retrieval weights (new alpha-blend)
     alpha: defaultSettings.alpha,
-    combinedBoostWeight: defaultSettings.combinedBoostWeight,
     vectorSimilarityThreshold: defaultSettings.vectorSimilarityThreshold,
     dedupSimilarityThreshold: defaultSettings.dedupSimilarityThreshold,
 
@@ -209,23 +199,15 @@ export const UI_DEFAULT_HINTS = {
     maxConcurrency: defaultSettings.maxConcurrency,
     reflectionThreshold: defaultSettings.reflectionThreshold,
     maxInsightsPerReflection: defaultSettings.maxInsightsPerReflection,
-    reflectionDedupThreshold: defaultSettings.reflectionDedupThreshold,
     worldContextBudget: defaultSettings.worldContextBudget,
     communityDetectionInterval: defaultSettings.communityDetectionInterval,
-    communityStalenessThreshold: defaultSettings.communityStalenessThreshold,
-    // Entity merge settings
-    entityMergeSimilarityThreshold: defaultSettings.entityMergeSimilarityThreshold,
-    edgeDescriptionCap: defaultSettings.edgeDescriptionCap,
     // Decay & forgetfulness curve tuning
     forgetfulnessBaseLambda: defaultSettings.forgetfulnessBaseLambda,
-    forgetfulnessImportance5Floor: defaultSettings.forgetfulnessImportance5Floor,
-    reflectionDecayThreshold: defaultSettings.reflectionDecayThreshold,
     maxReflectionLevel: defaultSettings.maxReflectionLevel,
     reflectionLevelMultiplier: defaultSettings.reflectionLevelMultiplier,
     bucketMinRepresentation: defaultSettings.bucketMinRepresentation,
     bucketSoftBalanceBudget: defaultSettings.bucketSoftBalanceBudget,
-    // Graph cap settings
-    entityDescriptionCap: defaultSettings.entityDescriptionCap,
+    // Reflection count limit
     maxReflectionsPerCharacter: defaultSettings.maxReflectionsPerCharacter,
     // Dedup
     dedupJaccardThreshold: defaultSettings.dedupJaccardThreshold,
