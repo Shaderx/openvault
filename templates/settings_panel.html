@@ -261,208 +261,14 @@
             </div>
 
             <!-- ================================================================
-                 TAB 2: MEMORY BANK
+                 TAB 2: MEMORIES (Browse & Engine)
                  ================================================================ -->
             <div class="openvault-tab-content" data-tab="memory-bank">
-                <!-- Background LLM Payload -->
-                <details class="openvault-details">
-                    <summary><i class="fa-solid fa-microchip"></i> Background LLM Payload</summary>
-                    <div class="openvault-settings-group">
-                        <label for="openvault_extraction_token_budget">
-                            Extraction Token Budget: <span id="openvault_extraction_token_budget_value">12000</span> tokens
-                            <small class="openvault-default-hint" data-default-key="extractionTokenBudget"></small>
-                        </label>
-                        <input type="range" id="openvault_extraction_token_budget" min="4000" max="64000" step="1000" />
-                        <small class="openvault-hint">Token threshold for extraction batches. When unextracted messages accumulate past this budget, a batch is processed. Larger = fewer LLM calls, smaller = more frequent extraction.</small>
 
-                        <div class="openvault-budget-indicator">
-                            <span class="openvault-budget-label">Unextracted:</span>
-                            <div class="openvault-budget-bar">
-                                <div class="openvault-budget-fill" id="openvault_extraction_budget_fill"></div>
-                            </div>
-                            <span class="openvault-budget-text" id="openvault_extraction_budget_text">0 / 12k</span>
-                        </div>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_extraction_rearview">
-                            Context Window Size: <span id="openvault_extraction_rearview_value">8000</span> tokens
-                            <small class="openvault-default-hint" data-default-key="contextWindowSize"></small>
-                            <small class="openvault-words-hint">~<span id="openvault_extraction_rearview_words">6000</span> words</small>
-                        </label>
-                        <input type="range" id="openvault_extraction_rearview" min="1000" max="32000" step="1000" />
-                        <small class="openvault-hint">How much past memories the LLM sees when writing new memories</small>
-
-                        <!-- Payload Calculator (NEW) -->
-                        <div id="openvault_payload_calculator" class="openvault-payload-calc">
-                            <span id="openvault_payload_emoji">✅</span>
-                            Estimated total: ~<span id="openvault_payload_total">32,000</span> tokens
-                            <div class="openvault-payload-breakdown" id="openvault_payload_breakdown">
-                                (12k batch + 8k rearview + 12k overhead)
-                            </div>
-                            <div class="openvault-payload-hint">
-                                Ensure your Extraction Profile supports this context size.
-                            </div>
-                        </div>
-                    </div>
-                </details>
-
-                <!-- Reflection Engine -->
-                <details class="openvault-details" style="margin-top: 10px;">
-                    <summary><i class="fa-solid fa-lightbulb"></i> Reflection Engine</summary>
-                    <div class="openvault-settings-group">
-                        <label for="openvault_reflection_threshold">
-                            Reflection Threshold: <span id="openvault_reflection_threshold_value">30</span>
-                            <small class="openvault-default-hint" data-default-key="reflectionThreshold"></small>
-                        </label>
-                        <input type="range" id="openvault_reflection_threshold" min="10" max="100" step="5" />
-                        <small class="openvault-hint">Importance sum to trigger character reflection. Lower = more frequent.</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_max_insights">
-                            Max Insights per Reflection: <span id="openvault_max_insights_value">3</span>
-                            <small class="openvault-default-hint" data-default-key="maxInsightsPerReflection"></small>
-                        </label>
-                        <input type="range" id="openvault_max_insights" min="1" max="5" step="1" />
-                        <small class="openvault-hint">Maximum insights generated per reflection question.</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <!-- Reflection 3-Tier Dedup System -->
-                        <div style="background: rgba(0,0,0,0.15); padding: 10px; border-radius: 6px; margin-bottom: 8px;">
-                            <div style="font-size: 0.9em; font-weight: 600; margin-bottom: 8px; color: #var(--smart-theme-body-color);">
-                                <i class="fa-solid fa-layer-group"></i> Reflection Dedup (3-Tier)
-                            </div>
-
-                            <label for="openvault_reflection_dedup_threshold" style="font-size: 0.85em;">
-                                Reject Threshold: <span id="openvault_reflection_dedup_threshold_value">0.90</span>
-                                <small class="openvault-default-hint" data-default-key="reflectionDedupThreshold"></small>
-                            </label>
-                            <input type="range" id="openvault_reflection_dedup_threshold" min="0.5" max="1" step="0.01" style="margin-bottom: 4px;" />
-
-                            <div style="font-size: 0.75em; color: #888; line-height: 1.4;">
-                                <span style="color: #f44;">≥<span id="openvault_reflection_reject_display">0.90</span> → Reject</span> ·
-                                <span style="color: #fb4;"><span id="openvault_reflection_replace_low">0.80</span>-<span id="openvault_reflection_replace_high">0.89</span> → Replace</span> ·
-                                <span style="color: #4b4;">&lt;<span id="openvault_reflection_add_display">0.80</span> → Add</span>
-                            </div>
-                        </div>
-
-                        <div style="height: 8px;"></div>
-
-                        <!-- Max Reflections per Character (NEW) -->
-                        <label for="openvault_max_reflections">
-                            Max Reflections per Character: <span id="openvault_max_reflections_value">50</span>
-                            <small class="openvault-default-hint" data-default-key="maxReflectionsPerCharacter"></small>
-                        </label>
-                        <input type="range" id="openvault_max_reflections" min="10" max="200" step="10" />
-                        <small class="openvault-hint">Caps total reflection memories per character. Prevents bloat in long chats.</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <!-- Reflection Decay Threshold (NEW) -->
-                        <label for="openvault_reflection_decay_threshold">
-                            Reflection Decay Threshold: <span id="openvault_reflection_decay_threshold_value">750</span>
-                            <small class="openvault-default-hint" data-default-key="reflectionDecayThreshold"></small>
-                        </label>
-                        <input type="range" id="openvault_reflection_decay_threshold" min="100" max="2000" step="50" />
-                        <small class="openvault-hint">Messages before reflections start losing priority. Higher = reflections stay relevant longer.</small>
-                    </div>
-                </details>
-
-                <!-- Graph & Communities -->
-                <details class="openvault-details" style="margin-top: 10px;">
-                    <summary><i class="fa-solid fa-diagram-project"></i> Graph & Communities</summary>
-                    <div class="openvault-settings-group">
-                        <!-- Entity Description Cap (NEW) -->
-                        <label for="openvault_entity_description_cap">
-                            Entity Description Cap: <span id="openvault_entity_description_cap_value">3</span>
-                            <small class="openvault-default-hint" data-default-key="entityDescriptionCap"></small>
-                        </label>
-                        <input type="range" id="openvault_entity_description_cap" min="1" max="10" step="1" />
-                        <small class="openvault-hint">Max description segments per entity. Older segments are evicted (FIFO).</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_edge_description_cap">
-                            Edge Description Cap: <span id="openvault_edge_description_cap_value">5</span>
-                            <small class="openvault-default-hint" data-default-key="edgeDescriptionCap"></small>
-                        </label>
-                        <input type="range" id="openvault_edge_description_cap" min="1" max="20" step="1" />
-                        <small class="openvault-hint">Max description segments per edge (FIFO eviction).</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_community_interval">
-                            Community Detection Interval: <span id="openvault_community_interval_value">50</span> messages
-                            <small class="openvault-default-hint" data-default-key="communityDetectionInterval"></small>
-                        </label>
-                        <input type="range" id="openvault_community_interval" min="10" max="200" step="10" />
-                        <small class="openvault-hint">How often Louvain runs. Lower = fresher communities, more LLM calls.</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <!-- Community Staleness Threshold (NEW) -->
-                        <label for="openvault_community_staleness">
-                            Community Staleness Threshold: <span id="openvault_community_staleness_value">100</span>
-                            <small class="openvault-default-hint" data-default-key="communityStalenessThreshold"></small>
-                        </label>
-                        <input type="range" id="openvault_community_staleness" min="20" max="500" step="10" />
-                        <small class="openvault-hint">Messages before community summaries are considered stale.</small>
-                    </div>
-                </details>
-
-                <!-- System Limits -->
-                <details class="openvault-details" style="margin-top: 10px;">
-                    <summary><i class="fa-solid fa-gauge"></i> System Limits</summary>
-                    <div class="openvault-settings-group">
-                        <label for="openvault_max_concurrency">
-                            Cloud API Concurrency: <span id="openvault_max_concurrency_value">1</span>
-                            <small class="openvault-default-hint" data-default-key="maxConcurrency"></small>
-                        </label>
-                        <input type="range" id="openvault_max_concurrency" min="1" max="5" step="1" />
-                        <small class="openvault-hint">Keep at 1 for local LLMs (Ollama/LM Studio). Increase to 3-5 for cloud APIs (Kimi/OpenAI) to speed up background processing. Auto-drops on rate limits.</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_backfill_rpm">
-                            Backfill Rate Limit (RPM)
-                            <small class="openvault-default-hint" data-default-key="backfillRateLimit"></small>
-                        </label>
-                        <input type="number" id="openvault_backfill_rpm" class="text_pole" min="1" max="600" />
-                    </div>
-                </details>
-
-                <!-- Character States (collapsed) -->
-                <div class="inline-drawer" style="margin-top: 15px;">
-                    <div class="inline-drawer-toggle inline-drawer-header">
-                        <span>Character States</span>
-                        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
-                    </div>
-                    <div class="inline-drawer-content">
-                        <div id="openvault_character_states" class="openvault-character-list">
-                            <p class="openvault-placeholder">No character data yet</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Reflection Progress (collapsed) -->
-                <div class="inline-drawer" style="margin-top: 15px;">
-                    <div class="inline-drawer-toggle inline-drawer-header">
-                        <span>Reflection Progress</span>
-                        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
-                    </div>
-                    <div class="inline-drawer-content">
-                        <div id="openvault_reflection_progress" class="openvault-reflection-progress">
-                            <p class="openvault-placeholder">No reflection data yet</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Search -->
+                <!-- Memory Browser (immediately visible) -->
                 <div class="openvault-search-container">
                     <i class="fa-solid fa-search"></i>
-                    <input type="text" id="openvault_memory_search" class="openvault-search-input" placeholder="Search memories..." />
+                    <input type="text" id="openvault_memory_search" class="openvault-search-input" placeholder="Find memories by content, character, or type..." />
                 </div>
 
                 <!-- Filters -->
@@ -492,6 +298,95 @@
                         <i class="fa-solid fa-chevron-right"></i>
                     </button>
                 </div>
+
+                <!-- Character States (collapsed) -->
+                <details class="openvault-details" style="margin-top: 15px;">
+                    <summary><i class="fa-solid fa-users"></i> Character States</summary>
+                    <div class="inline-drawer-content">
+                        <div id="openvault_character_states" class="openvault-character-list">
+                            <p class="openvault-placeholder">No character data yet</p>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Extraction & Context (collapsed) -->
+                <details class="openvault-details" style="margin-top: 10px;">
+                    <summary><i class="fa-solid fa-microchip"></i> Extraction & Context</summary>
+                    <div class="openvault-settings-group">
+                        <label for="openvault_extraction_token_budget">
+                            Extraction Batch Size: <span id="openvault_extraction_token_budget_value">8000</span> tokens
+                            <small class="openvault-default-hint" data-default-key="extractionTokenBudget"></small>
+                        </label>
+                        <input type="range" id="openvault_extraction_token_budget" min="4000" max="64000" step="1000" />
+                        <small class="openvault-hint">How much chat history to send to the background AI at once. Larger batches = fewer API calls but longer waits between updates</small>
+
+                        <label for="openvault_extraction_rearview">
+                            Context Window Size: <span id="openvault_extraction_rearview_value">6000</span> tokens
+                            <small class="openvault-default-hint" data-default-key="contextWindowSize"></small>
+                        </label>
+                        <input type="range" id="openvault_extraction_rearview" min="1000" max="32000" step="1000" />
+                        <small class="openvault-hint">How far back the AI reads to extract new memories. Larger = better context, but costs more tokens</small>
+
+                        <!-- Context & Injection Budgets -->
+                        <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                            <div style="font-weight: bold; margin-bottom: 10px;">Context & Injection Budgets</div>
+
+                            <label for="openvault_final_budget">
+                                Final Context Budget: <span id="openvault_final_budget_value">10000</span> tokens
+                                <small class="openvault-default-hint" data-default-key="retrievalFinalTokens"></small>
+                            </label>
+                            <input type="range" id="openvault_final_budget" min="1000" max="32000" step="1000" />
+                            <small class="openvault-hint">How many tokens of memories to inject into each AI response</small>
+
+                            <label for="openvault_visible_chat_budget">
+                                Visible Chat Budget: <span id="openvault_visible_chat_budget_value">16000</span> tokens
+                                <small class="openvault-default-hint" data-default-key="visibleChatBudget"></small>
+                            </label>
+                            <input type="range" id="openvault_visible_chat_budget" min="4000" max="64000" step="1000" />
+                            <small class="openvault-hint">Maximum tokens visible in chat history. Oldest messages are auto-hidden when exceeded.</small>
+                        </div>
+
+                        <!-- Payload Calculator -->
+                        <div id="openvault_payload_calculator" class="openvault-payload-calc">
+                            <span id="openvault_payload_emoji">✅</span>
+                            Estimated total: ~<span id="openvault_payload_total">32,000</span> tokens
+                            <div class="openvault-payload-breakdown" id="openvault_payload_breakdown">
+                                (8k batch + 6k rearview + 12k overhead)
+                            </div>
+                            <div class="openvault-payload-warning">
+                                Ensure your background LLM supports at least this context size.
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Reflection Engine (collapsed) -->
+                <details class="openvault-details" style="margin-top: 10px;">
+                    <summary><i class="fa-solid fa-lightbulb"></i> Reflection Engine</summary>
+                    <div class="openvault-settings-group">
+                        <label for="openvault_reflection_threshold">
+                            Reflection Threshold: <span id="openvault_reflection_threshold_value">40</span>
+                            <small class="openvault-default-hint" data-default-key="reflectionThreshold"></small>
+                        </label>
+                        <input type="range" id="openvault_reflection_threshold" min="10" max="100" step="5" />
+                        <small class="openvault-hint">How much 'interesting stuff' needs to happen before the AI thinks deeper about a character. Lower = more frequent insights</small>
+
+                        <label for="openvault_max_insights">
+                            Max Insights per Reflection: <span id="openvault_max_insights_value">3</span>
+                            <small class="openvault-default-hint" data-default-key="maxInsightsPerReflection"></small>
+                        </label>
+                        <input type="range" id="openvault_max_insights" min="1" max="5" step="1" />
+                        <small class="openvault-hint">How many new insights per reflection (1-5). More = richer character understanding, but more tokens</small>
+
+                        <label for="openvault_max_reflections">
+                            Max Reflections per Character: <span id="openvault_max_reflections_value">50</span>
+                            <small class="openvault-default-hint" data-default-key="maxReflectionsPerCharacter"></small>
+                        </label>
+                        <input type="range" id="openvault_max_reflections" min="10" max="200" step="10" />
+                        <small class="openvault-hint">Maximum stored insights per character. Older ones are archived when exceeded</small>
+                    </div>
+                </details>
+
             </div>
 
             <!-- ================================================================
