@@ -390,97 +390,25 @@
             </div>
 
             <!-- ================================================================
-                 TAB 3: WORLD
+                 TAB 3: WORLD (Pure Viewer)
                  ================================================================ -->
             <div class="openvault-tab-content" data-tab="world">
-                <!-- Prompt Injection Budgets -->
-                <details class="openvault-details">
-                    <summary><i class="fa-solid fa-syringe"></i> Prompt Injection Budgets</summary>
-                    <div class="openvault-settings-group">
-                        <label for="openvault_final_budget">
-                            Final Context Budget: <span id="openvault_final_budget_value">12000</span> tokens
-                            <small class="openvault-default-hint" data-default-key="retrievalFinalTokens"></small>
-                            <small class="openvault-words-hint">~<span id="openvault_final_budget_words">9000</span> words</small>
-                        </label>
-                        <input type="range" id="openvault_final_budget" min="1000" max="32000" step="1000" />
-                        <small class="openvault-hint">Memory budget injected into chat context</small>
 
-                        <div style="height: 8px;"></div>
+                <!-- Graph Stats Card -->
+                <div id="openvault_graph_stats" class="openvault-graph-stats-container">
+                    <!-- Rendered by renderGraphStats() -->
+                </div>
 
-                        <label for="openvault_world_context_budget">
-                            World Context Budget: <span id="openvault_world_context_budget_value">2000</span> tokens
-                            <small class="openvault-default-hint" data-default-key="worldContextBudget"></small>
-                            <small class="openvault-words-hint">~<span id="openvault_world_context_budget_words">1500</span> words</small>
-                        </label>
-                        <input type="range" id="openvault_world_context_budget" min="500" max="5000" step="250" />
-                        <small class="openvault-hint">Token budget for community summaries injected as world context.</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_visible_chat_budget">
-                            Visible Chat Budget: <span id="openvault_visible_chat_budget_value">16000</span> tokens
-                            <small class="openvault-default-hint" data-default-key="visibleChatBudget"></small>
-                        </label>
-                        <input type="range" id="openvault_visible_chat_budget" min="4000" max="64000" step="1000" />
-                        <small class="openvault-hint">Maximum tokens visible in chat history. Oldest already-extracted messages are auto-hidden when exceeded. Acts as a minimum guarantee — chat may temporarily exceed this until extraction catches up.</small>
-
-                        <div class="openvault-budget-indicator">
-                            <span class="openvault-budget-label">Visible:</span>
-                            <div class="openvault-budget-bar">
-                                <div class="openvault-budget-fill" id="openvault_visible_budget_fill"></div>
-                            </div>
-                            <span class="openvault-budget-text" id="openvault_visible_budget_text">0 / 16k</span>
-                        </div>
-                    </div>
-                </details>
-
-                <!-- Entity Detection Rules -->
-                <details class="openvault-details" style="margin-top: 10px;">
-                    <summary><i class="fa-solid fa-magnifying-glass-chart"></i> Entity Detection Rules</summary>
-                    <div class="openvault-settings-group">
-                        <label for="openvault_entity_window">
-                            Entity Window: <span id="openvault_entity_window_value">10</span> messages
-                            <small class="openvault-default-hint" data-default-key="entityWindowSize"></small>
-                        </label>
-                        <input type="range" id="openvault_entity_window" min="3" max="20" step="1" />
-                        <small class="openvault-hint">Messages to scan for names/places</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_embedding_window">
-                            Embedding Window: <span id="openvault_embedding_window_value">5</span> messages
-                            <small class="openvault-default-hint" data-default-key="embeddingWindowSize"></small>
-                        </label>
-                        <input type="range" id="openvault_embedding_window" min="2" max="10" step="1" />
-                        <small class="openvault-hint">Messages to include in semantic query</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_top_entities">
-                            Top Entities: <span id="openvault_top_entities_value">5</span>
-                            <small class="openvault-default-hint" data-default-key="topEntitiesCount"></small>
-                        </label>
-                        <input type="range" id="openvault_top_entities" min="1" max="10" step="1" />
-                        <small class="openvault-hint">Max entities to inject into query</small>
-
-                        <div style="height: 8px;"></div>
-
-                        <label for="openvault_entity_boost">
-                            Entity Boost: <span id="openvault_entity_boost_value">5.0</span>x
-                            <small class="openvault-default-hint" data-default-key="entityBoostWeight"></small>
-                        </label>
-                        <input type="range" id="openvault_entity_boost" min="0.5" max="15" step="0.5" />
-                        <small class="openvault-hint">BM25 weight multiplier for entities</small>
-                    </div>
-                </details>
-
-                <!-- Community Summaries -->
+                <!-- Communities Browser -->
                 <div class="openvault-card">
                     <div class="openvault-card-header">
                         <span class="openvault-card-title">
                             <i class="fa-solid fa-circle-nodes"></i> Communities
                         </span>
                         <span class="openvault-card-badge" id="openvault_community_count">0</span>
+                    </div>
+                    <div class="openvault-help-text" style="padding: 10px; font-size: 0.85em; color: var(--SmartThemeEmColor);">
+                        AI-discovered groups of related people, places, and concepts
                     </div>
                     <div id="openvault_community_list" class="openvault-community-list">
                         <p class="openvault-placeholder">No communities detected yet</p>
@@ -494,6 +422,9 @@
                             <i class="fa-solid fa-diagram-project"></i> Entities
                         </span>
                         <span class="openvault-card-badge" id="openvault_entity_count">0</span>
+                    </div>
+                    <div class="openvault-help-text" style="padding: 10px; font-size: 0.85em; color: var(--SmartThemeEmColor);">
+                        Browse all people, places, organizations, objects, and concepts in your story
                     </div>
                     <div class="openvault-filters">
                         <div class="openvault-search-container" style="flex: 1;">
@@ -514,6 +445,7 @@
                         <p class="openvault-placeholder">No entities extracted yet</p>
                     </div>
                 </div>
+
             </div>
 
             <!-- ================================================================
