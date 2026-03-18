@@ -21,6 +21,8 @@
         "test:ui": "vitest --ui",
         "sync-version": "node scripts/sync-version.js",
         "check-css": "node scripts/check-css.js",
+        "trim": "python scripts/trim-logs.py",
+        "trim:aggressive": "python scripts/trim-logs.py --aggressive",
         "repomix": "npm run repomix:logic-lite && npm run repomix:logic-full && npm run repomix:ui && npm run repomix:tests",
         "repomix:logic-full": "npx repomix --remove-empty-lines --output repomix-logic-full.md --include \"src/**/*.js,index.js,package.json,include/**,**/CLAUDE.md\" --ignore \"src/ui/**,**/*.css,**/*.html\"",
         "repomix:logic-lite": "npx repomix --remove-empty-lines --compress --output repomix-logic-lite.md --include \"src/**/*.js,index.js,package.json,include/**,**/CLAUDE.md\" --ignore \"src/ui/**,src/prompts/examples/**,**/*.css,**/*.html\"",
