@@ -99,4 +99,44 @@ describe('hasSufficientTokenOverlap', () => {
         const tokensB = new Set(['верёвка']);
         expect(hasSufficientTokenOverlap(tokensA, tokensB, 0.6, 'верёвки', 'верёвка')).toBe(true);
     });
+
+    // === TASK 1: Russian morphology stem-first tests ===
+
+    it('should merge Russian diminutives via stem equality (плетка/плеточка)', () => {
+        // Same root "плетк" — stems match exactly
+        const tokensA = new Set(['плетка']);
+        const tokensB = new Set(['плеточка']);
+        expect(hasSufficientTokenOverlap(tokensA, tokensB, 0.6, 'плетка', 'плеточка')).toBe(true);
+    });
+
+    it('should merge Russian singular/plural via stem equality (ошейник/ошейники)', () => {
+        // Same stem — should merge immediately
+        const tokensA = new Set(['ошейник']);
+        const tokensB = new Set(['ошейники']);
+        expect(hasSufficientTokenOverlap(tokensA, tokensB, 0.6, 'ошейник', 'ошейники')).toBe(true);
+    });
+
+    it('should NOT merge false positives blocked by stricter LCS (таблеточки/плеточка)', () => {
+        // Different roots, shared suffix "леточк" (6 chars)
+        // With LCS threshold 0.85, 6/9 = 0.67 < 0.85 → blocked
+        const tokensA = new Set(['таблеточки']);
+        const tokensB = new Set(['плеточка']);
+        expect(hasSufficientTokenOverlap(tokensA, tokensB, 0.6, 'таблеточки', 'плеточка')).toBe(false);
+    });
+
+    it('should still merge true positives via LCS at 0.85 (свечи/свеча)', () => {
+        // LCS "свеч" = 4 chars, minLen = 5, ratio = 0.8
+        // Wait, 0.8 < 0.85 — this should now FAIL at LCS level
+        // But stems should match: "свеч" for both
+        const tokensA = new Set(['свечи']);
+        const tokensB = new Set(['свеча']);
+        expect(hasSufficientTokenOverlap(tokensA, tokensB, 0.6, 'свечи', 'свеча')).toBe(true);
+    });
+
+    it('should still merge верёвки/верёвка via stem or LCS', () => {
+        // LCS "верёвк" = 6 chars, minLen = 7, ratio = 0.86 >= 0.85
+        const tokensA = new Set(['верёвки']);
+        const tokensB = new Set(['верёвка']);
+        expect(hasSufficientTokenOverlap(tokensA, tokensB, 0.6, 'верёвки', 'верёвка')).toBe(true);
+    });
 });
