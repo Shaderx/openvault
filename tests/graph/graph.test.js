@@ -535,6 +535,63 @@ describe('mergeOrInsertEntity', () => {
         expect(graphData.nodes.mina).toBeUndefined();
         expect(graphData._mergeRedirects?.mina).toBe('мина');
     });
+
+    it('does NOT merge short names with distance=2 (stricter threshold)', async () => {
+        // "Kaya" (4 chars) vs "Mama" (Мама, 4 chars) - distance is 2
+        // With old threshold (≤2), this would incorrectly merge
+        graphData.nodes.kaya = {
+            name: 'Kaya',
+            type: 'PERSON',
+            description: 'A friend',
+            mentions: 5,
+        };
+
+        // Act: try to insert Cyrillic "Мама" (Mama) - distance 2 from "kaya"
+        const key = await mergeOrInsertEntity(graphData, 'Мама', 'PERSON', 'Mother', 3, {
+            entityMergeSimilarityThreshold: 0.95,
+        });
+
+        // Assert: should NOT merge - distance 2 exceeds stricter threshold (1) for short names
+        expect(key).toBe('мама');
+        expect(graphData.nodes.мама).toBeDefined();
+        expect(graphData.nodes.kaya.aliases).toBeUndefined();
+    });
+
+    it('merges short names with distance=1 (within stricter threshold)', async () => {
+        // "Mina" (4 chars) vs "Mina" (Мина) - distance 0
+        graphData.nodes.mina = {
+            name: 'Mina',
+            type: 'PERSON',
+            description: 'A friend',
+            mentions: 5,
+        };
+
+        const key = await mergeOrInsertEntity(graphData, 'Мина', 'PERSON', 'Подруга', 3, {
+            entityMergeSimilarityThreshold: 0.95,
+        });
+
+        // Distance 0 should always match
+        expect(key).toBe('mina');
+        expect(graphData.nodes.mina.aliases).toContain('Мина');
+    });
+
+    it('merges longer names with distance=2 (standard threshold)', async () => {
+        // "Elizabeth" (9 chars) vs "Elizabet" (Элизабет) - distance 1 (h missing)
+        graphData.nodes.elizabeth = {
+            name: 'Elizabeth',
+            type: 'PERSON',
+            description: 'Queen',
+            mentions: 10,
+        };
+
+        const key = await mergeOrInsertEntity(graphData, 'Элизабет', 'PERSON', 'Королева', 3, {
+            entityMergeSimilarityThreshold: 0.95,
+        });
+
+        // Distance 1 should match for longer names (threshold ≤2)
+        expect(key).toBe('elizabeth');
+        expect(graphData.nodes.elizabeth.aliases).toContain('Элизабет');
+    });
 });
 
 describe('redirectEdges', () => {
@@ -1044,5 +1101,42 @@ describe('findCrossScriptCharacterKeys', () => {
         };
         const result = findCrossScriptCharacterKeys(['mina'], graphNodes);
         expect(result).toContain('мина');
+    });
+
+    it('uses stricter threshold (≤1) for short names (≤4 chars) to prevent false positives', () => {
+        // "kaya" (Кая) transliterates to "kaya" - distance 0 from "kaya"
+        // "mama" (Мама) transliterates to "mama" - distance 2 from "kaya"
+        // With old threshold (≤2), "Mama" would incorrectly match "Kaya"
+        const graphNodes = {
+            kaya: { name: 'Kaya', type: 'PERSON', description: 'A friend', mentions: 5 },
+            мама: { name: 'Мама', type: 'PERSON', description: 'Mother', mentions: 10 },
+        };
+        const result = findCrossScriptCharacterKeys(['kaya'], graphNodes);
+        // "мама" (Mama) should NOT match "kaya" - distance is 2, but short name threshold is 1
+        expect(result).not.toContain('мама');
+        expect(result).toHaveLength(0);
+    });
+
+    it('matches short names with distance 1 (within stricter threshold)', () => {
+        // "mina" vs "mina" (Мина) = distance 0 - should match
+        // "mina" vs "mina" with one typo = distance 1 - should still match for short names
+        const graphNodes = {
+            mina: { name: 'Mina', type: 'PERSON', description: 'A character', mentions: 5 },
+            мина: { name: 'Мина', type: 'PERSON', description: 'Персонаж', mentions: 10 },
+        };
+        const result = findCrossScriptCharacterKeys(['mina'], graphNodes);
+        expect(result).toContain('мина');
+    });
+
+    it('uses threshold ≤2 for longer names (>4 chars)', () => {
+        // Longer names can tolerate distance of 2
+        // "elizabeth" vs "elisabeth" = distance 2 (z→s, one extra char)
+        const graphNodes = {
+            elizabeth: { name: 'Elizabeth', type: 'PERSON', description: 'Queen', mentions: 10 },
+            элизабет: { name: 'Элизабет', type: 'PERSON', description: 'Королева', mentions: 15 },
+        };
+        const result = findCrossScriptCharacterKeys(['elizabeth'], graphNodes);
+        // "элизабет" (Elizabet) - distance 1 from "elizabeth" (h missing) - should match
+        expect(result).toContain('элизабет');
     });
 });

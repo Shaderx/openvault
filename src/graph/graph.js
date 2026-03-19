@@ -28,6 +28,18 @@ import { countTokens } from '../utils/tokens.js';
 import { levenshteinDistance, transliterateCyrToLat } from '../utils/transliterate.js';
 
 /**
+ * Compute dynamic Levenshtein distance threshold for cross-script matching.
+ * Short names (≤4 chars) are more prone to false positives, so use stricter threshold.
+ * @param {number} lenA - Length of first string
+ * @param {number} lenB - Length of second string
+ * @returns {number} Maximum allowed Levenshtein distance
+ */
+function getCrossScriptMaxDistance(lenA, lenB) {
+    const minLen = Math.min(lenA, lenB);
+    return minLen <= 4 ? 1 : 2;
+}
+
+/**
  * Resolve a raw entity name to its final graph key, accounting for merge redirects.
  * @param {Object} graphData - The graph object
  * @param {string} rawName - The raw entity name
@@ -100,7 +112,7 @@ export function findCrossScriptCharacterKeys(baseKeys, graphNodes) {
 
         const transliterated = transliterateCyrToLat(nodeKey);
         for (const baseKey of baseKeys) {
-            if (levenshteinDistance(transliterated, baseKey) <= 2) {
+            if (levenshteinDistance(transliterated, baseKey) <= getCrossScriptMaxDistance(transliterated.length, baseKey.length)) {
                 crossScriptKeys.push(nodeKey);
                 break;
             }
@@ -412,7 +424,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
             const cyrKey = keyIsCyrillic ? key : existingKey;
             const latKey = keyIsCyrillic ? existingKey : key;
 
-            if (levenshteinDistance(transliterateCyrToLat(cyrKey), latKey) <= 2) {
+            if (levenshteinDistance(transliterateCyrToLat(cyrKey), latKey) <= getCrossScriptMaxDistance(cyrKey.length, latKey.length)) {
                 logDebug(
                     `[graph] Cross-script merge: "${name}" (${key}) → "${node.name}" (${existingKey}), transliterated: "${transliterateCyrToLat(cyrKey)}"`
                 );
