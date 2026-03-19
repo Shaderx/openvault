@@ -38,11 +38,14 @@ describe('hasSufficientTokenOverlap', () => {
         expect(hasSufficientTokenOverlap(tokensA, tokensB, 0.6)).toBe(true);
     });
 
-    it('should handle substring containment separately', () => {
+    it('should NOT merge alice/alicia (different names, no stem match, LCS 0.8 < 0.85)', () => {
+        // alice/alicia are NOT morphological variants - different names
+        // English stemmer: "alice" -> "alic", "alicia" -> "alicia" (no reduction)
+        // LCS: "alic" = 4 chars, ratio = 4/5 = 0.8 < 0.85 threshold
         const keyA = 'alice';
         const keyB = 'alicia';
 
-        expect(hasSufficientTokenOverlap(new Set([keyA]), new Set([keyB]), 0.5, keyA, keyB)).toBe(true); // Substring containment
+        expect(hasSufficientTokenOverlap(new Set([keyA]), new Set([keyB]), 0.5, keyA, keyB)).toBe(false);
     });
 
     it('should match Russian morphological variants via stemming (ошейник/ошейником)', () => {
@@ -102,11 +105,13 @@ describe('hasSufficientTokenOverlap', () => {
 
     // === TASK 1: Russian morphology stem-first tests ===
 
-    it('should merge Russian diminutives via stem equality (плетка/плеточка)', () => {
-        // Same root "плетк" — stems match exactly
+    it('should NOT merge плетка/плеточка (different base words, not morphological variants)', () => {
+        // плетка (small whip/cord) vs плеточка (diminutive of плеть, not плетка)
+        // Russian stemmer: "плетка" -> "плетк", "плеточка" -> "плеточк" (different stems)
+        // LCS: "плет" = 4 chars, ratio = 4/6 = 0.67 < 0.85 threshold
         const tokensA = new Set(['плетка']);
         const tokensB = new Set(['плеточка']);
-        expect(hasSufficientTokenOverlap(tokensA, tokensB, 0.6, 'плетка', 'плеточка')).toBe(true);
+        expect(hasSufficientTokenOverlap(tokensA, tokensB, 0.6, 'плетка', 'плеточка')).toBe(false);
     });
 
     it('should merge Russian singular/plural via stem equality (ошейник/ошейники)', () => {

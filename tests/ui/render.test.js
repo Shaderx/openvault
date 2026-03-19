@@ -13,18 +13,18 @@ describe('renderGraphStats', () => {
                         graph: {
                             // Graph stores nodes/edges as objects (keyed by normalized name)
                             nodes: {
-                                'alice': { id: '1', name: 'Alice', type: 'PERSON' },
-                                'bob': { id: '2', name: 'Bob', type: 'PERSON' },
-                                'castle': { id: '3', name: 'Castle', type: 'PLACE' },
+                                alice: { id: '1', name: 'Alice', type: 'PERSON' },
+                                bob: { id: '2', name: 'Bob', type: 'PERSON' },
+                                castle: { id: '3', name: 'Castle', type: 'PLACE' },
                             },
                             edges: {
-                                'alice__bob': { source: 'alice', target: 'bob', relation: 'knows' },
-                                'alice__castle': { source: 'alice', target: 'castle', relation: 'owns' },
+                                alice__bob: { source: 'alice', target: 'bob', relation: 'knows' },
+                                alice__castle: { source: 'alice', target: 'castle', relation: 'owns' },
                             },
                         },
                         // Communities stored as object (keyed by ID)
                         communities: {
-                            'c1': { id: 'c1', summary: 'Test community' },
+                            c1: { id: 'c1', summary: 'Test community' },
                         },
                         lastCommunityDetection: 100,
                     },
