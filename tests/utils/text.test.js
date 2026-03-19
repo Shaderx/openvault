@@ -206,6 +206,33 @@ describe('text', () => {
             const input = '{"summary": "no plus signs here"}';
             expect(safeParseJSON(input)).toEqual({ summary: 'no plus signs here' });
         });
+
+        // === TASK 3: Multi-line concatenation tests ===
+
+        it('fixes string concatenation across multiple newlines with + on separate line', () => {
+            const input = '{"events": [{"summary": "Alice walked "\n+\n"to the garden"}]}';
+            const result = safeParseJSON(input);
+            expect(result.events[0].summary).toBe('Alice walked to the garden');
+        });
+
+        it('fixes string concatenation with + stranded between multiple blank lines', () => {
+            const input = '{"text": "start"\n\n+\n\n"end"}';
+            const result = safeParseJSON(input);
+            expect(result.text).toBe('startend');
+        });
+
+        it('fixes concatenation with CRLF line endings', () => {
+            const input = '{"text": "hello"\r\n+\r\n"world"}';
+            const result = safeParseJSON(input);
+            expect(result.text).toBe('helloworld');
+        });
+
+        it('handles mixed concatenation patterns in same input', () => {
+            const input = '{"a": "simple " + "case", "b": "multi"\n+\n"line"}';
+            const result = safeParseJSON(input);
+            expect(result.a).toBe('simple case');
+            expect(result.b).toBe('multiline');
+        });
     });
 
     describe('sortMemoriesBySequence', () => {
