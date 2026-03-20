@@ -104,6 +104,7 @@ global.setupTestContext = (overrides = {}) => {
             name2: 'Alice',
             chatId: 'test-chat-123',
             chatMetadata: { openvault: {} },
+            registerMacro: () => {}, // Mock for macro registration
             ...overrides.context,
         }),
         getExtensionSettings: () => ({
