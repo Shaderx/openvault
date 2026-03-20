@@ -225,34 +225,57 @@ class TransformersStrategy extends EmbeddingStrategy {
 
         this.#loadingPromise = (async () => {
             try {
-                const useWebGPU = await isWebGPUAvailable();
+                // Step 1: WebGPU detection
+                let useWebGPU;
+                try {
+                    useWebGPU = await isWebGPUAvailable();
+                } catch (gpuErr) {
+                    logError(`[loadPipeline] Step 1 FAILED: WebGPU detection`, gpuErr);
+                    useWebGPU = false;
+                }
 
-                // Check if model requires WebGPU
                 if (modelConfig.requiresWebGPU && !useWebGPU) {
-                    throw new Error(`${modelKey} requires WebGPU which is not available`);
+                    throw new Error(`${modelKey} requires WebGPU which is not available in this browser`);
                 }
 
                 const device = useWebGPU ? 'webgpu' : 'wasm';
                 const dtype = useWebGPU ? modelConfig.dtypeWebGPU : modelConfig.dtypeWASM;
+                logInfo(`[loadPipeline] Step 1 OK: device=${device}, dtype=${dtype}, model=${modelKey}`);
 
-                logDebug(`Loading ${modelKey} with ${device} (${dtype})`);
+                // Step 2: Import Transformers.js from CDN
+                let pipelineFn;
+                try {
+                    const module = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1');
+                    pipelineFn = module.pipeline;
+                    logInfo(`[loadPipeline] Step 2 OK: Transformers.js imported`);
+                } catch (cdnErr) {
+                    logError(`[loadPipeline] Step 2 FAILED: CDN import of Transformers.js`, cdnErr);
+                    throw cdnErr;
+                }
 
-                const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1');
-
-                let lastReportedPct = 0;
-                const pipe = await pipeline('feature-extraction', modelConfig.name, {
-                    device,
-                    dtype,
-                    progress_callback: (progress) => {
-                        if (progress.status === 'progress' && progress.total) {
-                            const pct = Math.round((progress.loaded / progress.total) * 100);
-                            if (pct >= lastReportedPct + 25) {
-                                lastReportedPct = Math.floor(pct / 25) * 25;
-                                this.#updateStatus(`Loading ${modelKey}: ${lastReportedPct}%`);
+                // Step 3: Create pipeline (downloads ONNX model if not in browser cache)
+                let pipe;
+                try {
+                    logInfo(`[loadPipeline] Step 3: Downloading ${modelConfig.name} (${dtype}) via ${device}...`);
+                    let lastReportedPct = 0;
+                    pipe = await pipelineFn('feature-extraction', modelConfig.name, {
+                        device,
+                        dtype,
+                        progress_callback: (progress) => {
+                            if (progress.status === 'progress' && progress.total) {
+                                const pct = Math.round((progress.loaded / progress.total) * 100);
+                                if (pct >= lastReportedPct + 25) {
+                                    lastReportedPct = Math.floor(pct / 25) * 25;
+                                    this.#updateStatus(`Loading ${modelKey}: ${lastReportedPct}%`);
+                                }
                             }
-                        }
-                    },
-                });
+                        },
+                    });
+                    logInfo(`[loadPipeline] Step 3 OK: Pipeline created for ${modelKey}`);
+                } catch (modelErr) {
+                    logError(`[loadPipeline] Step 3 FAILED: pipeline('feature-extraction', '${modelConfig.name}', {device: '${device}', dtype: '${dtype}'})`, modelErr);
+                    throw modelErr;
+                }
 
                 this.#cachedPipeline = pipe;
                 this.#cachedDevice = device;
