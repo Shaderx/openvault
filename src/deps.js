@@ -21,7 +21,16 @@ import { ConnectionManagerRequestService as stConnectionManager } from '../../..
  */
 const defaultDeps = {
     // SillyTavern context
-    getContext: () => stGetContext(),
+    getContext: () => {
+        const ctx = stGetContext();
+        // Ensure registerMacro is available (may not exist on older ST versions)
+        if (typeof ctx.registerMacro === 'undefined') {
+            ctx.registerMacro = () => {
+                console.warn('[OpenVault] registerMacro not available in this SillyTavern version');
+            };
+        }
+        return ctx;
+    },
     getExtensionSettings: () => stExtensionSettings,
 
     // Chat operations

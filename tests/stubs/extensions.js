@@ -10,6 +10,7 @@ export const getContext = () => ({
     characterId: 'test-char',
     characters: {},
     powerUserSettings: {},
+    registerMacro: () => {},
 });
 
 export const extension_settings = {
