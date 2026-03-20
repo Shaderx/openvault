@@ -11,7 +11,11 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **CDN Imports Only**: Use `https://esm.sh/...`. Never pin versions (`@version`). Do NOT add new dependencies without permission.
 - **Test Aliasing**: If adding a CDN dependency, you MUST `npm install` it and map the URL to `node_modules/` in `vitest.config.js`.
 - **SillyTavern Globals**: NEVER access ST globals (`getContext`, `eventSource`) directly. Always use `getDeps()` from `src/deps.js`.
-- **Settings Access**: NEVER use `settings.xxx ?? <hardcoded>` or `settings.xxx || <hardcoded>`. All defaults live in `defaultSettings` (src/constants.js). `loadSettings()` guarantees every key is populated.
+- **Settings Access**: Use centralized API from `src/settings.js`:
+  - `getSettings(path?, defaultValue?)` - Get entire settings object or nested value via dot notation
+  - `setSetting(path, value)` - Set nested value, auto-saves via debounced save
+  - `hasSettings(path)` - Check if path exists
+  - NEVER use `settings.xxx ?? <hardcoded>`. All defaults live in `defaultSettings` (src/constants.js).
 - **LLM Prompt Format**: ALL prompt builders MUST return `buildMessages(systemPrompt, userPrompt, prefill, preamble)` from `src/prompts/shared/formatters.js`. System prompt MUST be assembled via `assembleSystemPrompt({ role, examples, outputLanguage })` — containing ONLY role + examples (schema/rules moved to user prompt to defeat recency bias). User prompt MUST end with `assembleUserConstraints({ schema, rules, languageInstruction })` for the constraint block (language_rules → task_rules → output_schema → EXECUTION_TRIGGER). Every LLM call config MUST use an `LLM_CONFIGS.*` entry from `src/llm.js` — NEVER inline `{ maxTokens, ... }` objects. `prefill` is **required** — builders throw if missing or empty. Callers resolve via `resolveExtractionPrefill(settings)` (defaults to `pure_think`). This ensures uniform preamble injection, assistant prefill, language rules, and structured output support across all call sites.
 - **Anti-Test Creep**: Strictly enforce the Test Pyramid (`tests/CLAUDE.md`). Keep orchestrator integration tests thin (3-5 tests max). Test all edge cases, JSON parsing, and math exclusively in pure-function unit tests. Use `it.each` for permutations.
 - **Pre-commit**: Biome lints/formats automatically. DO NOT format manually. `npm run test` uses Vitest + JSDOM.

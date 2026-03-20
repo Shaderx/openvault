@@ -20,7 +20,10 @@ Settings reorganized by user activity pattern, not technical category:
 
 ## PATTERNS & CONVENTIONS
 - **Drawers (`.openvault-details`)**: Collapsible `<details>` elements. CSS hides native triangle, uses rotating `›` chevron.
-- **Settings Binding**: Uses `bindSetting(elementId, settingKey, type)`. ALL saves via `getDeps().saveSettingsDebounced()`.
+- **Settings Binding**: Uses `bindSetting(elementId, settingKey, type)`. All get/set operations use centralized API from `src/settings.js`:
+  - `getSettings(path?, defaultValue?)` for reads
+  - `setSetting(path, value)` for writes (auto-saves via debounced save)
+- **No Internal Functions**: Removed internal `getSettings()` and `saveSetting()` — all operations go through the centralized settings module.
 - **Reset Behavior**: `handleResetSettings()` preserves connection profiles (extractionProfile, embeddingSource, ollamaUrl, etc.) and only resets fine-tuning math.
 - **Warning Banner**: Advanced tab has amber warning banner discouraging changes to pre-calibrated values.
 - **Naming**:
