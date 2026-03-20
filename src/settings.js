@@ -18,9 +18,10 @@ import { getDeps } from './deps.js';
 export function loadSettings() {
     const deps = getDeps();
     const context = deps.getContext();
+    const extensionSettings = deps.getExtensionSettings();
 
     // SillyTavern provides lodash.merge via context
-    const { extensionSettings, lodash } = context;
+    const { lodash } = context;
 
     // If lodash isn't available yet (e.g., in test mocks), skip initialization
     // The settings will be initialized properly when running in actual ST
@@ -34,6 +35,24 @@ export function loadSettings() {
         structuredClone(defaultSettings),
         extensionSettings[extensionName] || {}
     );
+}
+
+/**
+ * Get settings object or nested value using lodash.get
+ * @param {string} [path] - Optional lodash path (dot notation)
+ * @param {*} [defaultValue] - Default value if path not found
+ * @returns {Settings|*} Settings object or value at path
+ */
+export function getSettings(path, defaultValue) {
+    const deps = getDeps();
+    const lodash = deps.getContext()?.lodash;
+    const settings = deps.getExtensionSettings()[extensionName];
+
+    if (path === undefined) {
+        return settings;
+    }
+
+    return lodash?.get(settings, path, defaultValue) ?? defaultValue;
 }
 
 // Auto-initialize on import
