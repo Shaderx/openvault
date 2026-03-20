@@ -115,5 +115,17 @@ describe('Centralized Settings Module', () => {
             const result = getSettings('injection.memory.position');
             expect(result).toBe(1);
         });
+
+        it('should return default value for missing paths', async () => {
+            const { getSettings } = await import('../src/settings.js');
+            const result = getSettings('nonexistent.path', 42);
+            expect(result).toBe(42);
+        });
+
+        it('should return default value when path is undefined', async () => {
+            const { getSettings } = await import('../src/settings.js');
+            const result = getSettings('missing.nested.deep', 'default');
+            expect(result).toBe('default');
+        });
     });
 });
