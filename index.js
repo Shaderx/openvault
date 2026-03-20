@@ -145,5 +145,10 @@ jQuery(() => {
         updateEventListeners();
         setStatus('ready');
         logInfo('Extension initialized successfully');
+
+        // Eagerly preload the configured embedding model on startup
+        import('./src/embeddings.js').then(({ preloadCurrentModel }) => {
+            preloadCurrentModel().catch(() => {});
+        });
     });
 });

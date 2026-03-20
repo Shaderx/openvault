@@ -18,7 +18,7 @@ import {
 } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getSettings, setSetting } from '../settings.js';
-import { getEmbeddingStatus, getStrategy, isEmbeddingsEnabled, setEmbeddingStatusCallback } from '../embeddings.js';
+import { getEmbeddingStatus, getStrategy, isEmbeddingsEnabled, preloadCurrentModel, setEmbeddingStatusCallback } from '../embeddings.js';
 import { updateEventListeners } from '../events.js';
 import { formatForClipboard, getAll as getPerfData } from '../perf/store.js';
 import { logError, logInfo, logWarn } from '../utils/logging.js';
@@ -585,6 +585,11 @@ function bindUIElements() {
 
         $('#openvault_ollama_settings').toggle(value === 'ollama');
         updateEmbeddingStatusDisplay(getEmbeddingStatus());
+
+        // Eagerly preload the new model (downloads if not in browser cache)
+        if (value !== 'ollama') {
+            preloadCurrentModel();
+        }
     });
 
     // Profile selectors

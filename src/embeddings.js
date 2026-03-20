@@ -312,6 +312,33 @@ class TransformersStrategy extends EmbeddingStrategy {
         return this.#embed(text, prefix, { signal });
     }
 
+    /**
+     * Whether the pipeline for the current model key is already loaded in memory.
+     * @returns {boolean}
+     */
+    isLoaded() {
+        return !!(this.#cachedPipeline && this.#cachedModelId === this.#currentModelKey);
+    }
+
+    /**
+     * Eagerly load (or verify cached) the pipeline for the current model.
+     * If the ONNX weights are already in the browser Cache API the load is fast;
+     * otherwise they are downloaded from HuggingFace with progress updates.
+     * Safe to call multiple times — deduplicates via #loadingPromise.
+     * @returns {Promise<void>}
+     */
+    async preload() {
+        if (this.isLoaded()) {
+            this.#updateStatus(`${this.#currentModelKey} already loaded ✓`);
+            return;
+        }
+        try {
+            await this.#loadPipeline(this.#currentModelKey);
+        } catch (error) {
+            logError(`Preload failed for ${this.#currentModelKey}`, error);
+        }
+    }
+
     async reset() {
         this.#cachedPipeline = null;
         this.#cachedModelId = null;
@@ -500,6 +527,21 @@ export function isEmbeddingsEnabled() {
     const source = settings.embeddingSource;
     const strategy = getStrategy(source);
     return strategy.isEnabled();
+}
+
+/**
+ * Eagerly preload the currently configured Transformers.js model.
+ * Downloads weights if not in browser cache; no-ops for Ollama.
+ * Safe to fire-and-forget — errors are logged, never thrown.
+ */
+export async function preloadCurrentModel() {
+    const settings = getDeps().getExtensionSettings()[extensionName];
+    const source = settings.embeddingSource;
+    const strategy = getStrategy(source);
+
+    if (typeof strategy.preload === 'function') {
+        await strategy.preload();
+    }
 }
 
 // LRU cache for embedding results to avoid redundant API calls
