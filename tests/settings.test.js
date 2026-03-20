@@ -109,5 +109,11 @@ describe('Centralized Settings Module', () => {
             const result = getSettings();
             expect(result).toEqual(mockExtensionSettings.openvault);
         });
+
+        it('should get nested value with dot notation', async () => {
+            const { getSettings } = await import('../src/settings.js');
+            const result = getSettings('injection.memory.position');
+            expect(result).toBe(1);
+        });
     });
 });
