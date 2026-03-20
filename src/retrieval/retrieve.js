@@ -24,6 +24,7 @@
 import { CHARACTERS_KEY, extensionName, MEMORIES_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
+import { cachedContent } from '../injection/macros.js';
 import { filterMemoriesByPOV, getActiveCharacters, getPOVContext } from '../pov.js';
 import { getOpenVaultData } from '../utils/data.js';
 import { logDebug, logError } from '../utils/logging.js';
@@ -123,19 +124,39 @@ export function buildRetrievalContext(opts = {}) {
 /**
  * Inject retrieved context into the prompt
  * @param {string} contextText - Formatted context to inject
+ * @param {string} [worldText] - World context to inject
  */
-export function injectContext(contextText) {
-    if (!contextText) {
-        // Clear the injection if no context
-        safeSetExtensionPrompt('');
-        safeSetExtensionPrompt('', 'openvault_world');
-        return;
-    }
+export function injectContext(contextText, worldText = '') {
+    const deps = getDeps();
+    const settings = deps.getExtensionSettings()[extensionName];
 
-    if (safeSetExtensionPrompt(contextText)) {
+    // Always update cachedContent for macro access
+    // NOTE: cachedContent is a live object reference from macros.js.
+    // Mutating its properties (not reassigning the binding) is intentional
+    // and updates the macro return values in-place.
+    cachedContent.memory = contextText || '';
+    cachedContent.world = worldText || '';
+
+    // Get position settings with defaults
+    const memoryPosition = settings?.injection?.memory?.position ?? 1;
+    const memoryDepth = settings?.injection?.memory?.depth ?? 4;
+    const worldPosition = settings?.injection?.world?.position ?? 1;
+    const worldDepth = settings?.injection?.world?.depth ?? 4;
+
+    // Inject memory content
+    if (!contextText) {
+        safeSetExtensionPrompt('', 'openvault', memoryPosition, memoryDepth);
+    } else if (safeSetExtensionPrompt(contextText, 'openvault', memoryPosition, memoryDepth)) {
         logDebug('Context injected into prompt');
     } else {
         logDebug('Failed to inject context');
+    }
+
+    // Inject world content
+    if (!worldText) {
+        safeSetExtensionPrompt('', 'openvault_world', worldPosition, worldDepth);
+    } else {
+        safeSetExtensionPrompt(worldText, 'openvault_world', worldPosition, worldDepth);
     }
 }
 
@@ -152,8 +173,10 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
     const relevantMemories = await selectRelevantMemories(memoriesToUse, ctx);
 
     if (!relevantMemories || relevantMemories.length === 0) {
-        // Clear world context if no memories found
-        safeSetExtensionPrompt('', 'openvault_world');
+        // Clear cachedContent and world context if no memories found
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return null;
     }
 
@@ -177,19 +200,8 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
         chatLength
     );
 
-    if (formattedContext) {
-        injectContext(formattedContext);
-    }
-
-    // Cache injected context for debug export
-    cacheRetrievalDebug({
-        injectedContext: formattedContext,
-        selectedCount: relevantMemories.length,
-        eventsCount: relevantMemories.filter((m) => m.type !== 'reflection').length,
-        reflectionsCount: relevantMemories.filter((m) => m.type === 'reflection').length,
-    });
-
-    // Inject world context from community summaries
+    // Prepare world context for injection
+    let worldText = '';
     const worldCommunities = data.communities;
     if (worldCommunities && Object.keys(worldCommunities).length > 0) {
         let worldQueryEmbedding = null;
@@ -204,7 +216,7 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
                 worldQueryEmbedding,
                 ctx.worldContextBudget
             );
-            safeSetExtensionPrompt(worldResult.text, 'openvault_world');
+            worldText = worldResult.text || '';
             // Cache world context result for debug export
             if (worldResult?.text) {
                 cacheRetrievalDebug({
@@ -212,12 +224,19 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
                     isMacroIntent: worldResult.isMacroIntent,
                 });
             }
-        } else {
-            safeSetExtensionPrompt('', 'openvault_world');
         }
-    } else {
-        safeSetExtensionPrompt('', 'openvault_world');
     }
+
+    // Inject both memory and world content together
+    injectContext(formattedContext, worldText);
+
+    // Cache injected context for debug export
+    cacheRetrievalDebug({
+        injectedContext: formattedContext,
+        selectedCount: relevantMemories.length,
+        eventsCount: relevantMemories.filter((m) => m.type !== 'reflection').length,
+        reflectionsCount: relevantMemories.filter((m) => m.type === 'reflection').length,
+    });
 
     return { memories: relevantMemories, context: formattedContext };
 }
@@ -229,7 +248,9 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
 export async function retrieveAndInjectContext() {
     if (!isExtensionEnabled()) {
         logDebug('OpenVault disabled, skipping retrieval');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return null;
     }
 
@@ -239,21 +260,27 @@ export async function retrieveAndInjectContext() {
 
     if (!chat || chat.length === 0) {
         logDebug('No chat to retrieve context for');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return null;
     }
 
     const data = getOpenVaultData();
     if (!data) {
         logDebug('No chat context available');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return null;
     }
     const memories = data[MEMORIES_KEY] || [];
 
     if (memories.length === 0) {
         logDebug('No memories stored yet');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return null;
     }
 
@@ -291,7 +318,9 @@ export async function retrieveAndInjectContext() {
 
         if (memoriesToUse.length === 0) {
             logDebug('No memories available');
-            safeSetExtensionPrompt('', 'openvault_world');
+            cachedContent.memory = '';
+            cachedContent.world = '';
+            injectContext('', '');
             return null;
         }
 
@@ -313,7 +342,9 @@ export async function retrieveAndInjectContext() {
 
         if (!result) {
             logDebug('No relevant memories found');
-            safeSetExtensionPrompt('', 'openvault_world');
+            cachedContent.memory = '';
+            cachedContent.world = '';
+            injectContext('', '');
             return null;
         }
 
@@ -335,30 +366,34 @@ export async function retrieveAndInjectContext() {
 export async function updateInjection(pendingUserMessage = '') {
     // Clear injection if disabled or not in automatic mode
     if (!isExtensionEnabled()) {
-        safeSetExtensionPrompt('');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return;
     }
 
     const deps = getDeps();
     const context = deps.getContext();
     if (!context.chat || context.chat.length === 0) {
-        safeSetExtensionPrompt('');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return;
     }
 
     const data = getOpenVaultData();
     if (!data) {
-        safeSetExtensionPrompt('');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return;
     }
     const memories = data[MEMORIES_KEY] || [];
 
     if (memories.length === 0) {
-        safeSetExtensionPrompt('');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return;
     }
 
@@ -384,8 +419,9 @@ export async function updateInjection(pendingUserMessage = '') {
     }
 
     if (memoriesToUse.length === 0) {
-        safeSetExtensionPrompt('');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return;
     }
 
@@ -398,8 +434,9 @@ export async function updateInjection(pendingUserMessage = '') {
     const result = await selectFormatAndInject(memoriesToUse, data, ctx);
 
     if (!result) {
-        safeSetExtensionPrompt('');
-        safeSetExtensionPrompt('', 'openvault_world');
+        cachedContent.memory = '';
+        cachedContent.world = '';
+        injectContext('', '');
         return;
     }
 
