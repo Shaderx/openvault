@@ -106,7 +106,7 @@ const TRANSFORMERS_MODELS = {
     },
     'bge-small-en-v1.5': {
         name: 'Xenova/bge-small-en-v1.5',
-        dtypeWebGPU: 'q4f16',
+        dtypeWebGPU: 'fp16',
         dtypeWASM: 'q8',
         dimensions: 384,
         description: '384d · 133MB · English · MTEB: 62.17 · SOTA RAG',
@@ -254,32 +254,52 @@ class TransformersStrategy extends EmbeddingStrategy {
                 }
 
                 // Step 3: Create pipeline (downloads ONNX model if not in browser cache)
+                const progressCb = (lastRef) => (progress) => {
+                    if (progress.status === 'progress' && progress.total) {
+                        const pct = Math.round((progress.loaded / progress.total) * 100);
+                        if (pct >= lastRef.v + 25) {
+                            lastRef.v = Math.floor(pct / 25) * 25;
+                            this.#updateStatus(`Loading ${modelKey}: ${lastRef.v}%`);
+                        }
+                    }
+                };
+
                 let pipe;
+                let finalDevice = device;
                 try {
-                    logInfo(`[loadPipeline] Step 3: Downloading ${modelConfig.name} (${dtype}) via ${device}...`);
-                    let lastReportedPct = 0;
+                    logInfo(`[loadPipeline] Step 3: Creating pipeline ${modelConfig.name} (${dtype}) via ${device}...`);
                     pipe = await pipelineFn('feature-extraction', modelConfig.name, {
                         device,
                         dtype,
-                        progress_callback: (progress) => {
-                            if (progress.status === 'progress' && progress.total) {
-                                const pct = Math.round((progress.loaded / progress.total) * 100);
-                                if (pct >= lastReportedPct + 25) {
-                                    lastReportedPct = Math.floor(pct / 25) * 25;
-                                    this.#updateStatus(`Loading ${modelKey}: ${lastReportedPct}%`);
-                                }
-                            }
-                        },
+                        progress_callback: progressCb({ v: 0 }),
                     });
-                    logInfo(`[loadPipeline] Step 3 OK: Pipeline created for ${modelKey}`);
-                } catch (modelErr) {
-                    logError(`[loadPipeline] Step 3 FAILED: pipeline('feature-extraction', '${modelConfig.name}', {device: '${device}', dtype: '${dtype}'})`, modelErr);
-                    throw modelErr;
+                    logInfo(`[loadPipeline] Step 3 OK: Pipeline created for ${modelKey} via ${device}`);
+                } catch (webgpuErr) {
+                    // If WebGPU failed and WASM is available, fall back automatically
+                    if (useWebGPU && modelConfig.dtypeWASM && !modelConfig.requiresWebGPU) {
+                        logError(`[loadPipeline] Step 3 WebGPU failed, falling back to WASM (${modelConfig.dtypeWASM})`, webgpuErr);
+                        this.#updateStatus(`Loading ${modelKey} via WASM (fallback)...`);
+                        try {
+                            pipe = await pipelineFn('feature-extraction', modelConfig.name, {
+                                device: 'wasm',
+                                dtype: modelConfig.dtypeWASM,
+                                progress_callback: progressCb({ v: 0 }),
+                            });
+                            finalDevice = 'wasm';
+                            logInfo(`[loadPipeline] Step 3 OK: WASM fallback succeeded for ${modelKey}`);
+                        } catch (wasmErr) {
+                            logError(`[loadPipeline] Step 3 WASM fallback also FAILED`, wasmErr);
+                            throw wasmErr;
+                        }
+                    } else {
+                        logError(`[loadPipeline] Step 3 FAILED: pipeline('feature-extraction', '${modelConfig.name}', {device: '${device}', dtype: '${dtype}'})`, webgpuErr);
+                        throw webgpuErr;
+                    }
                 }
 
                 this.#cachedPipeline = pipe;
-                this.#cachedDevice = device;
-                const deviceLabel = useWebGPU ? 'WebGPU' : 'WASM';
+                this.#cachedDevice = finalDevice;
+                const deviceLabel = finalDevice === 'webgpu' ? 'WebGPU' : 'WASM';
                 this.#updateStatus(`${modelKey} (${deviceLabel}) ✓`);
                 return pipe;
             } catch (error) {
