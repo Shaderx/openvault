@@ -1,6 +1,33 @@
 import { extensionName } from '../constants.js';
 import { getDeps } from '../deps.js';
 
+// =============================================================================
+// Error Ring Buffer — captured in memory for the Error Log UI panel
+// =============================================================================
+const MAX_ERROR_LOG = 50;
+const errorLog = [];
+
+function pushError(level, msg, detail) {
+    const entry = {
+        ts: new Date().toLocaleTimeString(),
+        level,
+        msg,
+        detail: detail instanceof Error ? `${detail.name}: ${detail.message}` : (detail ?? ''),
+    };
+    errorLog.push(entry);
+    if (errorLog.length > MAX_ERROR_LOG) errorLog.shift();
+}
+
+/** Get snapshot of the error ring buffer (newest last). */
+export function getErrorLog() {
+    return errorLog;
+}
+
+/** Clear all captured errors. */
+export function clearErrorLog() {
+    errorLog.length = 0;
+}
+
 /**
  * Debug-only log. Hidden unless settings.debugMode is true.
  * @param {string} msg
@@ -43,6 +70,7 @@ export function logWarn(msg, data) {
     } else {
         c.warn(`[OpenVault] ${msg}`);
     }
+    pushError('WARN', msg, data);
 }
 
 /**
@@ -64,6 +92,10 @@ export function logError(msg, error, context) {
         c.log(context);
         groupEnd();
     }
+    const detail = error
+        ? `${error.name}: ${error.message}${context ? ' | ctx: ' + JSON.stringify(context) : ''}`
+        : (context ? JSON.stringify(context) : '');
+    pushError('ERROR', msg, detail);
 }
 
 /**
