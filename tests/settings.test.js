@@ -13,14 +13,21 @@ const lodashGet = (obj, path, defaultValue) => {
 
 const lodashSet = (obj, path, value) => {
     if (Object(obj) !== obj) return obj;
-    const keys = String(path).split('.');
+    // Handle both dot notation and array bracket notation
+    const keys = String(path).split(/[.[\]]+/).filter(Boolean);
     let current = obj;
     for (let i = 0; i < keys.length - 1; i++) {
         const key = keys[i];
-        if (!(key in current)) current[key] = {};
-        current = current[key];
+        // Convert numeric keys to numbers for array access
+        const numKey = /^\d+$/.test(key) ? parseInt(key, 10) : key;
+        if (!(numKey in current)) {
+            current[numKey] = /^\d+$/.test(keys[i + 1]) ? [] : {};
+        }
+        current = current[numKey];
     }
-    current[keys[keys.length - 1]] = value;
+    const lastKey = keys[keys.length - 1];
+    const numLastKey = /^\d+$/.test(lastKey) ? parseInt(lastKey, 10) : lastKey;
+    current[numLastKey] = value;
     return obj;
 };
 
@@ -126,6 +133,34 @@ describe('Centralized Settings Module', () => {
             const { getSettings } = await import('../src/settings.js');
             const result = getSettings('missing.nested.deep', 'default');
             expect(result).toBe('default');
+        });
+    });
+
+    describe('setSetting', () => {
+        it('should set nested value with dot notation', async () => {
+            const { setSetting, getSettings } = await import('../src/settings.js');
+            setSetting('injection.memory.position', 0);
+            expect(getSettings('injection.memory.position')).toBe(0);
+            expect(mockSaveSettingsDebounced).toHaveBeenCalled();
+        });
+
+        it('should create intermediate objects when setting nested path', async () => {
+            const { setSetting, getSettings } = await import('../src/settings.js');
+            setSetting('new.nested.path', 'value');
+            expect(getSettings('new.nested.path')).toBe('value');
+            expect(mockSaveSettingsDebounced).toHaveBeenCalled();
+        });
+
+        it('should overwrite existing values', async () => {
+            const { setSetting, getSettings } = await import('../src/settings.js');
+            setSetting('extractionTokenBudget', 12000);
+            expect(getSettings('extractionTokenBudget')).toBe(12000);
+        });
+
+        it('should work with array notation', async () => {
+            const { setSetting, getSettings } = await import('../src/settings.js');
+            setSetting('testArray[0].name', 'first');
+            expect(getSettings('testArray[0].name')).toBe('first');
         });
     });
 });

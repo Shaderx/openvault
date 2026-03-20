@@ -55,5 +55,19 @@ export function getSettings(path, defaultValue) {
     return lodash?.get(settings, path, defaultValue) ?? defaultValue;
 }
 
+/**
+ * Set settings value using lodash.set
+ * @param {string} path - Lodash path (dot notation)
+ * @param {*} value - Value to set
+ */
+export function setSetting(path, value) {
+    const deps = getDeps();
+    const lodash = deps.getContext()?.lodash;
+    const settings = deps.getExtensionSettings()[extensionName];
+
+    lodash.set(settings, path, value);
+    deps.saveSettingsDebounced();
+}
+
 // Auto-initialize on import
 loadSettings();
