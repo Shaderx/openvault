@@ -2,7 +2,7 @@ import { CHARACTERS_KEY, LAST_PROCESSED_KEY, MEMORIES_KEY, METADATA_KEY } from '
 import { getDeps } from '../deps.js';
 import { record } from '../perf/store.js';
 import { showToast } from './dom.js';
-import { deleteEmbedding, hasEmbedding } from './embedding-codec.js';
+import { deleteEmbedding, hasEmbedding, isStSynced, clearStSynced } from './embedding-codec.js';
 import { logDebug, logError, logInfo, logWarn } from './logging.js';
 
 /**
@@ -368,6 +368,23 @@ export function invalidateStaleEmbeddings(data, currentModelId) {
         if (hasEmbedding(community)) {
             deleteEmbedding(community);
             count++;
+        }
+    }
+
+    // Also clear ST sync flags
+    for (const m of data[MEMORIES_KEY] || []) {
+        if (isStSynced(m)) {
+            clearStSynced(m);
+        }
+    }
+    for (const node of Object.values(data.graph?.nodes || {})) {
+        if (isStSynced(node)) {
+            clearStSynced(node);
+        }
+    }
+    for (const community of Object.values(data.communities || {})) {
+        if (isStSynced(community)) {
+            clearStSynced(community);
         }
     }
 
