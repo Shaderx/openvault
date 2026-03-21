@@ -28,8 +28,9 @@ import {
 } from '../prompts/index.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { generateId } from '../utils/data.js';
-import { getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
+import { getEmbedding, hasEmbedding, isStSynced, markStSynced, cyrb53 } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
+import { isStVectorSource, syncItemsToST, getCurrentChatId } from '../utils/data.js';
 import { sortMemoriesBySequence } from '../utils/text.js';
 
 const REFLECTION_THRESHOLD = 40;
@@ -319,6 +320,23 @@ export async function generateReflections(characterName, allMemories, characterS
     logDebug(
         `Reflection: Generated ${toAdd.length} reflections for ${characterName} (${newReflections.length - toAdd.length} filtered)`
     );
+
+    // Sync reflections to ST Vector Storage if enabled
+    if (isStVectorSource()) {
+        const chatId = getCurrentChatId();
+        const unsyncedReflections = toAdd.filter((r) => !isStSynced(r));
+        if (unsyncedReflections.length > 0) {
+            const items = unsyncedReflections.map((r) => ({
+                hash: cyrb53(`[OV_ID:${r.id}] ${r.summary}`),
+                text: `[OV_ID:${r.id}] ${r.summary}`,
+            }));
+            const success = await syncItemsToST(items, chatId);
+            if (success) {
+                for (const r of unsyncedReflections) markStSynced(r);
+            }
+        }
+    }
+
     record('llm_reflection', performance.now() - t0);
     return toAdd;
 }
