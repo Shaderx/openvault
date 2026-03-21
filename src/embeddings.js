@@ -89,6 +89,59 @@ class EmbeddingStrategy {
     async reset() {
         // Default: no-op
     }
+
+    /**
+     * Check if this strategy uses external storage (ST Vector Storage)
+     * @returns {boolean} True if strategy delegates storage to external system
+     */
+    usesExternalStorage() {
+        return false;
+    }
+
+    /**
+     * Insert items into external vector storage
+     * @param {Object[]} items - Items to insert [{ id, summary, type? }]
+     * @param {Object} options - Options
+     * @param {AbortSignal} options.signal - AbortSignal
+     * @returns {Promise<boolean>} True if successful
+     */
+    async insertItems(_items, _options = {}) {
+        return false;
+    }
+
+    /**
+     * Search for similar items in external vector storage
+     * @param {string} queryText - Query text
+     * @param {number} topK - Number of results
+     * @param {number} threshold - Similarity threshold
+     * @param {Object} options - Options
+     * @param {AbortSignal} options.signal - AbortSignal
+     * @returns {Promise<{id: string, text: string, score?: number}[]|null>} Search results or null
+     */
+    async searchItems(_queryText, _topK, _threshold, _options = {}) {
+        return null;
+    }
+
+    /**
+     * Delete items from external vector storage
+     * @param {string[]} ids - Item IDs to delete
+     * @param {Object} options - Options
+     * @param {AbortSignal} options.signal - AbortSignal
+     * @returns {Promise<boolean>} True if successful
+     */
+    async deleteItems(_ids, _options = {}) {
+        return false;
+    }
+
+    /**
+     * Purge entire collection from external vector storage
+     * @param {Object} options - Options
+     * @param {AbortSignal} options.signal - AbortSignal
+     * @returns {Promise<boolean>} True if successful
+     */
+    async purgeCollection(_options = {}) {
+        return false;
+    }
 }
 
 // =============================================================================
