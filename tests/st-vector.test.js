@@ -259,3 +259,12 @@ describe('StVectorStrategy', () => {
         expect(result).toBeNull();
     });
 });
+
+describe('hasEmbedding with _st_synced', () => {
+    it('returns true when _st_synced is set (no local embedding)', async () => {
+        const { hasEmbedding, markStSynced } = await import('../src/utils/embedding-codec.js');
+        const obj = {};
+        markStSynced(obj);
+        expect(hasEmbedding(obj)).toBe(true);
+    });
+});

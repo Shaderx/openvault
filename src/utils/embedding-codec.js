@@ -63,6 +63,7 @@ export function setEmbedding(obj, vec) {
  */
 export function hasEmbedding(obj) {
     if (!obj) return false;
+    if (obj._st_synced) return true;
     if (obj.embedding_b64) return true;
     if (obj.embedding && obj.embedding.length > 0) return true;
     return false;
