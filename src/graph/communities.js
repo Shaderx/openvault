@@ -299,7 +299,7 @@ export async function updateCommunitySummaries(
         for (const [id, community] of Object.entries(updatedCommunities)) {
             if (community.summary && !isStSynced(community)) {
                 const text = `[OV_ID:${id}] ${community.summary}`;
-                items.push({ hash: cyrb53(text), text });
+                items.push({ hash: cyrb53(text), text, index: 0 });
                 markStSynced(community);
             }
         }

@@ -744,7 +744,7 @@ export async function consolidateEdges(graphData, _settings) {
                             const chatId = getCurrentChatId();
                             const edgeId = `edge_${edge.source}_${edge.target}`;
                             const text = `[OV_ID:${edgeId}] ${edge.description}`;
-                            await syncItemsToST([{ hash: cyrb53(text), text }], chatId);
+                            await syncItemsToST([{ hash: cyrb53(text), text, index: 0 }], chatId);
                             markStSynced(edge);
                         }
 

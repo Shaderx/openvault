@@ -691,6 +691,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                 const items = unsyncedEvents.map((e) => ({
                     hash: cyrb53(`[OV_ID:${e.id}] ${e.summary}`),
                     text: `[OV_ID:${e.id}] ${e.summary}`,
+                    index: 0,
                 }));
                 const success = await syncItemsToST(items, chatId);
                 if (success) {

@@ -877,6 +877,7 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
             const stItems = batch.map(({ text }) => ({
                 hash: cyrb53(text),
                 text,
+                index: 0,
             }));
             const success = await strategy.insertItems(stItems);
             if (success) {

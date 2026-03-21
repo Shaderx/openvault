@@ -328,6 +328,7 @@ export async function generateReflections(characterName, allMemories, characterS
             const items = unsyncedReflections.map((r) => ({
                 hash: cyrb53(`[OV_ID:${r.id}] ${r.summary}`),
                 text: `[OV_ID:${r.id}] ${r.summary}`,
+                index: 0,
             }));
             const success = await syncItemsToST(items, chatId);
             if (success) {
