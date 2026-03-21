@@ -833,6 +833,67 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
         return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: false };
     }
 
+    const settings = getDeps().getExtensionSettings()[extensionName];
+    const source = settings.embeddingSource;
+    const strategy = getStrategy(source);
+
+    // ST Vector Storage branch: sync items instead of generating local embeddings
+    if (strategy.usesExternalStorage()) {
+        const { cyrb53, isStSynced, markStSynced } = await import('./utils/embedding-codec.js');
+        const BATCH_SIZE = 100;
+
+        const allItems = [];
+
+        // Collect unsynced memories
+        for (const m of data[MEMORIES_KEY] || []) {
+            if (m.summary && !isStSynced(m)) {
+                allItems.push({ item: m, text: `[OV_ID:${m.id}] ${m.summary}` });
+            }
+        }
+
+        // Collect unsynced graph nodes
+        for (const [name, node] of Object.entries(data.graph?.nodes || {})) {
+            if (!isStSynced(node)) {
+                allItems.push({ item: node, text: `[OV_ID:${name}] ${node.description}` });
+            }
+        }
+
+        // Collect unsynced communities
+        for (const [id, community] of Object.entries(data.communities || {})) {
+            if (community.summary && !isStSynced(community)) {
+                allItems.push({ item: community, text: `[OV_ID:${id}] ${community.summary}` });
+            }
+        }
+
+        if (allItems.length === 0) {
+            return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: true };
+        }
+
+        if (!silent) showToast('info', `Syncing ${allItems.length} items to ST Vector Storage...`);
+
+        let synced = 0;
+        for (let i = 0; i < allItems.length; i += BATCH_SIZE) {
+            const batch = allItems.slice(i, i + BATCH_SIZE);
+            const stItems = batch.map(({ text }) => ({
+                hash: cyrb53(text),
+                text,
+            }));
+            const success = await strategy.insertItems(stItems);
+            if (success) {
+                for (const { item } of batch) {
+                    markStSynced(item);
+                    synced++;
+                }
+            }
+        }
+
+        if (synced > 0) {
+            await saveOpenVaultData();
+        }
+
+        return { memories: synced, nodes: 0, communities: 0, total: synced, skipped: false };
+    }
+
     // Count what needs embedding
     const memories = (data[MEMORIES_KEY] || []).filter((m) => m.summary && !hasEmbedding(m));
     const nodes = Object.values(data.graph?.nodes || {}).filter((n) => !hasEmbedding(n));

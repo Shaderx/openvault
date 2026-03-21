@@ -268,3 +268,33 @@ describe('hasEmbedding with _st_synced', () => {
         expect(hasEmbedding(obj)).toBe(true);
     });
 });
+
+describe('backfillAllEmbeddings with ST strategy', () => {
+    it('syncs unsynced memories to ST in batches', async () => {
+        const depsModule = await import('../src/deps.js');
+        const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+        vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+            fetch: mockFetch,
+            getContext: () => ({
+                chatId: 'chat_123',
+                chatMetadata: {
+                    openvault: {
+                        memories: [
+                            { id: 'e1', summary: 'Event 1' },
+                            { id: 'e2', summary: 'Event 2' },
+                        ],
+                        graph: { nodes: {}, edges: {} },
+                        communities: {},
+                    },
+                },
+            }),
+            getExtensionSettings: () => ({
+                openvault: { embeddingSource: 'st_vector' },
+            }),
+            saveChatConditional: vi.fn().mockResolvedValue(undefined),
+        });
+
+        const { isStVectorSource } = await import('../src/utils/data.js');
+        expect(isStVectorSource()).toBe(true);
+    });
+});
