@@ -282,3 +282,300 @@ describe('ST Vector ID Prefix Utilities', () => {
         expect(hashStringToNumber(id1)).toBeGreaterThan(0); // Positive
     });
 });
+
+describe('StVectorStrategy', () => {
+    let _originalGetDeps;
+
+    beforeEach(async () => {
+        const depsModule = await import('../src/deps.js');
+        _originalGetDeps = depsModule.getDeps;
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    describe('isEnabled', () => {
+        it('returns true when ST vectors source is configured', async () => {
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({
+                    vectors: { source: 'openrouter', openrouter_model: 'qwen/qwen3-embedding-4b' },
+                })),
+            });
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            expect(strategy.isEnabled()).toBe(true);
+        });
+
+        it('returns false when ST vectors source is not configured', async () => {
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({ vectors: {} })),
+            });
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            expect(strategy.isEnabled()).toBe(false);
+        });
+    });
+
+    describe('getStatus', () => {
+        it('shows source and model when configured', async () => {
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({
+                    vectors: { source: 'openrouter', openrouter_model: 'qwen/qwen3-embedding-4b' },
+                })),
+            });
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            expect(strategy.getStatus()).toBe('ST: openrouter / qwen/qwen3-embedding-4b');
+        });
+
+        it('shows only source when model not set', async () => {
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({
+                    vectors: { source: 'ollama' },
+                })),
+            });
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            expect(strategy.getStatus()).toBe('ST: ollama');
+        });
+    });
+
+    describe('usesExternalStorage', () => {
+        it('returns true', async () => {
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({ vectors: { source: 'openrouter' } })),
+            });
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            expect(strategy.usesExternalStorage()).toBe(true);
+        });
+    });
+
+    describe('insertItems', () => {
+        it('calls ST /api/vector/insert with ID prefix in text', async () => {
+            const fetchSpy = vi.fn(async () => ({ ok: true }));
+
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({
+                    vectors: { source: 'openrouter', openrouter_model: 'test-model' },
+                })),
+                fetch: fetchSpy,
+            });
+
+            const dataModule = await import('../src/utils/data.js');
+            vi.spyOn(dataModule, 'getCurrentChatId').mockReturnValue('chat-123');
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            const items = [
+                { id: 'event_123', summary: 'First memory' },
+                { id: 'ref_456', summary: 'Second memory' },
+            ];
+
+            const result = await strategy.insertItems(items);
+
+            expect(result).toBe(true);
+            expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+            const callArgs = fetchSpy.mock.calls[0];
+            const body = JSON.parse(callArgs[1].body);
+
+            // Verify collectionId includes chatId
+            expect(body.collectionId).toBe('openvault-chat-123-openrouter');
+            expect(body.source).toBe('openrouter');
+
+            // Verify text contains ID prefix
+            expect(body.items[0].text).toBe('[OV_ID:event_123] First memory');
+            expect(body.items[1].text).toBe('[OV_ID:ref_456] Second memory');
+        });
+
+        it('returns false on fetch failure', async () => {
+            const fetchSpy = vi.fn(async () => ({ ok: false }));
+
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({ vectors: { source: 'openrouter' } })),
+                fetch: fetchSpy,
+            });
+
+            const dataModule = await import('../src/utils/data.js');
+            vi.spyOn(dataModule, 'getCurrentChatId').mockReturnValue('chat-123');
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            const result = await strategy.insertItems([{ id: 'event_1', summary: 'test' }]);
+
+            expect(result).toBe(false);
+        });
+    });
+
+    describe('searchItems', () => {
+        it('calls ST /api/vector/query and extracts IDs from text', async () => {
+            const fetchSpy = vi.fn(async () => ({
+                ok: true,
+                json: async () => ({
+                    hashes: [12345, 67890],
+                    metadata: [
+                        { text: '[OV_ID:event_123] First memory' },
+                        { text: '[OV_ID:ref_456] Second memory' },
+                    ],
+                }),
+            }));
+
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({
+                    vectors: { source: 'openrouter' },
+                })),
+                fetch: fetchSpy,
+            });
+
+            const dataModule = await import('../src/utils/data.js');
+            vi.spyOn(dataModule, 'getCurrentChatId').mockReturnValue('chat-123');
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            const results = await strategy.searchItems('query text', 10, 0.5);
+
+            expect(fetchSpy).toHaveBeenCalledWith('/api/vector/query', expect.objectContaining({
+                method: 'POST',
+            }));
+
+            const callArgs = fetchSpy.mock.calls[0];
+            const body = JSON.parse(callArgs[1].body);
+            expect(body.collectionId).toBe('openvault-chat-123-openrouter');
+            expect(body.searchText).toBe('query text');
+            expect(body.threshold).toBe(0.5);
+
+            // Verify IDs are extracted from text prefix
+            expect(results).toEqual([
+                { id: 'event_123', text: 'First memory', score: undefined },
+                { id: 'ref_456', text: 'Second memory', score: undefined },
+            ]);
+        });
+
+        it('handles items without ID prefix gracefully', async () => {
+            const fetchSpy = vi.fn(async () => ({
+                ok: true,
+                json: async () => ({
+                    hashes: [12345],
+                    metadata: [{ text: 'Memory without ID prefix' }],
+                }),
+            }));
+
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({ vectors: { source: 'openrouter' } })),
+                fetch: fetchSpy,
+            });
+
+            const dataModule = await import('../src/utils/data.js');
+            vi.spyOn(dataModule, 'getCurrentChatId').mockReturnValue('chat-123');
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            const results = await strategy.searchItems('query', 10, 0.5);
+
+            // Should return the hash as ID when no prefix found
+            expect(results).toEqual([
+                { id: '12345', text: 'Memory without ID prefix', score: undefined },
+            ]);
+        });
+
+        it('returns empty array on fetch failure', async () => {
+            const fetchSpy = vi.fn(async () => ({ ok: false }));
+
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({ vectors: { source: 'openrouter' } })),
+                fetch: fetchSpy,
+            });
+
+            const dataModule = await import('../src/utils/data.js');
+            vi.spyOn(dataModule, 'getCurrentChatId').mockReturnValue('chat-123');
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            const results = await strategy.searchItems('query', 10, 0.5);
+
+            expect(results).toEqual([]);
+        });
+    });
+
+    describe('deleteItems', () => {
+        it('converts string IDs to numeric hashes for deletion', async () => {
+            const fetchSpy = vi.fn(async () => ({ ok: true }));
+            const { hashStringToNumber } = await import('../src/embeddings.js');
+
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({ vectors: { source: 'openrouter' } })),
+                fetch: fetchSpy,
+            });
+
+            const dataModule = await import('../src/utils/data.js');
+            vi.spyOn(dataModule, 'getCurrentChatId').mockReturnValue('chat-123');
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            const result = await strategy.deleteItems(['event_123', 'ref_456']);
+
+            expect(result).toBe(true);
+            expect(fetchSpy).toHaveBeenCalledWith('/api/vector/delete', expect.objectContaining({
+                method: 'POST',
+            }));
+
+            const callArgs = fetchSpy.mock.calls[0];
+            const body = JSON.parse(callArgs[1].body);
+            expect(body.hashes).toEqual([hashStringToNumber('event_123'), hashStringToNumber('ref_456')]);
+        });
+    });
+
+    describe('purgeCollection', () => {
+        it('calls ST /api/vector/purge', async () => {
+            const fetchSpy = vi.fn(async () => ({ ok: true }));
+
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({ vectors: { source: 'openrouter' } })),
+                fetch: fetchSpy,
+            });
+
+            const dataModule = await import('../src/utils/data.js');
+            vi.spyOn(dataModule, 'getCurrentChatId').mockReturnValue('chat-123');
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            const result = await strategy.purgeCollection();
+
+            expect(result).toBe(true);
+            expect(fetchSpy).toHaveBeenCalledWith('/api/vector/purge', expect.objectContaining({
+                method: 'POST',
+            }));
+        });
+    });
+});
