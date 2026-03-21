@@ -262,7 +262,15 @@ export function calculateScore(memory, contextEmbedding, chatLength, constants, 
     let vectorBonus = 0;
     let vectorSimilarity = 0;
 
-    if (contextEmbedding && hasEmbedding(memory)) {
+    // ST Vector Storage branch: use pre-assigned proxy score (no local embeddings)
+    if (!contextEmbedding && memory._proxyVectorScore != null) {
+        vectorSimilarity = memory._proxyVectorScore;
+        const threshold = settings.vectorSimilarityThreshold;
+        if (vectorSimilarity > threshold) {
+            const normalizedSim = (vectorSimilarity - threshold) / (1 - threshold);
+            vectorBonus = alpha * boostWeight * normalizedSim;
+        }
+    } else if (contextEmbedding && hasEmbedding(memory)) {
         vectorSimilarity = cosineSimilarity(contextEmbedding, getEmbedding(memory));
         const threshold = settings.vectorSimilarityThreshold;
 
