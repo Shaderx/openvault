@@ -153,7 +153,7 @@ describe('STVectorsStrategy', () => {
             const depsModule = await import('../src/deps.js');
             vi.spyOn(depsModule, 'getDeps').mockReturnValue({
                 getExtensionSettings: vi.fn(() => ({
-                    vectors: { source: 'openrouter', openai_model: 'text-embedding-3-small' },
+                    vectors: { source: 'openrouter', openrouter_model: 'text-embedding-3-small' },
                 })),
             });
 
@@ -191,11 +191,11 @@ describe('STVectorsStrategy', () => {
     });
 
     describe('getStatus', () => {
-        it('shows provider and model when configured', async () => {
+        it('shows provider and model for openrouter source', async () => {
             const depsModule = await import('../src/deps.js');
             vi.spyOn(depsModule, 'getDeps').mockReturnValue({
                 getExtensionSettings: vi.fn(() => ({
-                    vectors: { source: 'openrouter', openai_model: 'text-embedding-3-small' },
+                    vectors: { source: 'openrouter', openrouter_model: 'text-embedding-3-small' },
                 })),
             });
 
@@ -203,6 +203,20 @@ describe('STVectorsStrategy', () => {
             const strategy = getStrategy('st-vectors');
 
             expect(strategy.getStatus()).toBe('ST: openrouter / text-embedding-3-small');
+        });
+
+        it('shows provider and model for openai source', async () => {
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({
+                    vectors: { source: 'openai', openai_model: 'text-embedding-ada-002' },
+                })),
+            });
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+
+            expect(strategy.getStatus()).toBe('ST: openai / text-embedding-ada-002');
         });
 
         it('shows "default" when model is empty', async () => {
@@ -233,7 +247,7 @@ describe('STVectorsStrategy', () => {
     });
 
     describe('getEmbedding', () => {
-        it('calls /api/embeddings/generate with correct payload', async () => {
+        it('calls /api/embeddings/generate with correct payload for openrouter', async () => {
             const fetchSpy = vi.fn(async () => ({
                 ok: true,
                 json: async () => ({ embeddings: [[0.1, 0.2, 0.3]] }),
@@ -242,7 +256,7 @@ describe('STVectorsStrategy', () => {
             const depsModule = await import('../src/deps.js');
             vi.spyOn(depsModule, 'getDeps').mockReturnValue({
                 getExtensionSettings: vi.fn(() => ({
-                    vectors: { source: 'openrouter', openai_model: 'text-embedding-3-small' },
+                    vectors: { source: 'openrouter', openrouter_model: 'qwen/qwen3-embedding-4b' },
                 })),
                 fetch: fetchSpy,
             });
@@ -259,7 +273,42 @@ describe('STVectorsStrategy', () => {
                     body: JSON.stringify({
                         source: 'openrouter',
                         items: ['test text'],
-                        model: 'text-embedding-3-small',
+                        model: 'qwen/qwen3-embedding-4b',
+                    }),
+                    signal: undefined,
+                })
+            );
+            expect(result).toBeInstanceOf(Float32Array);
+            expect(result[0]).toBeCloseTo(0.1, 5);
+        });
+
+        it('calls /api/embeddings/generate with correct payload for openai', async () => {
+            const fetchSpy = vi.fn(async () => ({
+                ok: true,
+                json: async () => ({ embeddings: [[0.1, 0.2, 0.3]] }),
+            }));
+
+            const depsModule = await import('../src/deps.js');
+            vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+                getExtensionSettings: vi.fn(() => ({
+                    vectors: { source: 'openai', openai_model: 'text-embedding-ada-002' },
+                })),
+                fetch: fetchSpy,
+            });
+
+            const { getStrategy } = await import('../src/embeddings.js');
+            const strategy = getStrategy('st-vectors');
+            const result = await strategy.getEmbedding('test text');
+
+            expect(fetchSpy).toHaveBeenCalledWith(
+                '/api/embeddings/generate',
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        source: 'openai',
+                        items: ['test text'],
+                        model: 'text-embedding-ada-002',
                     }),
                     signal: undefined,
                 })
@@ -286,7 +335,7 @@ describe('STVectorsStrategy', () => {
             const depsModule = await import('../src/deps.js');
             vi.spyOn(depsModule, 'getDeps').mockReturnValue({
                 getExtensionSettings: vi.fn(() => ({
-                    vectors: { source: 'openrouter', openai_model: 'text-embedding-3-small' },
+                    vectors: { source: 'openrouter', openrouter_model: 'text-embedding-3-small' },
                 })),
                 fetch: vi.fn(),
             });
@@ -302,7 +351,7 @@ describe('STVectorsStrategy', () => {
             const depsModule = await import('../src/deps.js');
             vi.spyOn(depsModule, 'getDeps').mockReturnValue({
                 getExtensionSettings: vi.fn(() => ({
-                    vectors: { source: 'openrouter', openai_model: 'text-embedding-3-small' },
+                    vectors: { source: 'openrouter', openrouter_model: 'text-embedding-3-small' },
                 })),
                 fetch: vi.fn(),
             });
@@ -326,7 +375,7 @@ describe('STVectorsStrategy', () => {
             const depsModule = await import('../src/deps.js');
             vi.spyOn(depsModule, 'getDeps').mockReturnValue({
                 getExtensionSettings: vi.fn(() => ({
-                    vectors: { source: 'openrouter', openai_model: 'text-embedding-3-small' },
+                    vectors: { source: 'openrouter', openrouter_model: 'text-embedding-3-small' },
                 })),
                 fetch: fetchSpy,
             });

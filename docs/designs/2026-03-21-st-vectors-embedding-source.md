@@ -76,7 +76,21 @@ class STVectorsStrategy extends EmbeddingStrategy {
             return 'Configure in Vector Storage';
         }
         const source = vectorSettings.source;
-        const model = vectorSettings.openai_model || 'default';
+        // Map source to its corresponding model field
+        const sourceToModelField = {
+            openai: 'openai_model',
+            openrouter: 'openrouter_model',
+            cohere: 'cohere_model',
+            ollama: 'ollama_model',
+            vllm: 'vllm_model',
+            google: 'google_model',
+            togetherai: 'togetherai_model',
+            electronhub: 'electronhub_model',
+            chutes: 'chutes_model',
+            nanogpt: 'nanogpt_model',
+        };
+        const modelField = sourceToModelField[source];
+        const model = (modelField && vectorSettings[modelField]) || 'default';
         return `ST: ${source} / ${model}`;
     }
 
@@ -86,13 +100,29 @@ class STVectorsStrategy extends EmbeddingStrategy {
             return null;
         }
 
+        // Map source to its corresponding model field
+        const sourceToModelField = {
+            openai: 'openai_model',
+            openrouter: 'openrouter_model',
+            cohere: 'cohere_model',
+            ollama: 'ollama_model',
+            vllm: 'vllm_model',
+            google: 'google_model',
+            togetherai: 'togetherai_model',
+            electronhub: 'electronhub_model',
+            chutes: 'chutes_model',
+            nanogpt: 'nanogpt_model',
+        };
+        const modelField = sourceToModelField[vectorSettings.source];
+        const model = modelField && vectorSettings[modelField];
+
         const response = await fetch('/api/embeddings/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 source: vectorSettings.source,
                 items: [text],
-                model: vectorSettings.openai_model || undefined,
+                model: model || undefined,
             }),
             signal,
         });

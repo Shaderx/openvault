@@ -420,13 +420,42 @@ class STVectorsStrategy extends EmbeddingStrategy {
         return !!(vectorSettings?.source);
     }
 
+    /**
+     * Get the model name for the current source
+     * Each source has its own model field (openai_model, openrouter_model, etc.)
+     * @param {Object} vectorSettings - Vector storage settings
+     * @returns {string|null} Model name or null if not set
+     */
+    #getModelForSource(vectorSettings) {
+        const source = vectorSettings?.source;
+        if (!source) return null;
+
+        // Map source to its corresponding model field
+        const sourceToModelField = {
+            openai: 'openai_model',
+            openrouter: 'openrouter_model',
+            cohere: 'cohere_model',
+            ollama: 'ollama_model',
+            vllm: 'vllm_model',
+            webllm: 'webllm_model',
+            google: 'google_model',
+            togetherai: 'togetherai_model',
+            electronhub: 'electronhub_model',
+            chutes: 'chutes_model',
+            nanogpt: 'nanogpt_model',
+        };
+
+        const modelField = sourceToModelField[source];
+        return modelField ? vectorSettings[modelField] : null;
+    }
+
     getStatus() {
         const vectorSettings = this.#getVectorSettings();
         if (!vectorSettings?.source) {
             return 'Configure in Vector Storage';
         }
         const source = vectorSettings.source;
-        const model = vectorSettings.openai_model || 'default';
+        const model = this.#getModelForSource(vectorSettings) || 'default';
         return `ST: ${source} / ${model}`;
     }
 
@@ -443,13 +472,14 @@ class STVectorsStrategy extends EmbeddingStrategy {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
         try {
+            const model = this.#getModelForSource(vectorSettings);
             const response = await getDeps().fetch('/api/embeddings/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     source: vectorSettings.source,
                     items: [text.trim()],
-                    model: vectorSettings.openai_model || undefined,
+                    model: model || undefined,
                 }),
                 signal,
             });
