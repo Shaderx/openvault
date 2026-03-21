@@ -137,6 +137,9 @@ export const MEMORIES_PER_PAGE = 20;
 // After fast-pass (Base + BM25), only top N get expensive cosine similarity
 export const VECTOR_PASS_LIMIT = 200;
 
+/** Over-fetch multiplier for ST Vector Storage candidate retrieval */
+export const OVER_FETCH_MULTIPLIER = 3;
+
 // Query context extraction defaults
 export const QUERY_CONTEXT_DEFAULTS = {
     entityWindowSize: 10, // messages to scan for entities
