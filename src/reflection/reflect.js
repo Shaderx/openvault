@@ -27,10 +27,9 @@ import {
     resolveOutputLanguage,
 } from '../prompts/index.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
-import { generateId } from '../utils/data.js';
-import { getEmbedding, hasEmbedding, isStSynced, markStSynced, cyrb53 } from '../utils/embedding-codec.js';
+import { generateId, getCurrentChatId, isStVectorSource, syncItemsToST } from '../utils/data.js';
+import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
-import { isStVectorSource, syncItemsToST, getCurrentChatId } from '../utils/data.js';
 import { sortMemoriesBySequence } from '../utils/text.js';
 
 const REFLECTION_THRESHOLD = 40;

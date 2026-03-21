@@ -25,8 +25,8 @@ import {
     resolveExtractionPrefill,
     resolveOutputLanguage,
 } from '../prompts/index.js';
-import { hasEmbedding, setEmbedding, isStSynced, markStSynced, cyrb53 } from '../utils/embedding-codec.js';
-import { isStVectorSource, syncItemsToST, getCurrentChatId } from '../utils/data.js';
+import { getCurrentChatId, isStVectorSource, syncItemsToST } from '../utils/data.js';
+import { cyrb53, hasEmbedding, isStSynced, markStSynced, setEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 

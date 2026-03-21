@@ -26,19 +26,19 @@ export const PROCESSED_MESSAGES_KEY = 'processed_message_ids';
 // =============================================================================
 
 export const INJECTION_POSITIONS = Object.freeze({
-    BEFORE_MAIN: 0,  // ↑Char - Before character definitions
-    AFTER_MAIN: 1,   // ↓Char - After character definitions (default)
-    BEFORE_AN: 2,    // ↑AN - Before author's note
-    AFTER_AN: 3,     // ↓AN - After author's note
-    IN_CHAT: 4,      // In-chat - At specified message depth
-    CUSTOM: -1,      // Custom - Macro-only, no auto-injection
+    BEFORE_MAIN: 0, // ↑Char - Before character definitions
+    AFTER_MAIN: 1, // ↓Char - After character definitions (default)
+    BEFORE_AN: 2, // ↑AN - Before author's note
+    AFTER_AN: 3, // ↓AN - After author's note
+    IN_CHAT: 4, // In-chat - At specified message depth
+    CUSTOM: -1, // Custom - Macro-only, no auto-injection
 });
 
 export const POSITION_LABELS = Object.freeze([
     { value: 0, label: '↑Char', description: 'Before character definitions' },
     { value: 1, label: '↓Char', description: 'After character definitions' },
-    { value: 2, label: '↑AN', description: 'Before author\'s note' },
-    { value: 3, label: '↓AN', description: 'After author\'s note' },
+    { value: 2, label: '↑AN', description: "Before author's note" },
+    { value: 3, label: '↓AN', description: "After author's note" },
     { value: 4, label: 'In-chat', description: 'At specified message depth' },
     { value: -1, label: 'Custom', description: 'Use macro manually' },
 ]);

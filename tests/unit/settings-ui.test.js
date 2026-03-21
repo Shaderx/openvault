@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('injection settings UI', () => {
     beforeEach(async () => {
@@ -49,7 +49,7 @@ describe('injection settings UI', () => {
         }));
 
         // Mock jQuery
-        global.$ = vi.fn((selector) => ({
+        global.$ = vi.fn((_selector) => ({
             val: vi.fn().mockReturnThis(),
             on: vi.fn().mockReturnThis(),
             parent: vi.fn().mockReturnThis(),
@@ -58,7 +58,7 @@ describe('injection settings UI', () => {
             find: vi.fn().mockReturnThis(),
         }));
 
-        global.$.get = vi.fn((url, callback) => {
+        global.$.get = vi.fn((_url, callback) => {
             callback('<div id="injection_settings"></div>');
             return { done: true };
         });

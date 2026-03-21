@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('updateInjection with position settings', () => {
     let mockSetExtensionPrompt;
@@ -12,15 +12,15 @@ describe('updateInjection with position settings', () => {
         // Track the cachedContent object to verify it gets updated
         mockCachedContent = {
             memory: '',
-            world: ''
+            world: '',
         };
 
         mockSetExtensionPrompt = vi.fn();
         mockGetContext = vi.fn(() => ({
             chat: [
                 { is_system: true, mes: 'System message' },
-                { is_system: false, is_user: true, mes: 'User test message' }
-            ]
+                { is_system: false, is_user: true, mes: 'User test message' },
+            ],
         }));
 
         const mockSettings = {
@@ -32,12 +32,12 @@ describe('updateInjection with position settings', () => {
             worldContextBudget: 500,
             injection: {
                 memory: { position: 1, depth: 4 },
-                world: { position: 2, depth: 4 }
-            }
+                world: { position: 2, depth: 4 },
+            },
         };
 
         mockGetExtensionSettings = vi.fn(() => ({
-            openvault: mockSettings
+            openvault: mockSettings,
         }));
 
         // Mock all dependencies - must mock before importing retrieve.js
@@ -45,76 +45,76 @@ describe('updateInjection with position settings', () => {
             getDeps: () => ({
                 setExtensionPrompt: mockSetExtensionPrompt,
                 getContext: mockGetContext,
-                getExtensionSettings: mockGetExtensionSettings
-            })
+                getExtensionSettings: mockGetExtensionSettings,
+            }),
         }));
 
         // Mock macros module to track cachedContent updates
         vi.doMock('../../src/injection/macros.js', () => ({
             cachedContent: mockCachedContent,
-            initMacros: vi.fn()
+            initMacros: vi.fn(),
         }));
 
         // Mock st-helpers
         vi.doMock('../../src/utils/st-helpers.js', () => ({
             safeSetExtensionPrompt: mockSetExtensionPrompt,
-            isExtensionEnabled: () => true
+            isExtensionEnabled: () => true,
         }));
 
         // Mock formatting module to avoid CDN import
         vi.doMock('../../src/retrieval/formatting.js', () => ({
-            formatContextForInjection: vi.fn(() => 'formatted context')
+            formatContextForInjection: vi.fn(() => 'formatted context'),
         }));
 
         // Mock data utility to return no memories (clear injection scenario)
         vi.doMock('../../src/utils/data.js', () => ({
             getOpenVaultData: () => ({
                 characters: {},
-                communities: {}
-            })
+                communities: {},
+            }),
         }));
 
         // Mock pov module
         vi.doMock('../../src/pov.js', () => ({
             getPOVContext: () => ({
                 povCharacters: [],
-                isGroupChat: false
+                isGroupChat: false,
             }),
-            filterMemoriesByPOV: () => []
+            filterMemoriesByPOV: () => [],
         }));
 
         // Mock scoring module
         vi.doMock('../../src/retrieval/scoring.js', () => ({
-            selectRelevantMemories: vi.fn(async () => [])
+            selectRelevantMemories: vi.fn(async () => []),
         }));
 
         // Mock world-context module
         vi.doMock('../../src/retrieval/world-context.js', () => ({
-            retrieveWorldContext: vi.fn(() => ({ text: '', isMacroIntent: false }))
+            retrieveWorldContext: vi.fn(() => ({ text: '', isMacroIntent: false })),
         }));
 
         // Mock embeddings module
         vi.doMock('../../src/embeddings.js', () => ({
             isEmbeddingsEnabled: () => false,
-            getQueryEmbedding: vi.fn(async () => null)
+            getQueryEmbedding: vi.fn(async () => null),
         }));
 
         // Mock constants
         vi.doMock('../../src/constants.js', () => ({
             extensionName: 'openvault',
             CHARACTERS_KEY: 'characters',
-            MEMORIES_KEY: 'memories'
+            MEMORIES_KEY: 'memories',
         }));
 
         // Mock logging
         vi.doMock('../../src/utils/logging.js', () => ({
             logDebug: vi.fn(),
-            logError: vi.fn()
+            logError: vi.fn(),
         }));
 
         // Mock debug-cache
         vi.doMock('../../src/retrieval/debug-cache.js', () => ({
-            cacheRetrievalDebug: vi.fn()
+            cacheRetrievalDebug: vi.fn(),
         }));
     });
 
@@ -159,19 +159,9 @@ describe('updateInjection with position settings', () => {
         injectContext('Test memory', 'Test world');
 
         // Should call safeSetExtensionPrompt with position 1 and depth 4 for memory
-        expect(mockSetExtensionPrompt).toHaveBeenCalledWith(
-            'Test memory',
-            'openvault',
-            1,
-            4
-        );
+        expect(mockSetExtensionPrompt).toHaveBeenCalledWith('Test memory', 'openvault', 1, 4);
 
         // Should call safeSetExtensionPrompt with position 2 and depth 4 for world
-        expect(mockSetExtensionPrompt).toHaveBeenCalledWith(
-            'Test world',
-            'openvault_world',
-            2,
-            4
-        );
+        expect(mockSetExtensionPrompt).toHaveBeenCalledWith('Test world', 'openvault_world', 2, 4);
     });
 });

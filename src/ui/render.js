@@ -479,13 +479,15 @@ export function renderPositionBadges(settings) {
     const memoryPos = settings?.injection?.memory?.position ?? 1;
     const worldPos = settings?.injection?.world?.position ?? 1;
 
-    const memoryLabel = memoryPos === -1
-        ? `<span class="openvault-position-badge custom" title="Click to copy macro" data-macro="openvault_memory">📋 {{openvault_memory}}</span>`
-        : `<span class="openvault-position-badge" title="Memory injection position">${getPositionLabel(memoryPos)}</span>`;
+    const memoryLabel =
+        memoryPos === -1
+            ? `<span class="openvault-position-badge custom" title="Click to copy macro" data-macro="openvault_memory">📋 {{openvault_memory}}</span>`
+            : `<span class="openvault-position-badge" title="Memory injection position">${getPositionLabel(memoryPos)}</span>`;
 
-    const worldLabel = worldPos === -1
-        ? `<span class="openvault-position-badge custom" title="Click to copy macro" data-macro="openvault_world">📋 {{openvault_world}}</span>`
-        : `<span class="openvault-position-badge" title="World injection position">${getPositionLabel(worldPos)}</span>`;
+    const worldLabel =
+        worldPos === -1
+            ? `<span class="openvault-position-badge custom" title="Click to copy macro" data-macro="openvault_world">📋 {{openvault_world}}</span>`
+            : `<span class="openvault-position-badge" title="World injection position">${getPositionLabel(worldPos)}</span>`;
 
     return `${memoryLabel} | ${worldLabel}`;
 }

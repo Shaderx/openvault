@@ -72,7 +72,13 @@ import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { clearAllLocks } from '../state.js';
 import { refreshAllUI } from '../ui/render.js';
 import { setStatus } from '../ui/status.js';
-import { getCurrentChatId, getOpenVaultData, isStVectorSource, saveOpenVaultData, syncItemsToST } from '../utils/data.js';
+import {
+    getCurrentChatId,
+    getOpenVaultData,
+    isStVectorSource,
+    saveOpenVaultData,
+    syncItemsToST,
+} from '../utils/data.js';
 import { showToast } from '../utils/dom.js';
 import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
 import { logDebug, logError, logInfo } from '../utils/logging.js';
@@ -680,9 +686,9 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Sync to ST Vector Storage if enabled
         if (isStVectorSource()) {
             const chatId = getCurrentChatId();
-            const unsyncedEvents = events.filter(e => !isStSynced(e));
+            const unsyncedEvents = events.filter((e) => !isStSynced(e));
             if (unsyncedEvents.length > 0) {
-                const items = unsyncedEvents.map(e => ({
+                const items = unsyncedEvents.map((e) => ({
                     hash: cyrb53(`[OV_ID:${e.id}] ${e.summary}`),
                     text: `[OV_ID:${e.id}] ${e.summary}`,
                 }));

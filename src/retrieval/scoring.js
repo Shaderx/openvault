@@ -203,7 +203,12 @@ async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemor
             const hasEvents = candidates.some((m) => m.type === 'event');
             let bm25Tokens = [];
             if (hasEvents) {
-                const corpusVocab = buildCorpusVocab(candidates, allHiddenMemories, ctx.graphNodes || {}, ctx.graphEdges || {});
+                const corpusVocab = buildCorpusVocab(
+                    candidates,
+                    allHiddenMemories,
+                    ctx.graphNodes || {},
+                    ctx.graphEdges || {}
+                );
                 bm25Tokens = buildBM25Tokens(userMessages, queryContext, corpusVocab);
             }
 

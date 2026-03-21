@@ -17,10 +17,10 @@ import {
     UI_DEFAULT_HINTS,
 } from '../constants.js';
 import { getDeps } from '../deps.js';
-import { getSettings, setSetting } from '../settings.js';
 import { getEmbeddingStatus, getStrategy, isEmbeddingsEnabled, setEmbeddingStatusCallback } from '../embeddings.js';
 import { updateEventListeners } from '../events.js';
 import { formatForClipboard, getAll as getPerfData } from '../perf/store.js';
+import { getSettings, setSetting } from '../settings.js';
 import { logError, logInfo, logWarn } from '../utils/logging.js';
 import { exportToClipboard } from './export-debug.js';
 import { validateRPM } from './helpers.js';
@@ -680,39 +680,39 @@ function bindUIElements() {
 function bindInjectionSettings() {
     // Memory position selector
     $('#openvault_memory_position').on('change', function () {
-        const position = parseInt($(this).val());
+        const position = parseInt($(this).val(), 10);
         setSetting('injection.memory.position', position);
         updateInjectionUI('memory');
     });
 
     // Memory depth input
     $('#openvault_memory_depth').on('input', function () {
-        const depth = parseInt($(this).val()) || 4;
+        const depth = parseInt($(this).val(), 10) || 4;
         setSetting('injection.memory.depth', depth);
     });
 
     // World position selector
     $('#openvault_world_position').on('change', function () {
-        const position = parseInt($(this).val());
+        const position = parseInt($(this).val(), 10);
         setSetting('injection.world.position', position);
         updateInjectionUI('world');
     });
 
     // World depth input
     $('#openvault_world_depth').on('input', function () {
-        const depth = parseInt($(this).val()) || 4;
+        const depth = parseInt($(this).val(), 10) || 4;
         setSetting('injection.world.depth', depth);
     });
 
     // Copy macro buttons
-    $('#openvault_copy_memory_macro').on('click', function () {
+    $('#openvault_copy_memory_macro').on('click', () => {
         navigator.clipboard.writeText('{{openvault_memory}}').then(
             () => showToast('success', 'Copied {{openvault_memory}} to clipboard'),
             () => showToast('error', 'Failed to copy')
         );
     });
 
-    $('#openvault_copy_world_macro').on('click', function () {
+    $('#openvault_copy_world_macro').on('click', () => {
         navigator.clipboard.writeText('{{openvault_world}}').then(
             () => showToast('success', 'Copied {{openvault_world}} to clipboard'),
             () => showToast('error', 'Failed to copy')
@@ -729,7 +729,7 @@ export function updateInjectionUI(type = 'both') {
 
     const updateType = (t) => {
         const position = settings.injection?.[t]?.position ?? 1;
-        const depth = settings.injection?.[t]?.depth ?? 4;
+        const _depth = settings.injection?.[t]?.depth ?? 4;
 
         // Update selector
         $(`#openvault_${t}_position`).val(position);

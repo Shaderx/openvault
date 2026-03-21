@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock lodash implementations
 const lodashGet = (obj, path, defaultValue) => {
@@ -14,7 +14,9 @@ const lodashGet = (obj, path, defaultValue) => {
 const lodashSet = (obj, path, value) => {
     if (Object(obj) !== obj) return obj;
     // Handle both dot notation and array bracket notation
-    const keys = String(path).split(/[.[\]]+/).filter(Boolean);
+    const keys = String(path)
+        .split(/[.[\]]+/)
+        .filter(Boolean);
     let current = obj;
     for (let i = 0; i < keys.length - 1; i++) {
         const key = keys[i];
@@ -44,7 +46,7 @@ const lodashHas = (obj, path) => {
 const lodashMerge = (target, source) => {
     const result = { ...target };
     for (const key in source) {
-        if (Object.prototype.hasOwnProperty.call(source, key)) {
+        if (Object.hasOwn(source, key)) {
             if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
                 result[key] = lodashMerge(result[key] || {}, source[key]);
             } else {
@@ -203,7 +205,7 @@ describe('Centralized Settings Module', () => {
                 testArray: [{ name: 'first' }, { name: 'second' }],
             };
 
-            const { getSettings, setSetting } = await import('../src/settings.js');
+            const { getSettings } = await import('../src/settings.js');
             expect(getSettings('testArray[0].name')).toBe('first');
         });
 

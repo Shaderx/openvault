@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('ST sync flag helpers', () => {
     it('markStSynced sets flag, isStSynced reads it', async () => {
@@ -18,7 +18,9 @@ describe('ST sync flag helpers', () => {
     });
 
     it('deleteEmbedding also clears _st_synced', async () => {
-        const { markStSynced, isStSynced, deleteEmbedding, setEmbedding } = await import('../src/utils/embedding-codec.js');
+        const { markStSynced, isStSynced, deleteEmbedding, setEmbedding } = await import(
+            '../src/utils/embedding-codec.js'
+        );
         const obj = {};
         setEmbedding(obj, new Float32Array([1, 2, 3]));
         markStSynced(obj);
@@ -121,9 +123,7 @@ describe('ST storage helpers', () => {
 
     it('syncItemsToST sends POST to /api/vector/insert with correct payload', async () => {
         const { syncItemsToST } = await import('../src/utils/data.js');
-        const items = [
-            { hash: 12345, text: '[OV_ID:event_1] Memory text' },
-        ];
+        const items = [{ hash: 12345, text: '[OV_ID:event_1] Memory text' }];
         await syncItemsToST(items, 'chat_123');
 
         expect(mockFetch).toHaveBeenCalledWith(
@@ -186,9 +186,7 @@ describe('ST storage helpers', () => {
             ok: true,
             json: async () => ({
                 hashes: [111],
-                metadata: [
-                    { hash: 111, text: '[OV_ID:ref_42] Reflection text', index: 0 },
-                ],
+                metadata: [{ hash: 111, text: '[OV_ID:ref_42] Reflection text', index: 0 }],
             }),
         });
 

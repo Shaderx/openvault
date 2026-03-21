@@ -2,7 +2,7 @@ import { CHARACTERS_KEY, LAST_PROCESSED_KEY, MEMORIES_KEY, METADATA_KEY } from '
 import { getDeps } from '../deps.js';
 import { record } from '../perf/store.js';
 import { showToast } from './dom.js';
-import { deleteEmbedding, hasEmbedding, isStSynced, clearStSynced } from './embedding-codec.js';
+import { clearStSynced, deleteEmbedding, hasEmbedding, isStSynced } from './embedding-codec.js';
 import { logDebug, logError, logInfo, logWarn } from './logging.js';
 
 /**

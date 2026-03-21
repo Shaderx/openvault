@@ -1,5 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { safeSetExtensionPrompt } from '../../src/utils/st-helpers.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockSetExtensionPrompt = vi.fn();
 
@@ -30,7 +29,7 @@ describe('safeSetExtensionPrompt with position', () => {
             'openvault',
             'test content',
             0, // IN_PROMPT
-            0  // depth
+            0 // depth
         );
     });
 
@@ -41,7 +40,7 @@ describe('safeSetExtensionPrompt with position', () => {
             'openvault',
             'test content',
             2, // AN
-            4  // depth
+            4 // depth
         );
     });
 

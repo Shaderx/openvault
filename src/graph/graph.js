@@ -17,8 +17,8 @@ import {
     resolveOutputLanguage,
 } from '../prompts/index.js';
 import { cosineSimilarity } from '../retrieval/math.js';
-import { getEmbedding, hasEmbedding, setEmbedding, isStSynced, markStSynced, cyrb53 } from '../utils/embedding-codec.js';
-import { isStVectorSource, syncItemsToST, deleteItemsFromST, getCurrentChatId } from '../utils/data.js';
+import { deleteItemsFromST, getCurrentChatId, isStVectorSource, syncItemsToST } from '../utils/data.js';
+import { cyrb53, getEmbedding, hasEmbedding, markStSynced, setEmbedding } from '../utils/embedding-codec.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { yieldToMain } from '../utils/st-helpers.js';
@@ -113,7 +113,10 @@ export function findCrossScriptCharacterKeys(baseKeys, graphNodes) {
 
         const transliterated = transliterateCyrToLat(nodeKey);
         for (const baseKey of baseKeys) {
-            if (levenshteinDistance(transliterated, baseKey) <= getCrossScriptMaxDistance(transliterated.length, baseKey.length)) {
+            if (
+                levenshteinDistance(transliterated, baseKey) <=
+                getCrossScriptMaxDistance(transliterated.length, baseKey.length)
+            ) {
                 crossScriptKeys.push(nodeKey);
                 break;
             }
@@ -425,7 +428,10 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
             const cyrKey = keyIsCyrillic ? key : existingKey;
             const latKey = keyIsCyrillic ? existingKey : key;
 
-            if (levenshteinDistance(transliterateCyrToLat(cyrKey), latKey) <= getCrossScriptMaxDistance(cyrKey.length, latKey.length)) {
+            if (
+                levenshteinDistance(transliterateCyrToLat(cyrKey), latKey) <=
+                getCrossScriptMaxDistance(cyrKey.length, latKey.length)
+            ) {
                 logDebug(
                     `[graph] Cross-script merge: "${name}" (${key}) → "${node.name}" (${existingKey}), transliterated: "${transliterateCyrToLat(cyrKey)}"`
                 );

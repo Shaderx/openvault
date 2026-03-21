@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSettings, PAYLOAD_CALC, UI_DEFAULT_HINTS, INJECTION_POSITIONS, POSITION_LABELS } from '../src/constants.js';
+import {
+    defaultSettings,
+    INJECTION_POSITIONS,
+    PAYLOAD_CALC,
+    POSITION_LABELS,
+    UI_DEFAULT_HINTS,
+} from '../src/constants.js';
 
 describe('PAYLOAD_CALC', () => {
     it('exports all required fields', () => {
@@ -112,8 +118,8 @@ describe('POSITION_LABELS', () => {
         expect(POSITION_LABELS).toHaveLength(6);
         expect(POSITION_LABELS[0]).toEqual({ value: 0, label: '↑Char', description: 'Before character definitions' });
         expect(POSITION_LABELS[1]).toEqual({ value: 1, label: '↓Char', description: 'After character definitions' });
-        expect(POSITION_LABELS[2]).toEqual({ value: 2, label: '↑AN', description: 'Before author\'s note' });
-        expect(POSITION_LABELS[3]).toEqual({ value: 3, label: '↓AN', description: 'After author\'s note' });
+        expect(POSITION_LABELS[2]).toEqual({ value: 2, label: '↑AN', description: "Before author's note" });
+        expect(POSITION_LABELS[3]).toEqual({ value: 3, label: '↓AN', description: "After author's note" });
         expect(POSITION_LABELS[4]).toEqual({ value: 4, label: 'In-chat', description: 'At specified message depth' });
         expect(POSITION_LABELS[5]).toEqual({ value: -1, label: 'Custom', description: 'Use macro manually' });
     });
