@@ -664,16 +664,16 @@ export async function consolidateGraph(graphData, settings) {
         if (!graphData.nodes[keepKey].aliases) graphData.nodes[keepKey].aliases = [];
         graphData.nodes[keepKey].aliases.push(removedNode.name);
 
-        // Redirect edges
+        // Redirect edges (includes ST deletion for removed edges)
         await redirectEdges(graphData, removeKey, keepKey);
+
+        // Delete merged node from ST Vector Storage
+        const { deleteItemsFromStStorage } = await import('../utils/data.js');
+        await deleteItemsFromStStorage([removeKey]);
 
         // Remove old node
         delete graphData.nodes[removeKey];
         mergedCount++;
-
-        // CRITICAL: Delete merged node from ST Vector Storage
-        const { deleteItemsFromStStorage } = await import('../utils/data.js');
-        await deleteItemsFromStStorage([removeKey]);
     }
 
     return { mergedCount, embeddedCount };
