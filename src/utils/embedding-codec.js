@@ -57,23 +57,53 @@ export function setEmbedding(obj, vec) {
 }
 
 /**
- * Check if an object has an embedding (either format).
+ * Check if an object has an embedding (either format or ST synced).
  * @param {Object} obj - Object to check
  * @returns {boolean}
  */
 export function hasEmbedding(obj) {
     if (!obj) return false;
+    // ST Vector Storage synced items don't have local embeddings
+    if (obj._st_synced) return true;
     if (obj.embedding_b64) return true;
     if (obj.embedding && obj.embedding.length > 0) return true;
     return false;
 }
 
 /**
- * Remove embedding from an object (both formats).
+ * Remove embedding from an object (both formats and ST sync flag).
  * @param {Object} obj - Object to clean (mutated)
  */
 export function deleteEmbedding(obj) {
     if (!obj) return;
     delete obj.embedding;
     delete obj.embedding_b64;
+    delete obj._st_synced;
+}
+
+/**
+ * Check if an object has been synced to ST Vector Storage.
+ * @param {Object} obj - Object to check
+ * @returns {boolean}
+ */
+export function isStSynced(obj) {
+    return !!(obj && obj._st_synced);
+}
+
+/**
+ * Mark an object as synced to ST Vector Storage.
+ * @param {Object} obj - Target object (mutated)
+ */
+export function markStSynced(obj) {
+    if (!obj) return;
+    obj._st_synced = true;
+}
+
+/**
+ * Clear the ST sync flag from an object.
+ * @param {Object} obj - Target object (mutated)
+ */
+export function clearStSynced(obj) {
+    if (!obj) return;
+    delete obj._st_synced;
 }

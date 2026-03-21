@@ -1,5 +1,68 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TRANSFORMERS_MODELS } from '../src/embeddings.js';
+import {
+    hasEmbedding,
+    deleteEmbedding,
+    isStSynced,
+    markStSynced,
+    clearStSynced,
+} from '../src/utils/embedding-codec.js';
+
+describe('embedding-codec: _st_synced flag', () => {
+    it('hasEmbedding returns true for _st_synced items without local embedding', () => {
+        const obj = { _st_synced: true };
+        expect(hasEmbedding(obj)).toBe(true);
+    });
+
+    it('hasEmbedding returns false when no embedding and not synced', () => {
+        const obj = { summary: 'test' };
+        expect(hasEmbedding(obj)).toBe(false);
+    });
+
+    it('deleteEmbedding clears _st_synced flag', () => {
+        const obj = { _st_synced: true, embedding_b64: 'AAAA' };
+        deleteEmbedding(obj);
+        expect(obj._st_synced).toBeUndefined();
+        expect(obj.embedding_b64).toBeUndefined();
+    });
+
+    it('isStSynced returns true for synced items', () => {
+        const obj = { _st_synced: true };
+        expect(isStSynced(obj)).toBe(true);
+    });
+
+    it('isStSynced returns false for non-synced items', () => {
+        const obj = { summary: 'test' };
+        expect(isStSynced(obj)).toBe(false);
+    });
+
+    it('isStSynced returns false for null/undefined', () => {
+        expect(isStSynced(null)).toBe(false);
+        expect(isStSynced(undefined)).toBe(false);
+    });
+
+    it('markStSynced sets _st_synced to true', () => {
+        const obj = { summary: 'test' };
+        markStSynced(obj);
+        expect(obj._st_synced).toBe(true);
+    });
+
+    it('markStSynced handles null/undefined gracefully', () => {
+        expect(() => markStSynced(null)).not.toThrow();
+        expect(() => markStSynced(undefined)).not.toThrow();
+    });
+
+    it('clearStSynced removes _st_synced flag', () => {
+        const obj = { _st_synced: true, summary: 'test' };
+        clearStSynced(obj);
+        expect(obj._st_synced).toBeUndefined();
+    });
+
+    it('clearStSynced handles null/undefined gracefully', () => {
+        expect(() => clearStSynced(null)).not.toThrow();
+        expect(() => clearStSynced(undefined)).not.toThrow();
+    });
+});
 
 describe('TRANSFORMERS_MODELS config', () => {
     it('multilingual-e5-small has Cyrillic-safe chunk size', () => {
