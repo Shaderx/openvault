@@ -9,6 +9,7 @@ import {
     eventSource as stEventSource,
     event_types as stEventTypes,
     extension_prompt_types as stPromptTypes,
+    getRequestHeaders as stGetRequestHeaders,
     saveChatConditional as stSaveChatConditional,
     saveSettingsDebounced as stSaveSettingsDebounced,
     setExtensionPrompt as stSetExtensionPrompt,
@@ -47,6 +48,9 @@ const defaultDeps = {
 
     // LLM communication
     connectionManager: stConnectionManager,
+
+    // HTTP headers with CSRF token
+    getRequestHeaders: stGetRequestHeaders,
 
     // Notifications
     showToast: (type, message, title, options) => {

@@ -161,7 +161,7 @@ export async function syncItemsToST(items, chatId) {
 
         const response = await getDeps().fetch('/api/vector/insert', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getDeps().getRequestHeaders(),
             body: JSON.stringify(body),
         });
         if (!response.ok) {
@@ -196,7 +196,7 @@ export async function deleteItemsFromST(hashes, chatId) {
 
         const response = await getDeps().fetch('/api/vector/delete', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getDeps().getRequestHeaders(),
             body: JSON.stringify(body),
         });
         if (!response.ok) {
@@ -220,7 +220,7 @@ export async function purgeSTCollection(chatId) {
         const collectionId = getSTCollectionId(chatId);
         const response = await getDeps().fetch('/api/vector/purge', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getDeps().getRequestHeaders(),
             body: JSON.stringify({ collectionId }),
         });
         if (!response.ok) {
@@ -257,7 +257,7 @@ export async function querySTVector(searchText, topK, threshold, chatId) {
 
         const response = await getDeps().fetch('/api/vector/query', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getDeps().getRequestHeaders(),
             body: JSON.stringify(body),
         });
 

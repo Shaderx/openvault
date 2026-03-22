@@ -99,12 +99,18 @@ describe('rankToProxyScore', () => {
 describe('ST storage helpers', () => {
     let mockFetch;
     let depsModule;
+    let mockGetRequestHeaders;
 
     beforeEach(async () => {
         depsModule = await import('../src/deps.js');
         mockFetch = vi.fn().mockResolvedValue({ ok: true });
+        mockGetRequestHeaders = vi.fn().mockReturnValue({
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': 'test-csrf-token',
+        });
         vi.spyOn(depsModule, 'getDeps').mockReturnValue({
             fetch: mockFetch,
+            getRequestHeaders: mockGetRequestHeaders,
             getContext: () => ({ chatId: 'chat_123' }),
             getExtensionSettings: () => ({
                 openvault: { embeddingSource: 'st_vector' },
@@ -201,6 +207,105 @@ describe('ST storage helpers', () => {
         const { querySTVector } = await import('../src/utils/data.js');
         const results = await querySTVector('test', 5, 0.5, 'chat_123');
         expect(results).toEqual([]);
+    });
+});
+
+describe('ST storage CSRF token', () => {
+    let mockFetch;
+    let depsModule;
+    let mockGetRequestHeaders;
+
+    beforeEach(async () => {
+        depsModule = await import('../src/deps.js');
+        mockFetch = vi.fn().mockResolvedValue({ ok: true });
+        mockGetRequestHeaders = vi.fn().mockReturnValue({
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': 'test-csrf-token',
+        });
+        vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+            fetch: mockFetch,
+            getRequestHeaders: mockGetRequestHeaders,
+            getContext: () => ({ chatId: 'chat_123' }),
+            getExtensionSettings: () => ({
+                openvault: { embeddingSource: 'st_vector' },
+            }),
+            console: {
+                log: vi.fn(),
+                warn: vi.fn(),
+                error: vi.fn(),
+            },
+        });
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('syncItemsToST calls getRequestHeaders and passes CSRF token', async () => {
+        const { syncItemsToST } = await import('../src/utils/data.js');
+        const items = [{ hash: 12345, text: '[OV_ID:event_1] Memory text' }];
+        await syncItemsToST(items, 'chat_123');
+
+        expect(mockGetRequestHeaders).toHaveBeenCalled();
+        expect(mockFetch).toHaveBeenCalledWith(
+            '/api/vector/insert',
+            expect.objectContaining({
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': 'test-csrf-token',
+                },
+            })
+        );
+    });
+
+    it('deleteItemsFromST includes CSRF token in headers', async () => {
+        const { deleteItemsFromST } = await import('../src/utils/data.js');
+        await deleteItemsFromST([12345], 'chat_123');
+
+        expect(mockGetRequestHeaders).toHaveBeenCalled();
+        expect(mockFetch).toHaveBeenCalledWith(
+            '/api/vector/delete',
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    'X-CSRF-Token': 'test-csrf-token',
+                }),
+            })
+        );
+    });
+
+    it('purgeSTCollection includes CSRF token in headers', async () => {
+        const { purgeSTCollection } = await import('../src/utils/data.js');
+        await purgeSTCollection('chat_123');
+
+        expect(mockGetRequestHeaders).toHaveBeenCalled();
+        expect(mockFetch).toHaveBeenCalledWith(
+            '/api/vector/purge',
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    'X-CSRF-Token': 'test-csrf-token',
+                }),
+            })
+        );
+    });
+
+    it('querySTVector includes CSRF token in headers', async () => {
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ hashes: [], metadata: [] }),
+        });
+
+        const { querySTVector } = await import('../src/utils/data.js');
+        await querySTVector('test', 5, 0.5, 'chat_123');
+
+        expect(mockGetRequestHeaders).toHaveBeenCalled();
+        expect(mockFetch).toHaveBeenCalledWith(
+            '/api/vector/query',
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    'X-CSRF-Token': 'test-csrf-token',
+                }),
+            })
+        );
     });
 });
 
