@@ -103,9 +103,9 @@ export const defaultSettings = {
     bucketMinRepresentation: 0.2, // 20% minimum per bucket
     bucketSoftBalanceBudget: 0.05, // 5% budget for soft balancing
     // Preamble & prefill settings
-    preambleLanguage: 'cn',
-    extractionPrefill: 'cn_compliance',
-    outputLanguage: 'auto',
+    preambleLanguage: 'en',
+    extractionPrefill: 'en_compliance',
+    outputLanguage: 'en',
     // Injection settings
     injection: {
         memory: { position: 1, depth: 4 },

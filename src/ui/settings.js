@@ -255,6 +255,92 @@ async function handleDeleteChatData() {
     }
 }
 
+/**
+ * Translate all non-English memory summaries to English using the extraction LLM.
+ */
+async function handleTranslateMemories() {
+    const { MEMORIES_KEY } = await import('../constants.js');
+    const { getOpenVaultData, saveOpenVaultData } = await import('../utils/data.js');
+    const { callLLM } = await import('../llm.js');
+
+    const data = getOpenVaultData();
+    if (!data) {
+        showToast('warning', 'No chat loaded');
+        return;
+    }
+
+    const memories = data[MEMORIES_KEY] || [];
+    if (memories.length === 0) {
+        showToast('info', 'No memories to translate');
+        return;
+    }
+
+    // Detect non-English memories by checking for non-Latin character majority
+    const nonEnglish = memories.filter((m) => {
+        if (!m.summary) return false;
+        const letters = m.summary.match(/\p{L}/gu) || [];
+        const latin = letters.filter((c) => /[a-zA-Z]/.test(c)).length;
+        return latin < letters.length * 0.5;
+    });
+
+    if (nonEnglish.length === 0) {
+        showToast('info', 'All memories appear to already be in English');
+        return;
+    }
+
+    if (!confirm(`Translate ${nonEnglish.length} non-English memories to English using your extraction LLM? This will make API calls.`)) {
+        return;
+    }
+
+    showToast('info', `Translating ${nonEnglish.length} memories...`);
+    const BATCH_SIZE = 10;
+    let translated = 0;
+
+    for (let i = 0; i < nonEnglish.length; i += BATCH_SIZE) {
+        const batch = nonEnglish.slice(i, i + BATCH_SIZE);
+        const summaries = batch.map((m, idx) => `[${idx}] ${m.summary}`).join('\n');
+
+        const messages = [
+            {
+                role: 'system',
+                content: 'You are a precise translator. Translate the following numbered text entries to English. Preserve the numbering format exactly. Do NOT add commentary. Return ONLY the translated lines.',
+            },
+            { role: 'user', content: summaries },
+        ];
+
+        try {
+            const result = await callLLM(messages, {
+                profileSettingKey: 'extractionProfile',
+                maxTokens: 4000,
+                errorContext: 'Translation',
+                timeoutMs: 120000,
+            });
+
+            const lines = result.split('\n').filter((l) => l.trim());
+            for (const line of lines) {
+                const match = line.match(/^\[(\d+)]\s*(.+)/);
+                if (match) {
+                    const idx = parseInt(match[1], 10);
+                    if (idx >= 0 && idx < batch.length) {
+                        batch[idx].summary = match[2].trim();
+                        translated++;
+                    }
+                }
+            }
+        } catch (err) {
+            logError('Translation batch failed', err);
+            showToast('error', `Translation failed at batch ${Math.floor(i / BATCH_SIZE) + 1}: ${err.message}`);
+            break;
+        }
+    }
+
+    if (translated > 0) {
+        await saveOpenVaultData();
+        showToast('success', `Translated ${translated} / ${nonEnglish.length} memories to English`);
+        refreshAllUI();
+    }
+}
+
 // Define keys that should be preserved during settings reset
 const PRESERVED_KEYS = [
     'extractionProfile',
@@ -633,6 +719,7 @@ function bindUIElements() {
     // Action buttons
     $('#openvault_backfill_embeddings_btn').on('click', backfillEmbeddings);
     $('#openvault_extract_all_btn').on('click', handleExtractAll);
+    $('#openvault_translate_memories_btn').on('click', handleTranslateMemories);
 
     // Danger zone buttons
     $('#openvault_reset_settings_btn').on('click', handleResetSettings);

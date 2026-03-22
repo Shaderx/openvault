@@ -35,6 +35,15 @@ export function loadSettings() {
         structuredClone(defaultSettings),
         extensionSettings[extensionName] || {}
     );
+
+    // One-time migration: switch CN defaults to EN for Shaderx fork
+    const s = extensionSettings[extensionName];
+    if (s._langMigrated !== 1) {
+        if (s.preambleLanguage === 'cn') s.preambleLanguage = 'en';
+        if (s.extractionPrefill === 'cn_compliance') s.extractionPrefill = 'en_compliance';
+        if (s.outputLanguage === 'auto') s.outputLanguage = 'en';
+        s._langMigrated = 1;
+    }
 }
 
 /**
