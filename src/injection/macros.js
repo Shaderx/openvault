@@ -7,7 +7,7 @@ import { getDeps } from '../deps.js';
  */
 export const cachedContent = {
     memory: '',
-    world: ''
+    world: '',
 };
 
 /**

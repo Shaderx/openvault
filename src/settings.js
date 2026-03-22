@@ -69,7 +69,9 @@ export function setSetting(path, value) {
         lodash.set(settings, path, value);
     } else {
         // Fallback: simple setByPath implementation
-        const keys = String(path).split(/[.[\]]+/).filter(Boolean);
+        const keys = String(path)
+            .split(/[.[\]]+/)
+            .filter(Boolean);
         let current = settings;
         for (let i = 0; i < keys.length - 1; i++) {
             const key = keys[i];

@@ -2,8 +2,283 @@ import { CHARACTERS_KEY, LAST_PROCESSED_KEY, MEMORIES_KEY, METADATA_KEY } from '
 import { getDeps } from '../deps.js';
 import { record } from '../perf/store.js';
 import { showToast } from './dom.js';
-import { deleteEmbedding, hasEmbedding } from './embedding-codec.js';
+import { clearStSynced, deleteEmbedding, hasEmbedding, isStSynced } from './embedding-codec.js';
 import { logDebug, logError, logInfo, logWarn } from './logging.js';
+
+/**
+ * Get the ST Vector Storage collection ID for the current chat.
+ * Includes chat ID to prevent cross-chat data leakage.
+ * @param {string} chatId - Current chat ID
+ * @returns {string} Collection ID
+ */
+function getSTCollectionId(chatId) {
+    const source = getDeps().getExtensionSettings()?.openvault?.embeddingSource || 'openvault';
+    return `openvault-${chatId || 'default'}-${source}`;
+}
+
+/**
+ * Extract OpenVault ID from ST text field with OV_ID prefix.
+ * @param {string} text - Text like "[OV_ID:event_123] The actual text..."
+ * @returns {string|null} Extracted ID or null
+ */
+function extractOvId(text) {
+    if (!text) return null;
+    const match = text.match(/^\[OV_ID:([^\]]+)\]/);
+    return match ? match[1] : null;
+}
+
+/**
+ * Get the ST Vector Storage source from ST settings.
+ * @returns {string} The configured source (e.g., 'openrouter', 'openai', 'ollama')
+ */
+function getSTVectorSource() {
+    const extSettings = getDeps().getExtensionSettings();
+    // ST stores vector source in extension_settings.vectors.source
+    return extSettings?.vectors?.source || 'transformers';
+}
+
+/**
+ * Get the API URL for a local text-generation source, respecting alt endpoint override.
+ * Mirrors ST's logic: use alt_endpoint_url if enabled, otherwise textCompletionSettings.server_urls.
+ * @param {string} sourceType - The textgen source type key (e.g., 'ollama', 'llamacpp', 'vllm')
+ * @returns {string|undefined} The API URL
+ */
+function getSourceApiUrl(sourceType) {
+    const vectors = getDeps().getExtensionSettings()?.vectors;
+    if (vectors?.use_alt_endpoint && vectors?.alt_endpoint_url) {
+        return vectors.alt_endpoint_url;
+    }
+    const ctx = getDeps().getContext();
+    return ctx?.textCompletionSettings?.server_urls?.[sourceType];
+}
+
+/**
+ * Get additional request body parameters based on the source.
+ * Mirrors ST's getVectorsRequestBody function.
+ * @param {string} source - The vector source
+ * @returns {Object} Additional parameters for the request body
+ */
+function getSTVectorRequestBody(source) {
+    const extSettings = getDeps().getExtensionSettings();
+    const body = {};
+
+    switch (source) {
+        case 'extras':
+            body.extrasUrl = extSettings?.apiUrl;
+            body.extrasKey = extSettings?.apiKey;
+            break;
+        case 'electronhub':
+            body.model = extSettings?.vectors?.electronhub_model;
+            break;
+        case 'openrouter':
+            body.model = extSettings?.vectors?.openrouter_model;
+            break;
+        case 'togetherai':
+            body.model = extSettings?.vectors?.togetherai_model;
+            break;
+        case 'openai':
+            body.model = extSettings?.vectors?.openai_model;
+            break;
+        case 'cohere':
+            body.model = extSettings?.vectors?.cohere_model;
+            break;
+        case 'ollama':
+            body.model = extSettings?.vectors?.ollama_model;
+            body.apiUrl = getSourceApiUrl('ollama');
+            body.keep = !!extSettings?.vectors?.ollama_keep;
+            break;
+        case 'llamacpp':
+            body.apiUrl = getSourceApiUrl('llamacpp');
+            break;
+        case 'vllm':
+            body.apiUrl = getSourceApiUrl('vllm');
+            body.model = extSettings?.vectors?.vllm_model;
+            break;
+        case 'webllm':
+            body.model = extSettings?.vectors?.webllm_model;
+            break;
+        case 'palm':
+            body.model = extSettings?.vectors?.google_model;
+            body.api = 'makersuite';
+            break;
+        case 'vertexai': {
+            body.model = extSettings?.vectors?.google_model;
+            body.api = 'vertexai';
+            const oaiSettings = getDeps().getContext()?.chatCompletionSettings;
+            body.vertexai_auth_mode = oaiSettings?.vertexai_auth_mode;
+            body.vertexai_region = oaiSettings?.vertexai_region;
+            body.vertexai_express_project_id = oaiSettings?.vertexai_express_project_id;
+            break;
+        }
+        case 'mistral':
+            body.model = 'mistral-embed';
+            break;
+        case 'nomicai':
+            body.model = 'nomic-embed-text-v1.5';
+            break;
+        case 'chutes':
+            body.model = extSettings?.vectors?.chutes_model;
+            break;
+        case 'nanogpt':
+            body.model = extSettings?.vectors?.nanogpt_model;
+            break;
+        case 'transformers':
+        default:
+            // No additional params needed
+            break;
+    }
+
+    return body;
+}
+
+/**
+ * Check if the current embedding source is ST Vector Storage.
+ * @returns {boolean}
+ */
+export function isStVectorSource() {
+    const settings = getDeps().getExtensionSettings()?.openvault;
+    return settings?.embeddingSource === 'st_vector';
+}
+
+/**
+ * Sync items to ST Vector Storage via /api/vector/insert.
+ * @param {Array<{hash: number, text: string}>} items - Items to insert
+ * @param {string} chatId - Current chat ID
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function syncItemsToST(items, chatId) {
+    if (!items || items.length === 0) return true;
+
+    try {
+        const collectionId = getSTCollectionId(chatId);
+        const source = getSTVectorSource();
+        const body = {
+            collectionId,
+            items,
+            source,
+            ...getSTVectorRequestBody(source),
+        };
+
+        const response = await getDeps().fetch('/api/vector/insert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+            logWarn(`ST Vector insert failed: ${response.status}`);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        logError('ST Vector insert error', error);
+        return false;
+    }
+}
+
+/**
+ * Delete items from ST Vector Storage via /api/vector/delete.
+ * @param {number[]} hashes - Cyrb53 hashes to delete
+ * @param {string} chatId - Current chat ID
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function deleteItemsFromST(hashes, chatId) {
+    if (!hashes || hashes.length === 0) return true;
+
+    try {
+        const collectionId = getSTCollectionId(chatId);
+        const source = getSTVectorSource();
+        const body = {
+            collectionId,
+            hashes,
+            source,
+            ...getSTVectorRequestBody(source),
+        };
+
+        const response = await getDeps().fetch('/api/vector/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+            logWarn(`ST Vector delete failed: ${response.status}`);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        logError('ST Vector delete error', error);
+        return false;
+    }
+}
+
+/**
+ * Purge entire ST Vector Storage collection.
+ * @param {string} chatId - Current chat ID
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function purgeSTCollection(chatId) {
+    try {
+        const collectionId = getSTCollectionId(chatId);
+        const response = await getDeps().fetch('/api/vector/purge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ collectionId }),
+        });
+        if (!response.ok) {
+            logWarn(`ST Vector purge failed: ${response.status}`);
+            return false;
+        }
+        return true;
+    } catch (error) {
+        logError('ST Vector purge error', error);
+        return false;
+    }
+}
+
+/**
+ * Query ST Vector Storage for similar items.
+ * @param {string} searchText - Query text
+ * @param {number} topK - Number of results
+ * @param {number} threshold - Similarity threshold
+ * @param {string} chatId - Current chat ID
+ * @returns {Promise<Array<{id: string, hash: number, text: string}>>} Results with extracted OV IDs
+ */
+export async function querySTVector(searchText, topK, threshold, chatId) {
+    try {
+        const collectionId = getSTCollectionId(chatId);
+        const source = getSTVectorSource();
+        const body = {
+            collectionId,
+            searchText,
+            topK,
+            threshold,
+            source,
+            ...getSTVectorRequestBody(source),
+        };
+
+        const response = await getDeps().fetch('/api/vector/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+            logWarn(`ST Vector query failed: ${response.status}`);
+            return [];
+        }
+
+        const data = await response.json();
+        if (!data?.metadata || !Array.isArray(data.metadata)) return [];
+
+        return data.metadata.map((item) => ({
+            id: extractOvId(item.text) || String(item.hash),
+            hash: item.hash,
+            text: item.text,
+        }));
+    } catch (error) {
+        logError('ST Vector query error', error);
+        return [];
+    }
+}
 
 /**
  * Get OpenVault data from chat metadata
@@ -160,14 +435,93 @@ export async function deleteCurrentChatData() {
 }
 
 /**
+ * Get the current ST Vector Storage fingerprint (source + model) from ST settings.
+ * Used to detect when the user changes vectorization settings on the ST side.
+ * @returns {{source: string, model: string}} Current ST vector source and model
+ */
+export function getStVectorFingerprint() {
+    const source = getSTVectorSource();
+    const body = getSTVectorRequestBody(source);
+    return { source, model: body.model || '' };
+}
+
+/**
+ * Stamp ST Vector Storage fingerprint onto chat data after successful sync.
+ * Call this after inserting items into ST so mismatch detection works on next load.
+ * @param {Object} data - OpenVault chat data (chatMetadata.openvault)
+ */
+export function stampStVectorFingerprint(data) {
+    if (!data) return;
+    const fp = getStVectorFingerprint();
+    data.st_vector_source = fp.source;
+    data.st_vector_model = fp.model;
+}
+
+/**
+ * Check if the ST Vector fingerprint (source + model) has changed.
+ * @param {Object} data - OpenVault chat data
+ * @returns {boolean} True if ST-side settings changed since last sync
+ */
+function _hasStVectorMismatch(data) {
+    // No fingerprint stored yet — not a mismatch (first sync will stamp it)
+    if (!data.st_vector_source && !data.st_vector_model) {
+        // But if items are already synced, treat as mismatch (legacy data)
+        const hasSynced = _hasSyncedItems(data);
+        return hasSynced;
+    }
+    const fp = getStVectorFingerprint();
+    return data.st_vector_source !== fp.source || data.st_vector_model !== fp.model;
+}
+
+/**
+ * Check if any items have the _st_synced flag.
+ * @param {Object} data - OpenVault chat data
+ * @returns {boolean}
+ */
+function _hasSyncedItems(data) {
+    for (const m of data[MEMORIES_KEY] || []) {
+        if (isStSynced(m)) return true;
+    }
+    for (const node of Object.values(data.graph?.nodes || {})) {
+        if (isStSynced(node)) return true;
+    }
+    for (const community of Object.values(data.communities || {})) {
+        if (isStSynced(community)) return true;
+    }
+    return false;
+}
+
+/**
+ * Clear all ST sync flags and fingerprint from data.
+ * @param {Object} data - OpenVault chat data
+ * @returns {number} Number of sync flags cleared
+ */
+function _clearAllStSyncFlags(data) {
+    let count = 0;
+    for (const m of data[MEMORIES_KEY] || []) {
+        if (isStSynced(m)) { clearStSynced(m); count++; }
+    }
+    for (const node of Object.values(data.graph?.nodes || {})) {
+        if (isStSynced(node)) { clearStSynced(node); count++; }
+    }
+    for (const community of Object.values(data.communities || {})) {
+        if (isStSynced(community)) { clearStSynced(community); count++; }
+    }
+    delete data.st_vector_source;
+    delete data.st_vector_model;
+    return count;
+}
+
+/**
  * Check if stored embeddings were generated by a different model.
  * If mismatch detected, wipe all embeddings and update the model tag.
+ * For ST Vector Storage, also detects source/model changes on the ST side.
  *
  * @param {Object} data - OpenVault chat data (chatMetadata.openvault)
  * @param {string} currentModelId - Currently selected embedding source
- * @returns {number} Number of embeddings wiped (0 = no mismatch)
+ * @returns {Promise<number>} Number of embeddings/sync-flags wiped (0 = no mismatch)
  */
-export function invalidateStaleEmbeddings(data, currentModelId) {
+export async function invalidateStaleEmbeddings(data, currentModelId) {
     if (!data || !currentModelId) return 0;
 
     const hasAnyEmbedding = _countEmbeddings(data) > 0;
@@ -177,13 +531,37 @@ export function invalidateStaleEmbeddings(data, currentModelId) {
         if (!hasAnyEmbedding) {
             // Brand new chat — just stamp
             data.embedding_model_id = currentModelId;
+            if (currentModelId === 'st_vector') {
+                stampStVectorFingerprint(data);
+            }
             return 0;
         }
         // Legacy chat with embeddings but no tag → fall through to wipe
     }
 
-    // Match → no-op
+    // Same OV source — but if ST Vector, also check ST-side fingerprint
     if (data.embedding_model_id === currentModelId) {
+        if (currentModelId === 'st_vector' && _hasStVectorMismatch(data)) {
+            // ST source/model changed — purge old collection, clear sync flags, re-sync
+            const oldSource = data.st_vector_source || 'unknown';
+            const oldModel = data.st_vector_model || 'unknown';
+            const fp = getStVectorFingerprint();
+
+            const cleared = _clearAllStSyncFlags(data);
+
+            // Purge old ST collection (best-effort, don't block on failure)
+            try {
+                await purgeSTCollection(getCurrentChatId() || 'default');
+            } catch (e) {
+                logWarn(`Failed to purge old ST collection: ${e.message}`);
+            }
+
+            // Stamp new fingerprint
+            stampStVectorFingerprint(data);
+
+            logInfo(`ST vector source changed (${oldSource}/${oldModel} → ${fp.source}/${fp.model}). Cleared ${cleared} sync flags.`);
+            return cleared;
+        }
         return 0;
     }
 
@@ -212,7 +590,24 @@ export function invalidateStaleEmbeddings(data, currentModelId) {
         }
     }
 
+    // Also clear ST sync flags
+    const syncCleared = _clearAllStSyncFlags(data);
+    count += syncCleared;
+
+    // Purge old ST collection if switching away from st_vector
+    if (oldModel === 'st_vector') {
+        try {
+            await purgeSTCollection(getCurrentChatId() || 'default');
+        } catch (e) {
+            logWarn(`Failed to purge old ST collection: ${e.message}`);
+        }
+    }
+
     data.embedding_model_id = currentModelId;
+    if (currentModelId === 'st_vector') {
+        stampStVectorFingerprint(data);
+    }
+
     logInfo(`Embedding model changed (${oldModel} → ${currentModelId}). Wiped ${count} embeddings.`);
     return count;
 }

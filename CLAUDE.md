@@ -1,3 +1,10 @@
+# OpenWolf
+
+@.wolf/OPENWOLF.md
+
+This project uses OpenWolf for context management. Read and follow .wolf/OPENWOLF.md every session. Check .wolf/cerebrum.md before generating code. Check .wolf/anatomy.md before reading files.
+
+
 # OpenVault - SillyTavern Extension
 
 ## WHAT & WHY
@@ -30,9 +37,12 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **Thread Yielding**: Use `yieldToMain()` (`src/utils/st-helpers.js`). It polyfills `scheduler.yield()` with `setTimeout(0)` fallback.
 - **State Locks**: `operationState.extractionInProgress` (`src/state.js`) is for MANUAL backfill only. Background worker uses `isRunning` (`worker.js`). They mutually exclude.
 - **ST Event Timing**: `GENERATION_AFTER_COMMANDS` fires BEFORE `chat.push()` and BEFORE textarea is cleared. Pending user message must be read from `$('#send_textarea').val()`, NOT from `context.chat` (which only has the previous message). See `events.js:onBeforeGeneration()`.
+- **ST Vector Storage**: Set `embeddingSource: 'st_vector'` to use SillyTavern's built-in Vectra DB. No local embeddings stored — ST handles vector generation. Items marked with `_st_synced` flag.
+- **Proxy Vector Scores**: When using `st_vector`, retrieval uses rank-position proxy scores (not cosine similarity). Higher rank = higher proxy score.
 
 ## ARCHITECTURE MAP (Lazy Loaded Context)
-- `include/ARCHITECTURE.md` - Global pipeline, Data Schema, Retrieval Math.
+- `src/embeddings.js` - Embedding strategies: Transformers.js (local), Ollama (remote), ST Vector Storage (external)
+- `include/DATA_SCHEMA.md` - Data schema, retrieval math, semantic merge, GraphRAG, embedding protection.
 - `src/extraction/CLAUDE.md` - 2-phase async worker, JSON validation, Zod schemas.
 - `src/prompts/CLAUDE.md` - Domain prompt structure, `<think>` tag convention, few-shot examples.
 - `src/retrieval/CLAUDE.md` - Alpha-Blend scoring, Forgetfulness curve.

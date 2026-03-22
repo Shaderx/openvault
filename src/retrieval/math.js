@@ -202,6 +202,19 @@ export function cosineSimilarity(vecA, vecB) {
 }
 
 /**
+ * Convert ST rank position to a cosine similarity proxy.
+ * ST results are pre-sorted by cosine similarity and pre-filtered by threshold.
+ *
+ * @param {number} rank - 0-based rank position from ST results
+ * @param {number} totalResults - Total number of results returned
+ * @returns {number} Proxy score in [0.5, 1.0] range
+ */
+export function rankToProxyScore(rank, totalResults) {
+    if (totalResults <= 1) return 1.0;
+    return 1.0 - (rank / (totalResults - 1)) * 0.5;
+}
+
+/**
  * Calculate memory score based on forgetfulness curve, vector similarity, and BM25
  * @param {Object} memory - Memory object with message_ids, importance, embedding
  * @param {Float32Array|null} contextEmbedding - Context embedding for similarity
@@ -249,7 +262,15 @@ export function calculateScore(memory, contextEmbedding, chatLength, constants, 
     let vectorBonus = 0;
     let vectorSimilarity = 0;
 
-    if (contextEmbedding && hasEmbedding(memory)) {
+    // ST Vector Storage branch: use pre-assigned proxy score (no local embeddings)
+    if (!contextEmbedding && memory._proxyVectorScore != null) {
+        vectorSimilarity = memory._proxyVectorScore;
+        const threshold = settings.vectorSimilarityThreshold;
+        if (vectorSimilarity > threshold) {
+            const normalizedSim = (vectorSimilarity - threshold) / (1 - threshold);
+            vectorBonus = alpha * boostWeight * normalizedSim;
+        }
+    } else if (contextEmbedding && hasEmbedding(memory)) {
         vectorSimilarity = cosineSimilarity(contextEmbedding, getEmbedding(memory));
         const threshold = settings.vectorSimilarityThreshold;
 

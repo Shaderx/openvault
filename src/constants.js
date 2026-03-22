@@ -26,19 +26,19 @@ export const PROCESSED_MESSAGES_KEY = 'processed_message_ids';
 // =============================================================================
 
 export const INJECTION_POSITIONS = Object.freeze({
-    BEFORE_MAIN: 0,  // ↑Char - Before character definitions
-    AFTER_MAIN: 1,   // ↓Char - After character definitions (default)
-    BEFORE_AN: 2,    // ↑AN - Before author's note
-    AFTER_AN: 3,     // ↓AN - After author's note
-    IN_CHAT: 4,      // In-chat - At specified message depth
-    CUSTOM: -1,      // Custom - Macro-only, no auto-injection
+    BEFORE_MAIN: 0, // ↑Char - Before character definitions
+    AFTER_MAIN: 1, // ↓Char - After character definitions (default)
+    BEFORE_AN: 2, // ↑AN - Before author's note
+    AFTER_AN: 3, // ↓AN - After author's note
+    IN_CHAT: 4, // In-chat - At specified message depth
+    CUSTOM: -1, // Custom - Macro-only, no auto-injection
 });
 
 export const POSITION_LABELS = Object.freeze([
     { value: 0, label: '↑Char', description: 'Before character definitions' },
     { value: 1, label: '↓Char', description: 'After character definitions' },
-    { value: 2, label: '↑AN', description: 'Before author\'s note' },
-    { value: 3, label: '↓AN', description: 'After author\'s note' },
+    { value: 2, label: '↑AN', description: "Before author's note" },
+    { value: 3, label: '↓AN', description: "After author's note" },
     { value: 4, label: 'In-chat', description: 'At specified message depth' },
     { value: -1, label: 'Custom', description: 'Use macro manually' },
 ]);
@@ -63,7 +63,7 @@ export const defaultSettings = {
     // Concurrency settings (Phase 2 parallelism)
     maxConcurrency: 1, // Default to 1 to protect local/VRAM-bound LLM users
     // Embedding settings (Local RAG)
-    embeddingSource: 'multilingual-e5-small', // model name or 'ollama'
+    embeddingSource: 'multilingual-e5-small', // model name, 'ollama', or 'st_vector'
     ollamaUrl: '',
     embeddingModel: '',
     embeddingQueryPrefix: '', // Empty by default — e5-small works best without prefixes
@@ -136,6 +136,9 @@ export const MEMORIES_PER_PAGE = 20;
 // Two-pass retrieval: maximum memories to calculate vector similarity on
 // After fast-pass (Base + BM25), only top N get expensive cosine similarity
 export const VECTOR_PASS_LIMIT = 200;
+
+/** Over-fetch multiplier for ST Vector Storage candidate retrieval */
+export const OVER_FETCH_MULTIPLIER = 3;
 
 // Query context extraction defaults
 export const QUERY_CONTEXT_DEFAULTS = {

@@ -89,6 +89,55 @@ class EmbeddingStrategy {
     async reset() {
         // Default: no-op
     }
+
+    /**
+     * Insert items into external vector storage (storage-backed strategies only).
+     * @param {Array<{hash: number, text: string}>} _items - Items to insert
+     * @param {Object} _options - Options
+     * @returns {Promise<boolean>} True if successful, false if not supported
+     */
+    async insertItems(_items, _options = {}) {
+        return false;
+    }
+
+    /**
+     * Search items in external vector storage (storage-backed strategies only).
+     * @param {string} _query - Search text
+     * @param {number} _topK - Number of results
+     * @param {number} _threshold - Similarity threshold
+     * @param {Object} _options - Options
+     * @returns {Promise<Array<{id: string, hash: number, text: string}>|null>} Results or null if not supported
+     */
+    async searchItems(_query, _topK, _threshold, _options = {}) {
+        return null;
+    }
+
+    /**
+     * Delete items from external vector storage.
+     * @param {number[]} _hashes - Hashes to delete
+     * @param {Object} _options - Options
+     * @returns {Promise<boolean>}
+     */
+    async deleteItems(_hashes, _options = {}) {
+        return false;
+    }
+
+    /**
+     * Purge entire collection from external storage.
+     * @param {Object} _options - Options
+     * @returns {Promise<boolean>}
+     */
+    async purgeCollection(_options = {}) {
+        return false;
+    }
+
+    /**
+     * Whether this strategy uses external vector storage (vs local embeddings).
+     * @returns {boolean}
+     */
+    usesExternalStorage() {
+        return false;
+    }
 }
 
 // =============================================================================
@@ -472,6 +521,66 @@ class OllamaStrategy extends EmbeddingStrategy {
 }
 
 // =============================================================================
+// ST Vector Storage Strategy
+// =============================================================================
+
+class StVectorStrategy extends EmbeddingStrategy {
+    getId() {
+        return 'st_vector';
+    }
+
+    isEnabled() {
+        // ST Vector Storage is always considered available if selected
+        return true;
+    }
+
+    getStatus() {
+        return 'ST Vector Storage';
+    }
+
+    // No local embeddings — ST handles embedding generation
+    async getQueryEmbedding(_text, _options = {}) {
+        return null;
+    }
+
+    async getDocumentEmbedding(_text, _options = {}) {
+        return null;
+    }
+
+    usesExternalStorage() {
+        return true;
+    }
+
+    async insertItems(items, _options = {}) {
+        const { syncItemsToST } = await import('./utils/data.js');
+        const { getCurrentChatId } = await import('./utils/data.js');
+        const chatId = getCurrentChatId() || 'default';
+        return syncItemsToST(items, chatId);
+    }
+
+    async searchItems(query, topK, threshold, _options = {}) {
+        const { querySTVector } = await import('./utils/data.js');
+        const { getCurrentChatId } = await import('./utils/data.js');
+        const chatId = getCurrentChatId() || 'default';
+        return querySTVector(query, topK, threshold, chatId);
+    }
+
+    async deleteItems(hashes, _options = {}) {
+        const { deleteItemsFromST } = await import('./utils/data.js');
+        const { getCurrentChatId } = await import('./utils/data.js');
+        const chatId = getCurrentChatId() || 'default';
+        return deleteItemsFromST(hashes, chatId);
+    }
+
+    async purgeCollection(_options = {}) {
+        const { purgeSTCollection } = await import('./utils/data.js');
+        const { getCurrentChatId } = await import('./utils/data.js');
+        const chatId = getCurrentChatId() || 'default';
+        return purgeSTCollection(chatId);
+    }
+}
+
+// =============================================================================
 // Strategy Registry
 // =============================================================================
 
@@ -480,6 +589,7 @@ const strategies = {
     'bge-small-en-v1.5': new TransformersStrategy(),
     'embeddinggemma-300m': new TransformersStrategy(),
     ollama: new OllamaStrategy(),
+    st_vector: new StVectorStrategy(),
 };
 
 // Configure model-specific transformers strategies
@@ -806,6 +916,72 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
     if (!data) {
         if (!silent) showToast('warning', 'No chat data available');
         return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: false };
+    }
+
+    const settings = getDeps().getExtensionSettings()[extensionName];
+    const source = settings.embeddingSource;
+    const strategy = getStrategy(source);
+
+    // ST Vector Storage branch: sync items instead of generating local embeddings
+    if (strategy.usesExternalStorage()) {
+        const { cyrb53, isStSynced, markStSynced } = await import('./utils/embedding-codec.js');
+        const BATCH_SIZE = 100;
+
+        const allItems = [];
+
+        // Collect unsynced memories
+        for (const m of data[MEMORIES_KEY] || []) {
+            if (m.summary && !isStSynced(m)) {
+                allItems.push({ item: m, text: `[OV_ID:${m.id}] ${m.summary}` });
+            }
+        }
+
+        // Collect unsynced graph nodes
+        for (const [name, node] of Object.entries(data.graph?.nodes || {})) {
+            if (!isStSynced(node)) {
+                allItems.push({ item: node, text: `[OV_ID:${name}] ${node.description}` });
+            }
+        }
+
+        // Collect unsynced communities
+        for (const [id, community] of Object.entries(data.communities || {})) {
+            if (community.summary && !isStSynced(community)) {
+                allItems.push({ item: community, text: `[OV_ID:${id}] ${community.summary}` });
+            }
+        }
+
+        if (allItems.length === 0) {
+            return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: true };
+        }
+
+        if (!silent) showToast('info', `Syncing ${allItems.length} items to ST Vector Storage...`);
+
+        let synced = 0;
+        for (let i = 0; i < allItems.length; i += BATCH_SIZE) {
+            const batch = allItems.slice(i, i + BATCH_SIZE);
+            const stItems = batch.map(({ text }) => ({
+                hash: cyrb53(text),
+                text,
+                index: 0,
+            }));
+            const success = await strategy.insertItems(stItems);
+            if (success) {
+                for (const { item } of batch) {
+                    markStSynced(item);
+                    synced++;
+                }
+            }
+        }
+
+        if (synced > 0) {
+            // Stamp ST fingerprint so mismatch detection works on next load
+            const { stampStVectorFingerprint } = await import('./utils/data.js');
+            stampStVectorFingerprint(data);
+
+            await saveOpenVaultData();
+        }
+
+        return { memories: synced, nodes: 0, communities: 0, total: synced, skipped: false };
     }
 
     // Count what needs embedding

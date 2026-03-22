@@ -10,11 +10,8 @@ describe('World Tab Structure', () => {
     );
     const worldHtml = worldMatch ? worldMatch[1] : '';
 
-    it('has Graph Stats Card at top', () => {
-        expect(worldHtml).toContain('openvault_graph_stats');
-        const graphStatsIndex = worldHtml.indexOf('openvault_graph_stats');
-        const communitiesIndex = worldHtml.indexOf('Communities');
-        expect(graphStatsIndex).toBeLessThan(communitiesIndex);
+    it('has no Graph Stats Card (moved to dashboard)', () => {
+        expect(worldHtml).not.toContain('openvault_graph_stats');
     });
 
     it('has no visible sliders/inputs for settings', () => {

@@ -17,7 +17,8 @@ import {
     resolveOutputLanguage,
 } from '../prompts/index.js';
 import { cosineSimilarity } from '../retrieval/math.js';
-import { getEmbedding, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
+import { deleteItemsFromST, getCurrentChatId, isStVectorSource, syncItemsToST } from '../utils/data.js';
+import { cyrb53, getEmbedding, hasEmbedding, markStSynced, setEmbedding } from '../utils/embedding-codec.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { yieldToMain } from '../utils/st-helpers.js';
@@ -112,7 +113,10 @@ export function findCrossScriptCharacterKeys(baseKeys, graphNodes) {
 
         const transliterated = transliterateCyrToLat(nodeKey);
         for (const baseKey of baseKeys) {
-            if (levenshteinDistance(transliterated, baseKey) <= getCrossScriptMaxDistance(transliterated.length, baseKey.length)) {
+            if (
+                levenshteinDistance(transliterated, baseKey) <=
+                getCrossScriptMaxDistance(transliterated.length, baseKey.length)
+            ) {
                 crossScriptKeys.push(nodeKey);
                 break;
             }
@@ -424,7 +428,10 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
             const cyrKey = keyIsCyrillic ? key : existingKey;
             const latKey = keyIsCyrillic ? existingKey : key;
 
-            if (levenshteinDistance(transliterateCyrToLat(cyrKey), latKey) <= getCrossScriptMaxDistance(cyrKey.length, latKey.length)) {
+            if (
+                levenshteinDistance(transliterateCyrToLat(cyrKey), latKey) <=
+                getCrossScriptMaxDistance(cyrKey.length, latKey.length)
+            ) {
                 logDebug(
                     `[graph] Cross-script merge: "${name}" (${key}) → "${node.name}" (${existingKey}), transliterated: "${transliterateCyrToLat(cyrKey)}"`
                 );
@@ -498,6 +505,16 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
     // No match: create new node with embedding
     upsertEntity(graphData, name, type, description, cap);
     setEmbedding(graphData.nodes[key], newEmbedding);
+
+    // Sync graph node to ST Vector Storage
+    if (isStVectorSource()) {
+        const chatId = getCurrentChatId();
+        const node = graphData.nodes[key];
+        const text = `[OV_ID:${key}] ${node.description}`;
+        await syncItemsToST([{ hash: cyrb53(text), text }], chatId);
+        markStSynced(node);
+    }
+
     return key;
 }
 
@@ -510,7 +527,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
  * @param {string} oldKey - Normalized key being removed
  * @param {string} newKey - Normalized key to redirect to
  */
-export function redirectEdges(graphData, oldKey, newKey) {
+export async function redirectEdges(graphData, oldKey, newKey) {
     const edgesToRemove = [];
     const edgesToAdd = [];
 
@@ -542,6 +559,21 @@ export function redirectEdges(graphData, oldKey, newKey) {
     // Remove old edges
     for (const key of edgesToRemove) {
         delete graphData.edges[key];
+    }
+
+    // Delete old edges from ST Vector Storage
+    if (isStVectorSource()) {
+        const chatId = getCurrentChatId();
+        for (const edgeKey of edgesToRemove) {
+            // Reconstruct edge info from the edge key (format: source__target)
+            const [source, target] = edgeKey.split('__');
+            const edgeId = `edge_${source}_${target}`;
+            const edge = edgesToAdd.find((e) => e.source === source || e.target === target);
+            if (edge) {
+                const text = `[OV_ID:${edgeId}] ${edge.description}`;
+                await deleteItemsFromST([cyrb53(text)], chatId);
+            }
+        }
     }
 
     // Add redirected edges (merge if duplicate)
@@ -645,7 +677,14 @@ export async function consolidateGraph(graphData, settings) {
         graphData.nodes[keepKey].aliases.push(removedNode.name);
 
         // Redirect edges
-        redirectEdges(graphData, removeKey, keepKey);
+        await redirectEdges(graphData, removeKey, keepKey);
+
+        // Delete orphaned node from ST Vector Storage
+        if (isStVectorSource()) {
+            const chatId = getCurrentChatId();
+            const text = `[OV_ID:${removeKey}] ${removedNode.description}`;
+            await deleteItemsFromST([cyrb53(text)], chatId);
+        }
 
         // Remove old node
         delete graphData.nodes[removeKey];
@@ -698,6 +737,15 @@ export async function consolidateEdges(graphData, _settings) {
                                 `relationship: ${edge.source} - ${edge.target}: ${edge.description}`
                             );
                             setEmbedding(edge, newEmbedding);
+                        }
+
+                        // Sync consolidated edge to ST Vector Storage
+                        if (isStVectorSource()) {
+                            const chatId = getCurrentChatId();
+                            const edgeId = `edge_${edge.source}_${edge.target}`;
+                            const text = `[OV_ID:${edgeId}] ${edge.description}`;
+                            await syncItemsToST([{ hash: cyrb53(text), text, index: 0 }], chatId);
+                            markStSynced(edge);
                         }
 
                         return edgeKey;

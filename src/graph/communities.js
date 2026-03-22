@@ -25,7 +25,8 @@ import {
     resolveExtractionPrefill,
     resolveOutputLanguage,
 } from '../prompts/index.js';
-import { hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
+import { getCurrentChatId, isStVectorSource, syncItemsToST } from '../utils/data.js';
+import { cyrb53, hasEmbedding, isStSynced, markStSynced, setEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 
@@ -290,6 +291,22 @@ export async function updateCommunitySummaries(
     }
 
     await Promise.all(promises);
+
+    // Sync community summaries to ST Vector Storage
+    if (isStVectorSource()) {
+        const chatId = getCurrentChatId();
+        const items = [];
+        for (const [id, community] of Object.entries(updatedCommunities)) {
+            if (community.summary && !isStSynced(community)) {
+                const text = `[OV_ID:${id}] ${community.summary}`;
+                items.push({ hash: cyrb53(text), text, index: 0 });
+                markStSynced(community);
+            }
+        }
+        if (items.length > 0) {
+            await syncItemsToST(items, chatId);
+        }
+    }
 
     const communityCount = Object.keys(updatedCommunities).length;
     record('llm_communities', performance.now() - t0, `${communityCount} communities`);

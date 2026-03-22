@@ -109,21 +109,29 @@ export async function refreshStats() {
 
     const memories = data[MEMORIES_KEY] || [];
     const eventCount = memories.length;
-    const embeddingCount = memories.filter((m) => hasEmbedding(m)).length;
     const charCount = Object.keys(data[CHARACTERS_KEY] || {}).length;
 
     // New feature stats
     const reflectionCount = memories.filter((m) => m.type === 'reflection').length;
-    const entityCount = Object.keys(data.graph?.nodes || {}).length;
-    const communityCount = Object.keys(data.communities || {}).length;
+    const nodes = Object.values(data.graph?.nodes || {});
+    const edges = Object.keys(data.graph?.edges || {});
+    const communities = Object.values(data.communities || {});
+
+    // Count ALL embeddings: memories + graph nodes + communities
+    const embeddingCount =
+        memories.filter((m) => hasEmbedding(m)).length +
+        nodes.filter((n) => hasEmbedding(n)).length +
+        communities.filter((c) => hasEmbedding(c)).length;
 
     // Update stat cards
     $('#openvault_stat_events').text(eventCount);
     $('#openvault_stat_embeddings').text(embeddingCount);
     $('#openvault_stat_characters').text(charCount);
     $('#openvault_stat_reflections').text(reflectionCount);
-    $('#openvault_stat_entities').text(entityCount);
-    $('#openvault_stat_communities').text(communityCount);
+    $('#openvault_stat_entities').text(nodes.length);
+    $('#openvault_stat_communities').text(communities.length);
+    $('#openvault_stat_graph_nodes').text(nodes.length);
+    $('#openvault_stat_graph_edges').text(edges.length);
 
     // Calculate batch progress (token-based)
     const settings = getDeps().getExtensionSettings()[extensionName];

@@ -26,7 +26,6 @@ import {
 import { renderErrorLog, renderPerfTab, updateBudgetIndicators } from './settings.js';
 import { refreshStats } from './status.js';
 import {
-    graphStatsCard,
     renderCharacterState,
     renderCommunityAccordion,
     renderEntityCard,
@@ -392,36 +391,6 @@ function renderWorldTab() {
 }
 
 // =============================================================================
-// Graph Stats Render
-// =============================================================================
-
-/**
- * Render Graph Stats Card in World tab
- */
-export function renderGraphStats() {
-    const container = document.getElementById('openvault_graph_stats');
-    if (!container) return;
-
-    const data = getOpenVaultData();
-    const context = getDeps().getContext?.();
-    const currentMessageId = context?.chat?.length || 0;
-
-    // Graph stores nodes/edges as objects (keyed by normalized name), not arrays
-    const graph = data?.graph || { nodes: {}, edges: {} };
-    const communities = data?.communities || {};
-    const lastDetection = data?.lastCommunityDetection || 0;
-
-    const stats = {
-        entities: Object.keys(graph.nodes || {}).length,
-        relationships: Object.keys(graph.edges || {}).length,
-        communities: Object.keys(communities || {}).length,
-        lastClustered: currentMessageId - lastDetection,
-    };
-
-    container.innerHTML = graphStatsCard(stats);
-}
-
-// =============================================================================
 // Browser Orchestration Layer
 // =============================================================================
 
@@ -448,7 +417,6 @@ export function refreshAllUI() {
     renderMemoryList();
     renderCharacterStates();
     renderReflectionProgressSection();
-    renderGraphStats();
     renderWorldTab();
     updateBudgetIndicators();
     renderPerfTab();
@@ -480,13 +448,15 @@ export function renderPositionBadges(settings) {
     const memoryPos = settings?.injection?.memory?.position ?? 1;
     const worldPos = settings?.injection?.world?.position ?? 1;
 
-    const memoryLabel = memoryPos === -1
-        ? `<span class="openvault-position-badge custom" title="Click to copy macro" data-macro="openvault_memory">📋 {{openvault_memory}}</span>`
-        : `<span class="openvault-position-badge" title="Memory injection position">${getPositionLabel(memoryPos)}</span>`;
+    const memoryLabel =
+        memoryPos === -1
+            ? `<span class="openvault-position-badge custom" title="Click to copy macro" data-macro="openvault_memory">📋 {{openvault_memory}}</span>`
+            : `<span class="openvault-position-badge" title="Memory injection position">${getPositionLabel(memoryPos)}</span>`;
 
-    const worldLabel = worldPos === -1
-        ? `<span class="openvault-position-badge custom" title="Click to copy macro" data-macro="openvault_world">📋 {{openvault_world}}</span>`
-        : `<span class="openvault-position-badge" title="World injection position">${getPositionLabel(worldPos)}</span>`;
+    const worldLabel =
+        worldPos === -1
+            ? `<span class="openvault-position-badge custom" title="Click to copy macro" data-macro="openvault_world">📋 {{openvault_world}}</span>`
+            : `<span class="openvault-position-badge" title="World injection position">${getPositionLabel(worldPos)}</span>`;
 
     return `${memoryLabel} | ${worldLabel}`;
 }

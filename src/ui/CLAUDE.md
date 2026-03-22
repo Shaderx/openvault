@@ -5,8 +5,8 @@ Handles the ST settings panel with progressive disclosure design: status/browsin
 
 ## ARCHITECTURE
 - **`helpers.js`**: Pure data transformations (pagination, filtering, math). **ZERO DOM INTERACTION**. Fully unit testable.
-- **`templates.js`**: Pure functions returning HTML strings. Includes `graphStatsCard()` for World tab. **ZERO STATE MUTATION**.
-- **`render.js`**: State orchestration and DOM manipulation (`$()`). Includes `renderGraphStats()` for World tab.
+- **`templates.js`**: Pure functions returning HTML strings. **ZERO STATE MUTATION**.
+- **`render.js`**: State orchestration and DOM manipulation (`$()`).
 - **`settings.js`**: Event binding and persistence. `handleResetSettings()` preserves connection settings.
 
 ## TAB STRUCTURE (Progressive Disclosure)
@@ -14,7 +14,7 @@ Settings reorganized by user activity pattern, not technical category:
 
 1. **Dashboard** (dashboard-connections): Quick Toggles → Status → Stats → Progress → [collapsed] Connection & Setup, Embeddings, API Limits
 2. **Memories** (memory-bank): Browser/Search first → [collapsed] Character States, Extraction & Context, Reflection Engine
-3. **World** (world): Graph Stats Card → Communities → Entities. **Pure viewer, zero settings**.
+3. **World** (world): Communities → Entities. **Pure viewer, zero settings**.
 4. **Advanced** (advanced): Warning banner → [collapsed] Scoring & Weights, Decay Math, Similarity Thresholds → Danger Zone
 5. **Perf** (perf): Performance metrics table with health indicators
 

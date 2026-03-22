@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('macros module', () => {
     let mockRegisterMacro;
@@ -28,17 +28,11 @@ describe('macros module', () => {
 
     it('should register openvault_memory macro on init', async () => {
         await import('../../src/injection/macros.js');
-        expect(mockRegisterMacro).toHaveBeenCalledWith(
-            'openvault_memory',
-            expect.any(Function)
-        );
+        expect(mockRegisterMacro).toHaveBeenCalledWith('openvault_memory', expect.any(Function));
     });
 
     it('should register openvault_world macro on init', async () => {
         await import('../../src/injection/macros.js');
-        expect(mockRegisterMacro).toHaveBeenCalledWith(
-            'openvault_world',
-            expect.any(Function)
-        );
+        expect(mockRegisterMacro).toHaveBeenCalledWith('openvault_world', expect.any(Function));
     });
 });

@@ -5,14 +5,14 @@
  * Uses forgetfulness curve (exponential decay) and optional vector similarity.
  */
 
-import { extensionName } from '../constants.js';
+import { extensionName, OVER_FETCH_MULTIPLIER } from '../constants.js';
 import { getDeps } from '../deps.js';
-import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
+import { getQueryEmbedding, getStrategy, isEmbeddingsEnabled } from '../embeddings.js';
 import { logDebug } from '../utils/logging.js';
 import { assignMemoriesToBuckets, getMemoryPosition } from '../utils/text.js';
 import { countTokens } from '../utils/tokens.js';
 import { cacheRetrievalDebug, cacheScoringDetails } from './debug-cache.js';
-import { scoreMemories } from './math.js';
+import { rankToProxyScore, scoreMemories } from './math.js';
 import {
     buildBM25Tokens,
     buildCorpusVocab,
@@ -98,6 +98,15 @@ async function scoreMemoriesDirect(
 async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemories = [], idfCache = null) {
     const { recentContext, userMessages, activeCharacters, chatLength } = ctx;
 
+    // Check if using ST Vector Storage (external storage strategy)
+    const settings = getDeps().getExtensionSettings()[extensionName];
+    const source = settings.embeddingSource;
+    const strategy = getStrategy(source);
+
+    if (strategy.usesExternalStorage()) {
+        return selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemories, idfCache, strategy);
+    }
+
     // Extract context from recent messages for enriched queries
     const recentMessages = parseRecentMessages(recentContext, 10);
     const queryContext = extractQueryContext(recentMessages, activeCharacters, ctx.graphNodes || {});
@@ -149,6 +158,101 @@ async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemor
     return scoreMemoriesDirect(
         memories,
         contextEmbedding,
+        chatLength,
+        limit,
+        bm25Tokens,
+        activeCharacters || [],
+        allHiddenMemories,
+        idfCache
+    );
+}
+
+/**
+ * Select relevant memories using ST Vector Storage + Alpha-Blend reranking.
+ * Over-fetches from ST, assigns rank-position proxy scores, then feeds into scoreMemories.
+ */
+async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemories, idfCache, strategy) {
+    const { recentContext, userMessages, activeCharacters, chatLength } = ctx;
+    const settings = getDeps().getExtensionSettings()[extensionName];
+
+    // Over-fetch from ST for reranking headroom
+    const stTopK = limit * OVER_FETCH_MULTIPLIER;
+    const stResults = await strategy.searchItems(
+        userMessages || recentContext?.slice(-500) || '',
+        stTopK,
+        settings.vectorSimilarityThreshold
+    );
+
+    // Build candidates with proxy scores
+    const memoriesById = new Map(memories.map((m) => [m.id, m]));
+
+    if (stResults && stResults.length > 0) {
+        const candidates = [];
+        for (let i = 0; i < stResults.length; i++) {
+            const memory = memoriesById.get(stResults[i].id);
+            if (!memory) continue;
+            memory._proxyVectorScore = rankToProxyScore(i, stResults.length);
+            candidates.push(memory);
+        }
+
+        if (candidates.length > 0) {
+            // Build BM25 tokens (same as local path)
+            const recentMessages = parseRecentMessages(recentContext, 10);
+            const queryContext = extractQueryContext(recentMessages, activeCharacters, ctx.graphNodes || {});
+
+            const hasEvents = candidates.some((m) => m.type === 'event');
+            let bm25Tokens = [];
+            if (hasEvents) {
+                const corpusVocab = buildCorpusVocab(
+                    candidates,
+                    allHiddenMemories,
+                    ctx.graphNodes || {},
+                    ctx.graphEdges || {}
+                );
+                bm25Tokens = buildBM25Tokens(userMessages, queryContext, corpusVocab);
+            }
+
+            // Score with proxy vector scores + BM25 + forgetfulness
+            const { constants, settings: scoringSettings } = getScoringParams();
+            const scored = await scoreMemories(
+                candidates,
+                null, // No context embedding — proxy scores are on memories
+                chatLength,
+                constants,
+                scoringSettings,
+                bm25Tokens,
+                activeCharacters || [],
+                allHiddenMemories,
+                idfCache
+            );
+
+            const topScored = scored.slice(0, limit);
+
+            // Clean up proxy scores from memories (don't persist them)
+            for (const memory of candidates) {
+                delete memory._proxyVectorScore;
+            }
+
+            return {
+                memories: topScored.map((r) => r.memory),
+                scoredResults: topScored,
+            };
+        }
+    }
+
+    // Graceful degradation: ST returned 0 candidates, fall through to BM25-only
+    const recentMessages = parseRecentMessages(recentContext, 10);
+    const queryContext = extractQueryContext(recentMessages, activeCharacters, ctx.graphNodes || {});
+    const hasEvents = memories.some((m) => m.type === 'event');
+    let bm25Tokens = [];
+    if (hasEvents) {
+        const corpusVocab = buildCorpusVocab(memories, allHiddenMemories, ctx.graphNodes || {}, ctx.graphEdges || {});
+        bm25Tokens = buildBM25Tokens(userMessages, queryContext, corpusVocab);
+    }
+
+    return scoreMemoriesDirect(
+        memories,
+        null,
         chatLength,
         limit,
         bm25Tokens,

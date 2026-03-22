@@ -7,6 +7,10 @@ OpenVault is an autonomous, POV-aware memory extension for SillyTavern. It runs 
 ## Images
 
 <p align="center">
+  <img width="80%" alt="OpenVault Infographic" src="docs/images/Infographic.webp" />
+</p>
+
+<p align="center">
   <img width="32%" alt="Screenshot 2026-03-08 160107" src="https://github.com/user-attachments/assets/ae81565e-8745-4d86-b6d1-5b73d65d355a" />
   <img width="32%" alt="Screenshot 2026-03-08 160132" src="https://github.com/user-attachments/assets/34427dcf-1e5b-4342-a2c2-269faec722e8" />
   <img width="32%" alt="Screenshot 2026-03-08 160145" src="https://github.com/user-attachments/assets/792826e8-2855-44c5-853c-de9c614fb38f" />
@@ -141,3 +145,5 @@ OpenVault implements ideas from two papers:
 12.00 - UI revamp, need to protect users from themselves. I can see oneguy changes the Jaccard threshold to 0.1, their graph will turn to mush, and they will submit a bug report saying "your extension sucks."
 
 12.50 - Customize injection position
+
+13.00 - Support all ST vectorization sources
