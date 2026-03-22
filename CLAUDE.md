@@ -39,6 +39,7 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **ST Event Timing**: `GENERATION_AFTER_COMMANDS` fires BEFORE `chat.push()` and BEFORE textarea is cleared. Pending user message must be read from `$('#send_textarea').val()`, NOT from `context.chat` (which only has the previous message). See `events.js:onBeforeGeneration()`.
 - **ST Vector Storage**: Set `embeddingSource: 'st_vector'` to use SillyTavern's built-in Vectra DB. No local embeddings stored — ST handles vector generation. Items marked with `_st_synced` flag.
 - **Proxy Vector Scores**: When using `st_vector`, retrieval uses rank-position proxy scores (not cosine similarity). Higher rank = higher proxy score.
+- **ST API CSRF**: All `fetch()` calls to ST endpoints (`/api/vector/*`) MUST use `getDeps().getRequestHeaders()` — never manual headers. ST requires `X-CSRF-Token` header on POST requests.
 
 ## ARCHITECTURE MAP (Lazy Loaded Context)
 - `src/embeddings.js` - Embedding strategies: Transformers.js (local), Ollama (remote), ST Vector Storage (external)
