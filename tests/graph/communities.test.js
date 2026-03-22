@@ -208,11 +208,15 @@ vi.mock('../../src/prompts.js', () => ({
     resolveOutputLanguage: vi.fn(() => 'auto'),
 }));
 
-// Mock structured
+// Mock structured - exports both parsers needed by this test file
 vi.mock('../../src/extraction/structured.js', () => ({
     parseCommunitySummaryResponse: vi.fn((content) => {
         const parsed = JSON.parse(content);
         return { title: parsed.title, summary: parsed.summary, findings: parsed.findings };
+    }),
+    parseGlobalSynthesisResponse: vi.fn((content) => {
+        const parsed = JSON.parse(content);
+        return { global_summary: parsed.global_summary };
     }),
 }));
 
@@ -350,18 +354,6 @@ vi.mock('../../src/prompts/index.js', async () => {
             { role: 'system', content: 'You are a narrative synthesist.' },
             { role: 'user', content: `Communities: ${communities.map((c) => c.title).join(', ')}` },
         ]),
-    };
-});
-
-// Mock global synthesis response parser
-vi.mock('../../src/extraction/structured.js', async () => {
-    const actual = await vi.importActual('../../src/extraction/structured.js');
-    return {
-        ...actual,
-        parseGlobalSynthesisResponse: vi.fn((content) => {
-            const parsed = JSON.parse(content);
-            return { global_summary: parsed.global_summary };
-        }),
     };
 });
 
