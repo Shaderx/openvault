@@ -884,12 +884,12 @@ export async function updateBudgetIndicators() {
     }
 
     const { getTokenSum } = await import('../utils/tokens.js');
-    const { getExtractedMessageIds, getUnextractedMessageIds } = await import('../extraction/scheduler.js');
+    const { getProcessedFingerprints, getUnextractedMessageIds } = await import('../extraction/scheduler.js');
 
     // Extraction indicator
     const extractionBudget = settings.extractionTokenBudget;
-    const extractedIds = getExtractedMessageIds(data);
-    const unextractedIds = getUnextractedMessageIds(chat, extractedIds);
+    const processedFps = getProcessedFingerprints(data);
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
     const unextractedTokens = getTokenSum(chat, unextractedIds);
     const extractionPct = Math.min((unextractedTokens / extractionBudget) * 100, 100);
 

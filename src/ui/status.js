@@ -105,7 +105,7 @@ export async function refreshStats() {
     }
 
     const { getTokenSum } = await import('../utils/tokens.js');
-    const { getExtractedMessageIds, getUnextractedMessageIds } = await import('../extraction/scheduler.js');
+    const { getProcessedFingerprints, getUnextractedMessageIds } = await import('../extraction/scheduler.js');
 
     const memories = data[MEMORIES_KEY] || [];
     const eventCount = memories.length;
@@ -139,8 +139,8 @@ export async function refreshStats() {
 
     const context = getDeps().getContext();
     const chat = context.chat || [];
-    const extractedIds = getExtractedMessageIds(data);
-    const unextractedIds = getUnextractedMessageIds(chat, extractedIds);
+    const processedFps = getProcessedFingerprints(data);
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
     const unextractedTokens = getTokenSum(chat, unextractedIds);
 
     // Calculate progress percentage

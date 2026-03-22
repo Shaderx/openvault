@@ -5,6 +5,8 @@
  * No DOM dependencies - fully testable.
  */
 
+import { getUnextractedMessageIds } from '../extraction/scheduler.js';
+
 // =============================================================================
 // Calculation Functions
 // =============================================================================
@@ -126,15 +128,19 @@ export function buildCharacterStateData(name, charData) {
 /**
  * Calculate extraction statistics
  * @param {Array} chat - Chat messages array
- * @param {Set} extractedMessageIds - Set of extracted message indices
+ * @param {Set} processedFps - Set of processed fingerprints
  * @param {number} messageCount - Messages per extraction setting
  * @param {number} bufferSize - Recent messages excluded from extraction
  * @returns {Object} Extraction statistics
  */
-export function calculateExtractionStats(chat, extractedMessageIds, messageCount, bufferSize = 0) {
+export function calculateExtractionStats(chat, processedFps, messageCount, bufferSize = 0) {
     const totalMessages = chat.length;
     const hiddenMessages = chat.filter((m) => m.is_system).length;
-    const extractedCount = extractedMessageIds.size;
+
+    // Fix: Derive extracted count from unextracted pool instead of dead-fingerprint-inflated Set size
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
+    const nonSystemCount = totalMessages - hiddenMessages;
+    const extractedCount = Math.max(0, nonSystemCount - unextractedIds.length);
 
     // Calculate extractable messages (total minus buffer)
     const extractableMessages = Math.max(0, totalMessages - bufferSize);
