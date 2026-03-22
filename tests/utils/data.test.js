@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CHARACTERS_KEY, extensionName, LAST_PROCESSED_KEY, MEMORIES_KEY, METADATA_KEY } from '../../src/constants.js';
+import { CHARACTERS_KEY, extensionName, MEMORIES_KEY, METADATA_KEY } from '../../src/constants.js';
 import { resetDeps, setDeps } from '../../src/deps.js';
 import {
     deleteCurrentChatData,
@@ -44,7 +44,6 @@ describe('data', () => {
             expect(data).toEqual({
                 [MEMORIES_KEY]: [],
                 [CHARACTERS_KEY]: {},
-                [LAST_PROCESSED_KEY]: -1,
             });
         });
 
@@ -52,7 +51,6 @@ describe('data', () => {
             const existing = {
                 [MEMORIES_KEY]: [{ id: '1' }],
                 [CHARACTERS_KEY]: {},
-                [LAST_PROCESSED_KEY]: 5,
             };
             mockContext.chatMetadata[METADATA_KEY] = existing;
             expect(getOpenVaultData()).toBe(existing);

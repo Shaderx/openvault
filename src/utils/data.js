@@ -1,4 +1,4 @@
-import { CHARACTERS_KEY, LAST_PROCESSED_KEY, MEMORIES_KEY, METADATA_KEY } from '../constants.js';
+import { CHARACTERS_KEY, MEMORIES_KEY, METADATA_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { record } from '../perf/store.js';
 import { showToast } from './dom.js';
@@ -297,7 +297,6 @@ export function getOpenVaultData() {
         context.chatMetadata[METADATA_KEY] = {
             [MEMORIES_KEY]: [],
             [CHARACTERS_KEY]: {},
-            [LAST_PROCESSED_KEY]: -1,
         };
     }
     const data = context.chatMetadata[METADATA_KEY];

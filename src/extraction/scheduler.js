@@ -92,11 +92,6 @@ export function getProcessedFingerprints(data) {
 }
 
 /**
- * @deprecated Use getProcessedFingerprints instead. Kept for backward compatibility during transition.
- */
-export const getExtractedMessageIds = getProcessedFingerprints;
-
-/**
  * Get array of message indices that have not been extracted yet.
  * Now uses fingerprint matching and filters out system messages.
  * @param {Object[]} chat - Chat messages array
