@@ -252,6 +252,105 @@ describe('data', () => {
             expect(await deleteCurrentChatData()).toBe(true);
             expect(mockContext.chatMetadata[METADATA_KEY]).toBeUndefined();
         });
+
+        it('purges ST Vector collection when using st_vector', async () => {
+            mockContext.chatMetadata[METADATA_KEY] = {
+                [MEMORIES_KEY]: [{ id: '1' }],
+            };
+            mockContext.chatId = 'test-chat-456';
+
+            const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: {
+                        debugMode: true,
+                        embeddingSource: 'st_vector',
+                    },
+                }),
+                saveChatConditional: vi.fn().mockResolvedValue(undefined),
+                fetch: mockFetch,
+                getRequestHeaders: () => ({ 'X-CSRF-Token': 'test-token' }),
+            });
+
+            await deleteCurrentChatData();
+
+            // Verify purge was called via fetch
+            const fetchCalls = mockFetch.mock.calls;
+            const purgeCall = fetchCalls.find((call) => call[0] === '/api/vector/purge');
+            expect(purgeCall).toBeDefined();
+            expect(JSON.parse(purgeCall[1].body)).toMatchObject({
+                collectionId: expect.stringContaining('test-chat-456'),
+            });
+        });
+
+        it('does not purge ST collection when using local embeddings', async () => {
+            mockContext.chatMetadata[METADATA_KEY] = {
+                [MEMORIES_KEY]: [{ id: '1' }],
+            };
+            mockContext.chatId = 'test-chat-789';
+
+            const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: {
+                        debugMode: true,
+                        embeddingSource: 'multilingual-e5-small',
+                    },
+                }),
+                saveChatConditional: vi.fn().mockResolvedValue(undefined),
+                fetch: mockFetch,
+            });
+
+            await deleteCurrentChatData();
+
+            // Verify no purge call was made
+            const purgeCalls = mockFetch.mock.calls.filter(
+                (call) => call[0] === '/api/vector/purge'
+            );
+            expect(purgeCalls).toHaveLength(0);
+        });
+
+        it('continues with OpenVault data clearing even if ST purge fails', async () => {
+            mockContext.chatMetadata[METADATA_KEY] = {
+                [MEMORIES_KEY]: [{ id: '1' }],
+            };
+            mockContext.chatId = 'test-chat-fail';
+
+            const mockSave = vi.fn().mockResolvedValue(undefined);
+
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: {
+                        debugMode: true,
+                        embeddingSource: 'st_vector',
+                    },
+                }),
+                saveChatConditional: mockSave,
+                fetch: vi.fn().mockRejectedValue(new Error('Network error')),
+                getRequestHeaders: () => ({ 'X-CSRF-Token': 'test-token' }),
+            });
+
+            // Should not throw
+            const result = await deleteCurrentChatData();
+            expect(result).toBe(true);
+
+            // Verify OpenVault data was still cleared
+            expect(mockContext.chatMetadata[METADATA_KEY]).toBeUndefined();
+
+            // Verify warning was logged
+            expect(mockConsole.warn).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to purge ST collection'),
+                expect.any(Error)
+            );
+        });
     });
 
     describe('deleteCurrentChatEmbeddings', () => {

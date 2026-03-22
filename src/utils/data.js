@@ -513,6 +513,25 @@ export async function deleteCurrentChatData() {
         logDebug(`Unhid ${unhiddenCount} messages after memory clear`);
     }
 
+    // Purge ST Vector Storage if using st_vector
+    const settings = getDeps().getExtensionSettings()?.openvault;
+    if (settings?.embeddingSource === 'st_vector') {
+        const chatId = getCurrentChatId();
+        if (chatId) {
+            try {
+                const purged = await purgeSTCollection(chatId);
+                if (!purged) {
+                    logWarn('Failed to purge ST collection during chat data deletion', new Error('Purge failed'));
+                } else {
+                    logInfo(`Purged ST Vector collection for cleared chat: ${chatId}`);
+                }
+            } catch (err) {
+                logWarn('Failed to purge ST collection during chat data deletion', err);
+                // Don't fail the whole operation - OpenVault data is already cleared
+            }
+        }
+    }
+
     delete context.chatMetadata[METADATA_KEY];
     await getDeps().saveChatConditional();
     logDebug('Deleted all chat data');
