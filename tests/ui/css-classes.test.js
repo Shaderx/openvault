@@ -22,4 +22,25 @@ describe('CSS Classes', () => {
         expect(css).toContain('payload-warning');
         expect(css).toContain('payload-danger');
     });
+
+    it('defines emergency cut modal classes', () => {
+        const dashboardCss = readFileSync(resolve(process.cwd(), 'css/dashboard.css'), 'utf-8');
+
+        // Modal overlay
+        expect(dashboardCss).toContain('.openvault-modal');
+        expect(dashboardCss).toContain('position: fixed');
+        expect(dashboardCss).toContain('z-index: 9999');
+
+        // Hidden state
+        expect(dashboardCss).toContain('.openvault-modal.hidden');
+
+        // Button stack
+        expect(dashboardCss).toContain('.openvault-button-stack');
+
+        // Danger button
+        expect(dashboardCss).toContain('#openvault_emergency_cut_btn');
+
+        // Disabled cancel button
+        expect(dashboardCss).toContain('#openvault_emergency_cancel:disabled');
+    });
 });
