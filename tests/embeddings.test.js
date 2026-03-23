@@ -175,3 +175,33 @@ describe('enrichEventsWithEmbeddings abort signal', () => {
         );
     });
 });
+
+describe('OllamaStrategy with injected params', () => {
+    it('uses injected url and model instead of getDeps', async () => {
+        const fetchSpy = vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ embedding: [0.1, 0.2] }),
+        }));
+
+        const depsModule = await import('../src/deps.js');
+        vi.spyOn(depsModule, 'getDeps').mockReturnValue({ fetch: fetchSpy });
+
+        const { getStrategy } = await import('../src/embeddings.js');
+        const strategy = getStrategy('ollama');
+        const result = await strategy.getEmbedding('test text', {
+            url: 'http://injected:11434',
+            model: 'injected-model',
+        });
+
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        const fetchUrl = fetchSpy.mock.calls[0][0];
+        expect(fetchUrl).toBe('http://injected:11434/api/embeddings');
+        const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+        expect(body.model).toBe('injected-model');
+        expect(result).toBeInstanceOf(Float32Array);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+});
