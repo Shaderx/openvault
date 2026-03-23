@@ -1,6 +1,6 @@
 # Design: Emergency Cut Feature
 
-**Status:** Draft v6 (Final)
+**Status:** v7 - Approved for Implementation
 **Date:** 2026-03-23
 **Scope:** UI dashboard button to extract all unprocessed messages and hide them, breaking LLM repetition loops.
 
@@ -92,22 +92,29 @@ operationState.extractionInProgress = true; // Worker checks this at line 101
 
 **Layer 1 (DOM):** Modal appended to `document.body` with `z-index: 9999`
 **Layer 2 (Input):** `$('#send_textarea').prop('disabled', true)`
-**Layer 3 (Hotkeys):** Keyboard trap with modal accessibility (v6 fix)
+**Layer 3 (Hotkeys):** Keyboard trap with modal accessibility
 
 ```javascript
-// v6: Keyboard trap that preserves modal accessibility
+// Keyboard trap that preserves modal accessibility
 $(document).on('keydown.emergencyCut', function(e) {
-    // Allow events inside the modal
-    if ($(e.target).closest('#openvault_emergency_cut_modal').length) {
-        // Escape key closes modal (triggers cancel)
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            $('#openvault_emergency_cancel').click();
+    // Escape key - always check first (handles focus loss edge case)
+    // If user clicks overlay, focus drops to body, but Escape should still work
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        const $cancelBtn = $('#openvault_emergency_cancel');
+        // Only trigger if not disabled (Phase 2)
+        if (!$cancelBtn.prop('disabled')) {
+            $cancelBtn.click();
         }
-        return; // Let other modal events pass (Tab, Enter on button, etc.)
+        return;
     }
 
-    // Block all keyboard events outside the modal (ST hotkeys)
+    // Allow Tab/Enter/etc inside the modal
+    if ($(e.target).closest('#openvault_emergency_cut_modal').length) {
+        return;
+    }
+
+    // Block ST hotkeys outside the modal (Ctrl+Enter, Enter, etc.)
     e.preventDefault();
     e.stopPropagation();
 });
@@ -123,7 +130,7 @@ $(document).on('keydown.emergencyCut', function(e) {
 let emergencyCutModalAppended = false;
 
 function showEmergencyCutModal() {
-    // v6: Append to body to avoid stacking context issues with ST's extension panel
+    // Append to body to avoid stacking context issues with ST's extension panel
     const $modal = $('#openvault_emergency_cut_modal');
     if (!emergencyCutModalAppended) {
         $modal.appendTo('body');
@@ -131,24 +138,40 @@ function showEmergencyCutModal() {
     }
     $modal.removeClass('hidden');
 
-    // v6: Keyboard trap with modal accessibility
+    // Keyboard trap with modal accessibility
     $(document).on('keydown.emergencyCut', function(e) {
-        // Allow events inside the modal
-        if ($(e.target).closest('#openvault_emergency_cut_modal').length) {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                $('#openvault_emergency_cancel').click();
+        // Escape - always check first (handles focus loss on overlay click)
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            const $cancelBtn = $('#openvault_emergency_cancel');
+            if (!$cancelBtn.prop('disabled')) {
+                $cancelBtn.click();
             }
             return;
         }
+
+        // Allow Tab/Enter inside modal
+        if ($(e.target).closest('#openvault_emergency_cut_modal').length) {
+            return;
+        }
+
+        // Block ST hotkeys outside
         e.preventDefault();
         e.stopPropagation();
+    });
+
+    // Bind cancel button click to abort controller
+    $('#openvault_emergency_cancel').off('click').on('click', () => {
+        if (emergencyCutAbortController) {
+            emergencyCutAbortController.abort();
+        }
     });
 }
 
 function hideEmergencyCutModal() {
     $('#openvault_emergency_cut_modal').addClass('hidden');
     $(document).off('keydown.emergencyCut');
+    $('#openvault_emergency_cancel').off('click');
 }
 
 function updateEmergencyCutProgress(batchNum, totalBatches, eventsCreated) {
@@ -616,7 +639,7 @@ async function handleExtractAll() {
 2. Keyboard Hotkey Trap
 3. Backdrop blur
 
-### v6 Fixes (Final)
+### v6 Fixes
 1. **AbortSignal Propagation** - Pass signal through `extractMemories` → `callLLM` so in-flight LLM calls can be cancelled mid-request.
 
 2. **Uncancellable Phase 2** - Disable Cancel button during Phase 2 synthesis with `onPhase2Start` callback. Button shows "Synthesizing...".
@@ -628,3 +651,12 @@ async function handleExtractAll() {
 5. **Missing Imports** - Added `getOpenVaultData` and `getFingerprint` imports to `hideExtractedMessages`.
 
 6. **Modal Stacking Context** - Append modal to `document.body` instead of extension panel to avoid CSS transform/overflow clipping.
+
+### v7 Fixes (Final)
+1. **Escape Key Focus Loss** - Pull Escape check above `closest()` check. If user clicks overlay, focus drops to body, but Escape must still cancel.
+
+2. **Cancel Button Binding** - Explicitly bind click handler in `showEmergencyCutModal()` that calls `emergencyCutAbortController.abort()`. Cleanup in `hideEmergencyCutModal()`.
+
+---
+
+**Status: APPROVED FOR IMPLEMENTATION**
