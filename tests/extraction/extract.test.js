@@ -235,19 +235,6 @@ describe('runPhase2Enrichment', () => {
             .mockResolvedValueOnce({ content: reflectionResponse })
             .mockResolvedValueOnce({ content: communityResponse });
 
-        setupTestContext({
-            context: mockContext,
-            settings: { ...getExtractionSettings(), reflectionThreshold: 40 },
-            deps: {
-                connectionManager: getMockConnectionManager(sendRequest),
-                fetch: vi.fn(async () => ({
-                    ok: true,
-                    json: async () => ({ embedding: [0.1, 0.2] }),
-                })),
-                saveChatConditional: vi.fn(async () => true),
-            },
-        });
-
         const mockDataWithState = {
             memories: [
                 {
@@ -292,6 +279,22 @@ describe('runPhase2Enrichment', () => {
             graph_message_count: 100,
             character_states: {},
         };
+
+        // Set up context metadata with test data so repository methods work correctly
+        mockContext.chatMetadata = { openvault: mockDataWithState };
+
+        setupTestContext({
+            context: mockContext,
+            settings: { ...getExtractionSettings(), reflectionThreshold: 40 },
+            deps: {
+                connectionManager: getMockConnectionManager(sendRequest),
+                fetch: vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ embedding: [0.1, 0.2] }),
+                })),
+                saveChatConditional: vi.fn(async () => true),
+            },
+        });
 
         const initialLength = mockDataWithState.memories.length;
         await runPhase2Enrichment(mockDataWithState, getExtractionSettings(), null);

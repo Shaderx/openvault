@@ -5,7 +5,7 @@
  * Previously: ExtractionPipeline class + 5 separate stage files.
  */
 
-import { CHARACTERS_KEY, extensionName, MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../constants.js';
+import { CHARACTERS_KEY, extensionName, MEMORIES_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
 import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
@@ -33,7 +33,7 @@ import { clearAllLocks, isWorkerRunning, operationState } from '../state.js';
 import { refreshAllUI } from '../ui/render.js';
 import { setStatus } from '../ui/status.js';
 import { deleteItemsFromST, isStVectorSource, syncItemsToST } from '../services/st-vector.js';
-import { getCurrentChatId, getOpenVaultData, saveOpenVaultData } from '../store/chat-data.js';
+import { addMemories, getCurrentChatId, getOpenVaultData, incrementGraphMessageCount, markMessagesProcessed, saveOpenVaultData } from '../store/chat-data.js';
 import { showToast } from '../utils/dom.js';
 import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
 import { logDebug, logError, logInfo } from '../utils/logging.js';
@@ -593,7 +593,7 @@ async function synthesizeReflections(data, characterNames, settings, options = {
                             data[CHARACTERS_KEY] || {}
                         );
                         if (reflections.length > 0) {
-                            data[MEMORIES_KEY].push(...reflections);
+                            addMemories(reflections);
                         }
                         // Reset accumulator after reflection
                         data.reflection_state[characterName].importance_sum = 0;
@@ -951,21 +951,19 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             graphResult.relationships,
             settings
         );
-        data.graph_message_count = (data.graph_message_count || 0) + messages.length;
+        incrementGraphMessageCount(messages.length);
 
         // ===== PHASE 1 COMMIT: Events + Graph are done =====
         if (events.length > 0) {
             // Canonicalize cross-script character names before downstream consumption
             canonicalizeEventCharNames(events, [characterName, userName], data.graph?.nodes);
-            data[MEMORIES_KEY] = data[MEMORIES_KEY] || [];
-            data[MEMORIES_KEY].push(...events);
+            addMemories(events);
             updateCharacterStatesFromEvents(events, data, [characterName, userName]);
         }
 
         // Mark processed AFTER events are committed to memories
         const processedFps = messages.map((m) => getFingerprint(m));
-        data[PROCESSED_MESSAGES_KEY] = data[PROCESSED_MESSAGES_KEY] || [];
-        data[PROCESSED_MESSAGES_KEY].push(...processedFps);
+        markMessagesProcessed(processedFps);
         logDebug(`Phase 1 complete: ${events.length} events, ${processedFps.length} messages processed`);
 
         // Update IDF cache after Phase 1 commit — corpus has changed
