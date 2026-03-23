@@ -143,6 +143,96 @@ export async function hideExtractedMessages() {
 }
 
 /**
+ * Handle Emergency Cut button click.
+ * Extracts all unprocessed messages and hides them from LLM context.
+ */
+export async function handleEmergencyCut() {
+    const { getBackfillStats, getProcessedFingerprints, getFingerprint } = await import('../extraction/scheduler.js');
+    const { operationState } = await import('../state.js');
+    const { isWorkerRunning } = await import('../extraction/worker.js');
+    const { getOpenVaultData } = await import('../utils/data.js');
+
+    if (isWorkerRunning()) {
+        showToast('warning', 'Background extraction in progress. Please wait a moment.');
+        return;
+    }
+
+    const context = getDeps().getContext();
+    const chat = context.chat || [];
+    const data = getOpenVaultData();
+
+    const stats = getBackfillStats(chat, data);
+
+    let shouldExtract = true;
+    let confirmMessage = '';
+
+    if (stats.unextractedCount === 0) {
+        const processedFps = getProcessedFingerprints(data);
+        const hideableCount = chat.filter(m =>
+            !m.is_system && processedFps.has(getFingerprint(m))
+        ).length;
+
+        if (hideableCount === 0) {
+            showToast('info', 'No messages to hide');
+            return;
+        }
+
+        confirmMessage = `All messages are already extracted. Hide ${hideableCount} messages from the LLM to break the loop?\n\n` +
+            `The LLM will only see: preset, char card, lorebooks, and OpenVault memories.`;
+        shouldExtract = false;
+    } else {
+        confirmMessage = `Extract and hide ${stats.unextractedCount} unprocessed messages?\n\n` +
+            `The LLM will only see: preset, char card, lorebooks, and OpenVault memories.`;
+    }
+
+    if (!confirm(confirmMessage)) return;
+
+    if (!shouldExtract) {
+        const hiddenCount = await hideExtractedMessages();
+        showToast('success', `Emergency Cut complete. ${hiddenCount} messages hidden from context.`);
+        refreshAllUI();
+        return;
+    }
+
+    operationState.extractionInProgress = true;
+    $('#send_textarea').prop('disabled', true);
+    emergencyCutAbortController = new AbortController();
+
+    showEmergencyCutModal();
+
+    try {
+        const { extractAllMessages } = await import('../extraction/extract.js');
+        const result = await extractAllMessages({
+            isEmergencyCut: true,
+            progressCallback: updateEmergencyCutProgress,
+            abortSignal: emergencyCutAbortController.signal,
+            onPhase2Start: disableEmergencyCutCancel,
+        });
+
+        await hideExtractedMessages();
+
+        showToast('success',
+            `Emergency Cut complete. ${result.messagesProcessed} messages processed, ` +
+            `${result.eventsCreated} memories created. Chat history hidden.`
+        );
+        refreshAllUI();
+
+    } catch (err) {
+        logError('Emergency Cut failed', err);
+        const isCancel = err.name === 'AbortError';
+        const message = isCancel
+            ? 'Emergency Cut cancelled. No messages were hidden.'
+            : `Emergency Cut failed: ${err.message}. No messages were hidden.`;
+        showToast(isCancel ? 'info' : 'error', message);
+    } finally {
+        operationState.extractionInProgress = false;
+        $('#send_textarea').prop('disabled', false);
+        hideEmergencyCutModal();
+        emergencyCutAbortController = null;
+    }
+}
+
+/**
  * Test Ollama connection
  */
 async function testOllamaConnection() {

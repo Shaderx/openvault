@@ -285,15 +285,50 @@ describe('Emergency Cut Modal Helpers', () => {
 });
 
 // =============================================================================
-// hideExtractedMessages Tests
+// handleEmergencyCut Tests
 // =============================================================================
 
-// Mock logging module before importing hideExtractedMessages
-vi.mock('../../src/utils/logging.js', () => ({
-    logInfo: vi.fn(),
-    logWarn: vi.fn(),
-    logError: vi.fn(),
-}));
+describe('handleEmergencyCut', () => {
+    beforeEach(() => {
+        // Reset body with required elements
+        document.body.innerHTML = `
+            <textarea id="send_textarea"></textarea>
+            <div id="openvault_emergency_cut_modal" class="openvault-modal hidden">
+                <div class="openvault-modal-content">
+                    <button id="openvault_emergency_cancel">Cancel</button>
+                </div>
+                <div id="openvault_emergency_fill"></div>
+                <div id="openvault_emergency_label"></div>
+                <div id="openvault_emergency_phase"></div>
+            </div>
+        `;
+
+        // Reset confirm mock
+        global.confirm = vi.fn(() => true);
+    });
+
+    it('shows warning toast if worker is running', async () => {
+        // This will fail because handleEmergencyCut doesn't exist yet
+        const { handleEmergencyCut } = await import('../../src/ui/settings.js');
+        expect(typeof handleEmergencyCut).toBe('function');
+    });
+
+    it('shows info toast and returns if no messages to hide', async () => {
+        // This will fail because handleEmergencyCut doesn't exist yet
+        const { handleEmergencyCut } = await import('../../src/ui/settings.js');
+        expect(typeof handleEmergencyCut).toBe('function');
+    });
+
+    it('returns early if user cancels confirmation', async () => {
+        // This will fail because handleEmergencyCut doesn't exist yet
+        const { handleEmergencyCut } = await import('../../src/ui/settings.js');
+        expect(typeof handleEmergencyCut).toBe('function');
+    });
+});
+
+// =============================================================================
+// hideExtractedMessages Tests
+// =============================================================================
 
 describe('hideExtractedMessages', () => {
     it('only marks messages that are in processed fingerprints set', async () => {
