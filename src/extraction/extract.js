@@ -32,14 +32,8 @@ import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { clearAllLocks, operationState } from '../state.js';
 import { refreshAllUI } from '../ui/render.js';
 import { setStatus } from '../ui/status.js';
-import {
-    deleteItemsFromST,
-    getCurrentChatId,
-    getOpenVaultData,
-    isStVectorSource,
-    saveOpenVaultData,
-    syncItemsToST,
-} from '../utils/data.js';
+import { deleteItemsFromST, isStVectorSource, syncItemsToST } from '../services/st-vector.js';
+import { getCurrentChatId, getOpenVaultData, saveOpenVaultData } from '../store/chat-data.js';
 import { showToast } from '../utils/dom.js';
 import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
 import { logDebug, logError, logInfo } from '../utils/logging.js';

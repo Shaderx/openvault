@@ -6,7 +6,7 @@
 
 import { CHARACTERS_KEY, defaultSettings, extensionName, MEMORIES_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
-import { getOpenVaultData } from '../utils/data.js';
+import { getOpenVaultData } from '../store/chat-data.js';
 import { hasEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
 import { getStatusText } from './helpers.js';

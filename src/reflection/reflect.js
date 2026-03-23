@@ -27,7 +27,7 @@ import {
     resolveOutputLanguage,
 } from '../prompts/index.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
-import { generateId } from '../utils/data.js';
+import { generateId } from '../store/chat-data.js';
 import { cyrb53, getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
 import { sortMemoriesBySequence } from '../utils/text.js';

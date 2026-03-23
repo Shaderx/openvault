@@ -1,5 +1,5 @@
 import { PERF_METRICS } from '../constants.js';
-import { getOpenVaultData } from '../utils/data.js';
+import { getOpenVaultData } from '../store/chat-data.js';
 import { logDebug } from '../utils/logging.js';
 
 /** @type {Object<string, {ms: number, size: string|null, ts: number}>} */

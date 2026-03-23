@@ -10,7 +10,7 @@ import { extensionName } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getSessionSignal, operationState } from '../state.js';
 import { setStatus } from '../ui/status.js';
-import { getCurrentChatId, getOpenVaultData } from '../utils/data.js';
+import { getCurrentChatId, getOpenVaultData } from '../store/chat-data.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled } from '../utils/st-helpers.js';
 import { extractMemories } from './extract.js';

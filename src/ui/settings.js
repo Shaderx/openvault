@@ -191,7 +191,7 @@ async function handleOllamaTestClick() {
 }
 
 import { PREFILL_PRESETS } from '../prompts/index.js';
-import { deleteCurrentChatData, getOpenVaultData } from '../utils/data.js';
+import { deleteCurrentChatData, getOpenVaultData } from '../store/chat-data.js';
 import { showToast } from '../utils/dom.js';
 
 // =============================================================================
