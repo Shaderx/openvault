@@ -42,6 +42,7 @@ Background pipeline converting raw messages -> structured JSON -> Deduplicated M
 
 **Integration**:
 - `extractAllMessages()`: Passes `{ isBackfill: true, silent: true }` in the while loop. After loop, calls `runPhase2Enrichment()` with "Synthesizing..." toast.
+- **Emergency Cut**: Passes `{ isEmergencyCut: true, progressCallback, abortSignal, onPhase2Start }` for UI-driven extraction with cancel support.
 - Worker: Unchanged. Calls `extractMemories(batch, chatId, { silent: true })` (no `isBackfill`, normal flow for incremental extractions).
 
 ## GOTCHAS & RULES
