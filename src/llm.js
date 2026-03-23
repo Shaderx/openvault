@@ -106,7 +106,7 @@ export async function callLLM(messages, config, options = {}) {
     const settings = extension_settings[extensionName];
 
     // Get profile ID - use specified profile or fall back to currently selected
-    let profileId = settings[profileSettingKey];
+    let profileId = options.profileId ?? settings[profileSettingKey];
 
     if (!profileId) {
         profileId = extension_settings?.connectionManager?.selectedProfile;
@@ -171,7 +171,7 @@ export async function callLLM(messages, config, options = {}) {
         if (mainError.name === 'AbortError') throw mainError;
 
         // Attempt backup profile if configured and different from main
-        const backupProfileId = settings.backupProfile;
+        const backupProfileId = options.backupProfileId ?? settings.backupProfile;
         if (backupProfileId && backupProfileId !== profileId) {
             const profiles = extension_settings?.connectionManager?.profiles || [];
             const backupName = profiles.find((p) => p.id === backupProfileId)?.name || backupProfileId;
