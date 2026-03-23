@@ -21,13 +21,6 @@
 - **Error context**: On critical paths (JSON parse, embedding, extraction top-level), always pass a `context` object to `logError`. Truncate raw text to 100-2000 chars. Never include full chat messages or API keys.
 - **AbortError**: Always re-throw `AbortError` before logging — it signals intentional cancellation, not a failure.
 
-### `data.js`
-- Lazy-initializes `chatMetadata.openvault`.
-- **Chat-Switch Guard**: `saveOpenVaultData(expectedChatId)` aborts save if the user switched chats during an async operation. Prevents massive cross-chat data corruption.
-- `updateMemory()`: Automatically invalidates/deletes the embedding if the `summary` string changes.
-- **ST Vector Storage**: `isStVectorSource()` checks if `embeddingSource === 'st_vector'`.
-- **ST Sync Helpers**: `syncItemsToST(items, chatId)`, `deleteItemsFromST(hashes, chatId)`, `purgeSTCollection(chatId)`, `querySTVector(query, topK, threshold, chatId)` — REST API wrappers for `/api/vector/*`.
-
 ### `embedding-codec.js`
 - Base64 Float32Array encode/decode for embeddings.
 - `getEmbedding(obj)`, `setEmbedding(obj, vec)`, `hasEmbedding(obj)`, `deleteEmbedding(obj)`.
