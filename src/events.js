@@ -232,12 +232,13 @@ export async function onChatChanged() {
     const chat = context.chat || [];
     if (migrateProcessedMessages(chat, data)) {
         showToast('info', 'OpenVault upgraded tracking format.', 'Data Migration');
-        const { saveOpenVaultData } = await import('./utils/data.js');
+        const { saveOpenVaultData } = await import('./store/chat-data.js');
         await saveOpenVaultData();
     }
 
     // Check for embedding model mismatch and wipe stale vectors
-    const { invalidateStaleEmbeddings, saveOpenVaultData } = await import('./utils/data.js');
+    const { invalidateStaleEmbeddings } = await import('./embeddings/migration.js');
+    const { saveOpenVaultData } = await import('./store/chat-data.js');
     const settings = getDeps().getExtensionSettings()[extensionName];
     if (data && settings?.embeddingSource) {
         const wiped = await invalidateStaleEmbeddings(data, settings.embeddingSource);

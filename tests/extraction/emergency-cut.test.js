@@ -35,7 +35,7 @@ describe('executeEmergencyCut', () => {
         vi.spyOn(schedulerModule, 'getProcessedFingerprints').mockReturnValue(new Set());
         vi.spyOn(schedulerModule, 'getFingerprint').mockImplementation((msg) => msg.fp);
 
-        const dataModule = await import('../../src/utils/data.js');
+        const dataModule = await import('../../src/store/chat-data.js');
         vi.spyOn(dataModule, 'getOpenVaultData').mockReturnValue({ memories: [] });
 
         const depsModule = await import('../../src/deps.js');
@@ -61,7 +61,7 @@ describe('executeEmergencyCut', () => {
             totalMessages: 10, extractedCount: 5, unextractedCount: 5,
         });
 
-        const dataModule = await import('../../src/utils/data.js');
+        const dataModule = await import('../../src/store/chat-data.js');
         vi.spyOn(dataModule, 'getOpenVaultData').mockReturnValue({ memories: [] });
 
         const depsModule = await import('../../src/deps.js');
@@ -91,7 +91,7 @@ describe('executeEmergencyCut', () => {
         vi.spyOn(schedulerModule, 'getProcessedFingerprints').mockReturnValue(new Set(['fp1', 'fp2']));
         vi.spyOn(schedulerModule, 'getFingerprint').mockImplementation((msg) => msg.fp);
 
-        const dataModule = await import('../../src/utils/data.js');
+        const dataModule = await import('../../src/store/chat-data.js');
         vi.spyOn(dataModule, 'getOpenVaultData').mockReturnValue({ memories: [] });
 
         const mockChat = [

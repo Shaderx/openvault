@@ -497,29 +497,29 @@ class StVectorStrategy extends EmbeddingStrategy {
     }
 
     async insertItems(items, _options = {}) {
-        const { syncItemsToST } = await import('./utils/data.js');
-        const { getCurrentChatId } = await import('./utils/data.js');
+        const { syncItemsToST } = await import('./services/st-vector.js');
+        const { getCurrentChatId } = await import('./store/chat-data.js');
         const chatId = getCurrentChatId() || 'default';
         return syncItemsToST(items, chatId);
     }
 
     async searchItems(query, topK, threshold, _options = {}) {
-        const { querySTVector } = await import('./utils/data.js');
-        const { getCurrentChatId } = await import('./utils/data.js');
+        const { querySTVector } = await import('./services/st-vector.js');
+        const { getCurrentChatId } = await import('./store/chat-data.js');
         const chatId = getCurrentChatId() || 'default';
         return querySTVector(query, topK, threshold, chatId);
     }
 
     async deleteItems(hashes, _options = {}) {
-        const { deleteItemsFromST } = await import('./utils/data.js');
-        const { getCurrentChatId } = await import('./utils/data.js');
+        const { deleteItemsFromST } = await import('./services/st-vector.js');
+        const { getCurrentChatId } = await import('./store/chat-data.js');
         const chatId = getCurrentChatId() || 'default';
         return deleteItemsFromST(hashes, chatId);
     }
 
     async purgeCollection(_options = {}) {
-        const { purgeSTCollection } = await import('./utils/data.js');
-        const { getCurrentChatId } = await import('./utils/data.js');
+        const { purgeSTCollection } = await import('./services/st-vector.js');
+        const { getCurrentChatId } = await import('./store/chat-data.js');
         const chatId = getCurrentChatId() || 'default';
         return purgeSTCollection(chatId);
     }
@@ -853,7 +853,7 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
     const { MEMORIES_KEY } = await import('./constants.js');
-    const { getOpenVaultData, saveOpenVaultData } = await import('./utils/data.js');
+    const { getOpenVaultData, saveOpenVaultData } = await import('./store/chat-data.js');
     const { setStatus } = await import('./ui/status.js');
     const { showToast } = await import('./utils/dom.js');
 
@@ -925,7 +925,7 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
 
         if (synced > 0) {
             // Stamp ST fingerprint so mismatch detection works on next load
-            const { stampStVectorFingerprint } = await import('./utils/data.js');
+            const { stampStVectorFingerprint } = await import('./embeddings/migration.js');
             stampStVectorFingerprint(data);
 
             await saveOpenVaultData();

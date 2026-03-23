@@ -687,7 +687,8 @@ function bindUIElements() {
         // Invalidate stale embeddings if model changed
         const data = getOpenVaultData();
         if (data) {
-            const { invalidateStaleEmbeddings, saveOpenVaultData } = await import('../utils/data.js');
+            const { invalidateStaleEmbeddings } = await import('../embeddings/migration.js');
+            const { saveOpenVaultData } = await import('../store/chat-data.js');
             const wiped = await invalidateStaleEmbeddings(data, value);
             if (wiped > 0) {
                 await saveOpenVaultData();

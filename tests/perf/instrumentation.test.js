@@ -82,7 +82,7 @@ describe('perf instrumentation - data.js', () => {
             settings: { debugMode: true },
         });
 
-        const { saveOpenVaultData } = await import('../../src/utils/data.js');
+        const { saveOpenVaultData } = await import('../../src/store/chat-data.js');
         await saveOpenVaultData();
 
         const all = getAll();

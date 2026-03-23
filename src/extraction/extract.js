@@ -939,7 +939,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         if (events.length > 0 && !data.embedding_model_id && events.some((e) => hasEmbedding(e))) {
             data.embedding_model_id = settings.embeddingSource;
             if (settings.embeddingSource === 'st_vector') {
-                const { stampStVectorFingerprint } = await import('../utils/data.js');
+                const { stampStVectorFingerprint } = await import('../embeddings/migration.js');
                 stampStVectorFingerprint(data);
             }
         }

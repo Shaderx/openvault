@@ -21,7 +21,7 @@ describe('hideExtractedMessages', () => {
         vi.spyOn(await import('../../src/extraction/scheduler.js'), 'getFingerprint').mockImplementation((msg) => msg.fp);
 
         // Mock data module
-        vi.spyOn(await import('../../src/utils/data.js'), 'getOpenVaultData').mockReturnValue({ memories: [] });
+        vi.spyOn(await import('../../src/store/chat-data.js'), 'getOpenVaultData').mockReturnValue({ memories: [] });
 
         // Mock deps
         const mockContext = {
@@ -58,7 +58,7 @@ describe('hideExtractedMessages', () => {
         vi.spyOn(await import('../../src/extraction/scheduler.js'), 'getFingerprint').mockImplementation((msg) => msg.fp);
 
         // Mock data module
-        vi.spyOn(await import('../../src/utils/data.js'), 'getOpenVaultData').mockReturnValue({ memories: [] });
+        vi.spyOn(await import('../../src/store/chat-data.js'), 'getOpenVaultData').mockReturnValue({ memories: [] });
 
         // Mock deps
         const mockContext = {
