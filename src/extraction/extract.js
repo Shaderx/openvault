@@ -83,7 +83,7 @@ import {
 } from '../prompts/index.js';
 import { accumulateImportance, generateReflections, shouldReflect } from '../reflection/reflect.js';
 import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
-import { clearAllLocks } from '../state.js';
+import { clearAllLocks, operationState } from '../state.js';
 import { refreshAllUI } from '../ui/render.js';
 import { setStatus } from '../ui/status.js';
 import {
@@ -102,8 +102,40 @@ import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../util
 import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 import { countTokens } from '../utils/tokens.js';
 import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
-import { getBackfillMessageIds, getFingerprint, getNextBatch, getProcessedFingerprints } from './scheduler.js';
+import { getBackfillMessageIds, getBackfillStats, getFingerprint, getNextBatch, getProcessedFingerprints } from './scheduler.js';
+import { isWorkerRunning } from './worker.js';
 import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
+
+// =============================================================================
+// Message Hiding (moved from ui/settings.js)
+// =============================================================================
+
+/**
+ * Hide all extracted messages from LLM context by setting is_system=true.
+ * Only hides messages that have been successfully processed (fingerprint in processed set).
+ * @returns {Promise<number>} Number of messages hidden
+ */
+export async function hideExtractedMessages() {
+    const context = getDeps().getContext();
+    const chat = context.chat || [];
+    const data = getOpenVaultData();
+    const processedFps = getProcessedFingerprints(data);
+
+    let hiddenCount = 0;
+    for (let i = 0; i < chat.length; i++) {
+        const msg = chat[i];
+        if (processedFps.has(getFingerprint(msg)) && !msg.is_system) {
+            msg.is_system = true;
+            hiddenCount++;
+        }
+    }
+
+    if (hiddenCount > 0) {
+        await getDeps().saveChatConditional();
+        logInfo(`Emergency Cut: hid ${hiddenCount} messages (all extracted)`);
+    }
+    return hiddenCount;
+}
 
 /**
  * Canonicalize character names in extracted events by resolving cross-script
