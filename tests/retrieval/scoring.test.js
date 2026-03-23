@@ -58,14 +58,13 @@ describe('selectMemoriesWithSoftBalance', () => {
 describe('selectRelevantMemories with soft balance', () => {
     // Common config fixtures
     const scoringConfig = {
-        embeddingSource: 'ollama', // Use ollama to avoid local embedding model in tests
         forgetfulnessBaseLambda: 0.05,
-        forgetfulnessImportance5Floor: 1.0,
-        reflectionDecayThreshold: 750,
-        reflectionLevelMultiplier: 2.0,
+        forgetfulnessImportance5Floor: undefined,
+        reflectionDecayThreshold: undefined,
         vectorSimilarityThreshold: 0.5,
         alpha: 0.7,
-        combinedBoostWeight: 5.0,
+        combinedBoostWeight: 15,
+        embeddingSource: 'ollama', // Use ollama to avoid local embedding model in tests
     };
 
     const queryConfig = {
