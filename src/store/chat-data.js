@@ -1,4 +1,4 @@
-import { CHARACTERS_KEY, MEMORIES_KEY, METADATA_KEY } from '../constants.js';
+import { CHARACTERS_KEY, MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { record } from '../perf/store.js';
 import { purgeSTCollection } from '../services/st-vector.js';
@@ -191,4 +191,36 @@ export async function deleteCurrentChatData() {
     await getDeps().saveChatConditional();
     logDebug('Deleted all chat data');
     return true;
+}
+
+/**
+ * Append new memories to the store
+ * @param {Array} newMemories - Memory objects to add
+ */
+export function addMemories(newMemories) {
+    const data = getOpenVaultData();
+    if (!data || newMemories.length === 0) return;
+    data[MEMORIES_KEY] = data[MEMORIES_KEY] || [];
+    data[MEMORIES_KEY].push(...newMemories);
+}
+
+/**
+ * Record message fingerprints as processed
+ * @param {Array<string>} fingerprints - Message fingerprints to mark
+ */
+export function markMessagesProcessed(fingerprints) {
+    const data = getOpenVaultData();
+    if (!data || fingerprints.length === 0) return;
+    data[PROCESSED_MESSAGES_KEY] = data[PROCESSED_MESSAGES_KEY] || [];
+    data[PROCESSED_MESSAGES_KEY].push(...fingerprints);
+}
+
+/**
+ * Increment the graph message count
+ * @param {number} count - Number of messages to add
+ */
+export function incrementGraphMessageCount(count) {
+    const data = getOpenVaultData();
+    if (!data) return;
+    data.graph_message_count = (data.graph_message_count || 0) + count;
 }

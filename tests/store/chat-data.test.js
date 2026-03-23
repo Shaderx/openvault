@@ -2,11 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHARACTERS_KEY, extensionName, MEMORIES_KEY, METADATA_KEY } from '../../src/constants.js';
 import { resetDeps, setDeps } from '../../src/deps.js';
 import {
+    addMemories,
     deleteCurrentChatData,
     deleteMemory,
     generateId,
     getCurrentChatId,
     getOpenVaultData,
+    incrementGraphMessageCount,
+    markMessagesProcessed,
     saveOpenVaultData,
     updateMemory,
 } from '../../src/store/chat-data.js';
@@ -346,6 +349,78 @@ describe('store/chat-data', () => {
                 expect.stringContaining('Failed to purge ST collection'),
                 expect.any(Error)
             );
+        });
+    });
+
+    describe('addMemories', () => {
+        it('appends memories to the store', () => {
+            mockContext.chatMetadata[METADATA_KEY] = { [MEMORIES_KEY]: [{ id: 'existing' }] };
+            addMemories([{ id: 'new1' }, { id: 'new2' }]);
+            expect(getOpenVaultData()[MEMORIES_KEY]).toEqual([{ id: 'existing' }, { id: 'new1' }, { id: 'new2' }]);
+        });
+
+        it('initializes memories array if missing', () => {
+            mockContext.chatMetadata[METADATA_KEY] = {};
+            addMemories([{ id: 'first' }]);
+            expect(getOpenVaultData()[MEMORIES_KEY]).toEqual([{ id: 'first' }]);
+        });
+
+        it('no-ops on empty array', () => {
+            mockContext.chatMetadata[METADATA_KEY] = { [MEMORIES_KEY]: [{ id: 'existing' }] };
+            addMemories([]);
+            expect(getOpenVaultData()[MEMORIES_KEY]).toEqual([{ id: 'existing' }]);
+        });
+
+        it('no-ops when context unavailable', () => {
+            setDeps({
+                console: mockConsole,
+                getContext: () => null,
+                getExtensionSettings: () => ({}),
+            });
+            expect(() => addMemories([{ id: 'x' }])).not.toThrow();
+        });
+    });
+
+    describe('markMessagesProcessed', () => {
+        it('appends fingerprints to processed list', () => {
+            mockContext.chatMetadata[METADATA_KEY] = { processed_message_ids: ['fp1'] };
+            markMessagesProcessed(['fp2', 'fp3']);
+            expect(getOpenVaultData().processed_message_ids).toEqual(['fp1', 'fp2', 'fp3']);
+        });
+
+        it('initializes processed list if missing', () => {
+            mockContext.chatMetadata[METADATA_KEY] = {};
+            markMessagesProcessed(['fp1']);
+            expect(getOpenVaultData().processed_message_ids).toEqual(['fp1']);
+        });
+
+        it('no-ops on empty array', () => {
+            mockContext.chatMetadata[METADATA_KEY] = { processed_message_ids: ['fp1'] };
+            markMessagesProcessed([]);
+            expect(getOpenVaultData().processed_message_ids).toEqual(['fp1']);
+        });
+    });
+
+    describe('incrementGraphMessageCount', () => {
+        it('increments existing count', () => {
+            mockContext.chatMetadata[METADATA_KEY] = { graph_message_count: 10 };
+            incrementGraphMessageCount(5);
+            expect(getOpenVaultData().graph_message_count).toBe(15);
+        });
+
+        it('initializes from zero if missing', () => {
+            mockContext.chatMetadata[METADATA_KEY] = {};
+            incrementGraphMessageCount(3);
+            expect(getOpenVaultData().graph_message_count).toBe(3);
+        });
+
+        it('no-ops when context unavailable', () => {
+            setDeps({
+                console: mockConsole,
+                getContext: () => null,
+                getExtensionSettings: () => ({}),
+            });
+            expect(() => incrementGraphMessageCount(5)).not.toThrow();
         });
     });
 });
