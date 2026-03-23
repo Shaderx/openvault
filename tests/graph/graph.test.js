@@ -651,6 +651,41 @@ describe('mergeOrInsertEntity', () => {
         expect(graphData.nodes.elizabeth.aliases).toContain('Элизабет');
     });
 
+    it('does NOT merge cross-script PERSON entities via semantic similarity alone', async () => {
+        // Regression test: "Alice" (Latin) and "Боб" (Cyrillic Bob) should NOT merge
+        // even if embeddings are nearly identical (similar descriptions).
+        // Cross-script PERSON merges should ONLY happen via transliteration match.
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+
+        // Setup: existing Cyrillic PERSON with embedding
+        graphData.nodes.мария = {
+            name: 'Мария',
+            type: 'PERSON',
+            description: 'A character involved in roleplay dynamics',
+            mentions: 10,
+        };
+        graphData.nodes.мария.embedding_b64 = 'AAAAAPo/AAAAAA'; // mock embedding
+
+        // Mock embedding to return nearly identical vector (simulating similar descriptions)
+        getDocumentEmbedding.mockResolvedValue([1.0, 0.9, 0.8]);
+
+        // Act: insert Latin "Rose" - different name, different script, similar description
+        const { key, stChanges } = await mergeOrInsertEntity(
+            graphData,
+            'Rose',
+            'PERSON',
+            'A character involved in similar roleplay dynamics',
+            3,
+            mockSettings
+        );
+
+        // Assert: should NOT merge - different scripts without transliteration match
+        expect(key).toBe('rose');
+        expect(graphData.nodes.rose).toBeDefined();
+        expect(graphData.nodes.мария.aliases).toBeUndefined(); // Rose not added as alias
+        expect(stChanges.toSync).toHaveLength(1); // New node created
+    });
+
     it('returns stChanges.toSync with new node when creating a new entity', async () => {
         const { getDocumentEmbedding } = await import('../../src/embeddings.js');
         getDocumentEmbedding.mockResolvedValue([0.5, 0.5, 0.5]);

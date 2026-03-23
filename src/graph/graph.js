@@ -474,6 +474,18 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
     }
 
     for (const [existingKey, existingEmbedding] of existingEmbeddings) {
+        // Cross-script PERSON merge guard: if both are PERSONs in different scripts,
+        // they should only merge via transliteration match (handled earlier), not semantic similarity.
+        // Prevents false merges like "Alice" -> "Мария" where descriptions are similar but names are different.
+        if (type === 'PERSON') {
+            const CYRILLIC_RE = /\p{Script=Cyrillic}/u;
+            const keyIsCyrillic = CYRILLIC_RE.test(key);
+            const existingIsCyrillic = CYRILLIC_RE.test(existingKey);
+            if (keyIsCyrillic !== existingIsCyrillic) {
+                continue; // Different scripts, skip semantic merge
+            }
+        }
+
         const sim = cosineSimilarity(newEmbedding, existingEmbedding);
         if (!shouldMergeEntities(sim, threshold, newTokens, key, existingKey)) {
             continue;
