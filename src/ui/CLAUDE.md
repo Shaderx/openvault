@@ -9,6 +9,8 @@ Handles the ST settings panel with progressive disclosure design: status/browsin
 - **`render.js`**: State orchestration and DOM manipulation (`$()`).
 - **`settings.js`**: Event binding and persistence. `handleResetSettings()` preserves connection settings.
 
+**Callback Wiring Pattern (PR3, PR6)**: UI provides callbacks to domain functions. `handleOllamaTestClick`, `handleEmergencyCutClick`, `handleExtractAll` are thin wiring layers. Domain logic (`testOllamaConnection`, `executeEmergencyCut`, `extractAllMessages`) lives in embeddings.js and extract.js.
+
 ## TAB STRUCTURE (Progressive Disclosure)
 Settings reorganized by user activity pattern, not technical category:
 

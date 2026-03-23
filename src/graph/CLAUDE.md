@@ -17,6 +17,8 @@ Flat-JSON entity and relationship storage with rigorous semantic deduplication, 
 
 ## SEMANTIC MERGE LOGIC
 Prevents duplicate nodes (e.g., "The King" vs "King Aldric"). Uses `shouldMergeEntities()` DRY helper (cosine-first check order). Extraction uses delta approach — focuses on NEW entities or CHANGES to existing ones, not re-describing static relationships. Schema limits to 5 entities/relationships per batch.
+
+**stChanges Return Pattern (PR2)**: `mergeOrInsertEntity()` returns `{ key, stChanges: { toSync: [], toDelete: [] } }`. New nodes push `{ hash, text, item }` to `toSync`. Semantic merge deletions push `{ hash }` to `toDelete`. Orchestrator applies bulk network I/O. `consolidateEdges()` returns `{ count, stChanges }`. Dead functions `consolidateGraph()` and `redirectEdges()` were deleted.
 1. **Fast Path**: Exact key match -> basic upsert.
 2. **Slow Path**: Embeds `Type: Name - Description`. Cosine computed first, then routed:
    - **Above threshold** (>= 0.94): Merge directly (cosine alone sufficient).

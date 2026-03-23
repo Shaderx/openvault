@@ -1,7 +1,7 @@
 # OpenVault - SillyTavern Extension
 
 ## WHAT & WHY
-Agentic memory extension for SillyTavern providing POV-aware memory, witness tracking, relationships, and emotional continuity. 
+Agentic memory extension for SillyTavern providing POV-aware memory, witness tracking, relationships, and emotional continuity.
 - **Zero External DBs**: All state lives strictly in `context.chatMetadata.openvault`.
 - **Local RAG**: Transformers.js (WebGPU/WASM) or Ollama.
 - **LLM Agnostic**: Optimized for structured output (Zod schemas). Configurable preamble language (CN/EN) and assistant prefill presets.
@@ -25,20 +25,25 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **Bucket Utilities**: `assignMemoriesToBuckets()` and `getMemoryPosition()` moved from `formatting.js` to `utils/text.js` to avoid circular deps with `scoring.js`.
 - **IDF Cache**: Pre-computed BM25 IDF map cached in `chatMetadata.openvault.idf_cache` after Phase 1 commit. Eliminates O(N) tokenization during retrieval.
 - **Two-Pass Retrieval**: Fast pass (Base + BM25) scores all memories; slow pass calculates expensive cosine similarity only on top `VECTOR_PASS_LIMIT` (200) candidates. Keeps critical path under 100ms even with 2000+ memories.
-- **`<think>`/`<tool_call>` Tags**: LLMs often return reasoning or tool wrappers before JSON. ALWAYS pass output through `stripThinkingTags()` (`src/utils/text.js`) before parsing. Handles paired tags (with attributes), bracket variants, and orphaned closing tags (from prefill continuations). Preambles contain explicit anti-tool-call directives; `extractBalancedJSON` returns the LAST balanced block as safety net (LLMs output noise before payload). Few-shot examples use `thinking` property (wrapped in `<think>` tags by `format-examples.js`) — schemas permit optional `<thinking>` tags for backward compatibility.
+- **`thinking`/`/thinking` Tags**: LLMs often return reasoning or tool wrappers before JSON. ALWAYS pass output through `stripThinkingTags()` (`src/utils/text.js`) before parsing. Handles paired tags (with attributes), bracket variants, and orphaned closing tags (from prefill continuations). Preambles contain explicit anti-tool-call directives; `extractBalancedJSON` returns the LAST balanced block as safety net (LLMs output noise before payload). Few-shot examples use `thinking` property (wrapped in `<thinking>` tags by `format-examples.js`) — schemas permit optional `<thinking>` tags for backward compatibility.
 - **Payload Calculator**: `PAYLOAD_CALC` in `src/constants.js` is the single source of truth for LLM context overhead (12k tokens). Don't hardcode it elsewhere.
 - **Thread Yielding**: Use `yieldToMain()` (`src/utils/st-helpers.js`). It polyfills `scheduler.yield()` with `setTimeout(0)` fallback.
-- **State Locks**: `operationState.extractionInProgress` (`src/state.js`) is for MANUAL backfill and Emergency Cut. Background worker uses `isRunning` (`worker.js`). They mutually exclude.
+- **State Locks**: `operationState.extractionInProgress` (`src/state.js`) is for MANUAL backfill and Emergency Cut. Background worker uses `isWorkerRunning()` (`src/state.js`). They mutually exclude.
 - **ST Event Timing**: `GENERATION_AFTER_COMMANDS` fires BEFORE `chat.push()` and BEFORE textarea is cleared. Pending user message must be read from `$('#send_textarea').val()`, NOT from `context.chat` (which only has the previous message). See `events.js:onBeforeGeneration()`.
 - **ST Vector Storage**: Set `embeddingSource: 'st_vector'` to use SillyTavern's built-in Vectra DB. No local embeddings stored — ST handles vector generation. Items marked with `_st_synced` flag.
 - **Proxy Vector Scores**: When using `st_vector`, retrieval uses rank-position proxy scores (not cosine similarity). Higher rank = higher proxy score.
 - **ST API CSRF**: All `fetch()` calls to ST endpoints (`/api/vector/*`) MUST use `getDeps().getRequestHeaders()` — never manual headers. ST requires `X-CSRF-Token` header on POST requests.
 
 ## ARCHITECTURE MAP (Lazy Loaded Context)
+- `src/deps.js` - Dependency injection for testability (SillyTavern globals, browser APIs)
+- `src/state.js` - Operation state machine, generation locks, chat loading cooldown, worker singleton
+- `src/store/chat-data.js` - Repository for local chat metadata mutations (CRUD, batch operations)
+- `src/services/st-vector.js` - Network I/O boundary for ST Vector REST API (sync, delete, purge, query)
+- `src/embeddings/migration.js` - Embedding model mismatch detection, stale embedding cleanup, ST fingerprinting
 - `src/embeddings.js` - Embedding strategies: Transformers.js (local), Ollama (remote), ST Vector Storage (external)
 - `include/DATA_SCHEMA.md` - Data schema, retrieval math, semantic merge, GraphRAG, embedding protection.
-- `src/extraction/CLAUDE.md` - 2-phase async worker, JSON validation, Zod schemas.
-- `src/prompts/CLAUDE.md` - Domain prompt structure, `<think>` tag convention, few-shot examples.
+- `src/extraction/CLAUDE.md` - 2-phase async worker, 6-stage pipeline, callback injection, Zod schemas.
+- `src/prompts/CLAUDE.md` - Domain prompt structure, `thinking` tag convention, few-shot examples.
 - `src/retrieval/CLAUDE.md` - Alpha-Blend scoring, Forgetfulness curve.
 - `src/graph/CLAUDE.md` - Flat JSON graph, Semantic Merge, GraphRAG Louvain communities.
 - `src/reflection/CLAUDE.md` - Per-character insight pipeline, 3-tier replacement.
@@ -46,3 +51,9 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - `src/ui/CLAUDE.md` - jQuery UI patterns, Settings bindings, 5th Perf tab.
 - `src/utils/CLAUDE.md` - Shared utils (stemmer, stopwords).
 - `tests/CLAUDE.md` - Vitest mocking constraints via `deps.js`, `tests/perf/` suite.
+
+## ARCHITECTURAL PATTERNS
+- **Settings Injection**: Domain functions receive settings via extended context objects (`queryConfig`, `scoringConfig`) instead of calling `getDeps().getExtensionSettings()` directly. Enables pure unit tests.
+- **Callback Injection**: UI provides callbacks (`onStart`, `onProgress`, `onComplete`, `onError`) to domain functions. Domain becomes testable without DOM mocking. UI becomes thin wiring layer.
+- **stChanges Return Pattern**: Domain functions (`mergeOrInsertEntity`, `generateReflections`, `updateCommunitySummaries`) return `{ ..., stChanges }` containing items to sync/delete. Orchestrator collects and applies bulk network I/O at phase boundaries.
+- **Repository Pattern**: Data mutations go through explicit methods (`addMemories`, `markMessagesProcessed`, `incrementGraphMessageCount`) in `store/chat-data.js`, not direct array pushes.
