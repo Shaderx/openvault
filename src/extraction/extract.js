@@ -6,6 +6,57 @@
  */
 
 import { CHARACTERS_KEY, extensionName, MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../constants.js';
+import { getDeps } from '../deps.js';
+import { enrichEventsWithEmbeddings } from '../embeddings.js';
+import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
+import {
+    consolidateEdges,
+    expandMainCharacterKeys,
+    findCrossScriptCharacterKeys,
+    initGraphState,
+    mergeOrInsertEntity,
+    normalizeKey,
+    upsertRelationship,
+} from '../graph/graph.js';
+import { callLLM, LLM_CONFIGS } from '../llm.js';
+import { record } from '../perf/store.js';
+import {
+    buildEventExtractionPrompt,
+    buildGraphExtractionPrompt,
+    resolveExtractionPreamble,
+    resolveExtractionPrefill,
+    resolveOutputLanguage,
+} from '../prompts/index.js';
+import { accumulateImportance, generateReflections, shouldReflect } from '../reflection/reflect.js';
+import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
+import { clearAllLocks, operationState } from '../state.js';
+import { refreshAllUI } from '../ui/render.js';
+import { setStatus } from '../ui/status.js';
+import {
+    deleteItemsFromST,
+    getCurrentChatId,
+    getOpenVaultData,
+    isStVectorSource,
+    saveOpenVaultData,
+    syncItemsToST,
+} from '../utils/data.js';
+import { showToast } from '../utils/dom.js';
+import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
+import { logDebug, logError, logInfo } from '../utils/logging.js';
+import { createLadderQueue } from '../utils/queue.js';
+import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
+import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
+import { countTokens } from '../utils/tokens.js';
+import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
+import {
+    getBackfillMessageIds,
+    getBackfillStats,
+    getFingerprint,
+    getNextBatch,
+    getProcessedFingerprints,
+} from './scheduler.js';
+import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
+import { isWorkerRunning } from './worker.js';
 
 /**
  * Backoff schedule in seconds for failed extraction batches.
@@ -56,55 +107,12 @@ async function applySyncChanges(stChanges) {
         }
     }
     if (stChanges.toDelete?.length > 0) {
-        await deleteItemsFromST(stChanges.toDelete.map((c) => c.hash), chatId);
+        await deleteItemsFromST(
+            stChanges.toDelete.map((c) => c.hash),
+            chatId
+        );
     }
 }
-
-import { getDeps } from '../deps.js';
-import { enrichEventsWithEmbeddings } from '../embeddings.js';
-import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
-import {
-    consolidateEdges,
-    expandMainCharacterKeys,
-    findCrossScriptCharacterKeys,
-    initGraphState,
-    mergeOrInsertEntity,
-    normalizeKey,
-    upsertRelationship,
-} from '../graph/graph.js';
-import { callLLM, LLM_CONFIGS } from '../llm.js';
-import { record } from '../perf/store.js';
-import {
-    buildEventExtractionPrompt,
-    buildGraphExtractionPrompt,
-    resolveExtractionPreamble,
-    resolveExtractionPrefill,
-    resolveOutputLanguage,
-} from '../prompts/index.js';
-import { accumulateImportance, generateReflections, shouldReflect } from '../reflection/reflect.js';
-import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
-import { clearAllLocks, operationState } from '../state.js';
-import { refreshAllUI } from '../ui/render.js';
-import { setStatus } from '../ui/status.js';
-import {
-    deleteItemsFromST,
-    getCurrentChatId,
-    getOpenVaultData,
-    isStVectorSource,
-    saveOpenVaultData,
-    syncItemsToST,
-} from '../utils/data.js';
-import { showToast } from '../utils/dom.js';
-import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
-import { logDebug, logError, logInfo } from '../utils/logging.js';
-import { createLadderQueue } from '../utils/queue.js';
-import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
-import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
-import { countTokens } from '../utils/tokens.js';
-import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
-import { getBackfillMessageIds, getBackfillStats, getFingerprint, getNextBatch, getProcessedFingerprints } from './scheduler.js';
-import { isWorkerRunning } from './worker.js';
-import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
 
 // =============================================================================
 // Message Hiding (moved from ui/settings.js)
@@ -146,22 +154,12 @@ export async function hideExtractedMessages() {
  * @param {function(string): boolean} [options.onConfirmPrompt] - Called for user confirmation; return false to cancel
  * @param {function(): void} [options.onStart] - Called when extraction phase begins
  * @param {function(number, number, number): void} [options.onProgress] - Called per batch (batchNum, totalBatches, eventsCreated)
- * @param {function(): void} [options.onPhase2Start] - Called when Phase 2 begins (uncancellable)
  * @param {function({messagesProcessed: number, eventsCreated: number, hiddenCount: number}): void} [options.onComplete] - Called on success
  * @param {function(Error, boolean): void} [options.onError] - Called on failure (error, isCancel)
  * @param {AbortSignal} [options.abortSignal] - For cancellation
  */
 export async function executeEmergencyCut(options = {}) {
-    const {
-        onWarning,
-        onConfirmPrompt,
-        onStart,
-        onProgress,
-        onPhase2Start,
-        onComplete,
-        onError,
-        abortSignal,
-    } = options;
+    const { onWarning, onConfirmPrompt, onStart, onProgress, onComplete, onError, abortSignal } = options;
 
     if (isWorkerRunning()) {
         onWarning?.('Background extraction in progress. Please wait a moment.');
@@ -177,21 +175,21 @@ export async function executeEmergencyCut(options = {}) {
 
     if (stats.unextractedCount === 0) {
         const processedFps = getProcessedFingerprints(data);
-        const hideableCount = chat.filter((m) =>
-            !m.is_system && processedFps.has(getFingerprint(m)),
-        ).length;
+        const hideableCount = chat.filter((m) => !m.is_system && processedFps.has(getFingerprint(m))).length;
 
         if (hideableCount === 0) {
             onWarning?.('No messages to hide');
             return;
         }
 
-        const msg = `All messages are already extracted. Hide ${hideableCount} messages from the LLM to break the loop?\n\n` +
+        const msg =
+            `All messages are already extracted. Hide ${hideableCount} messages from the LLM to break the loop?\n\n` +
             'The LLM will only see: preset, char card, lorebooks, and OpenVault memories.';
         if (!onConfirmPrompt?.(msg)) return;
         shouldExtract = false;
     } else {
-        const msg = `Extract and hide ${stats.unextractedCount} unprocessed messages?\n\n` +
+        const msg =
+            `Extract and hide ${stats.unextractedCount} unprocessed messages?\n\n` +
             'The LLM will only see: preset, char card, lorebooks, and OpenVault memories.';
         if (!onConfirmPrompt?.(msg)) return;
     }
@@ -210,7 +208,6 @@ export async function executeEmergencyCut(options = {}) {
             isEmergencyCut: true,
             progressCallback: onProgress,
             abortSignal,
-            onPhase2Start,
         });
 
         const hiddenCount = await hideExtractedMessages();
@@ -815,11 +812,7 @@ async function processGraphUpdates(graphData, entities, relationships, settings)
             graphSyncChanges.toSync.push(...entityChanges.toSync);
             graphSyncChanges.toDelete.push(...entityChanges.toDelete);
         }
-        record(
-            'entity_merge',
-            performance.now() - t0Merge,
-            `${entities.length}×${existingNodeCount} nodes`
-        );
+        record('entity_merge', performance.now() - t0Merge, `${entities.length}×${existingNodeCount} nodes`);
     }
 
     if (relationships?.length) {
@@ -897,7 +890,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
     const messages = messagesToExtract;
     const batchId = `batch_${deps.Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const { isBackfill = false, silent = false, abortSignal = null } = options;
+    const { abortSignal = null } = options;
 
     logDebug(`Extracting ${messages.length} messages`);
 
@@ -940,7 +933,13 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Stage 3: Enrich & dedup events
         const messageIdsArray = messages.map((m) => m.id);
         logDebug(`LLM returned ${rawEvents.length} events from ${messages.length} messages`);
-        const { events } = await enrichAndDedupEvents(rawEvents, messageIdsArray, batchId, data.memories || [], settings);
+        const { events } = await enrichAndDedupEvents(
+            rawEvents,
+            messageIdsArray,
+            batchId,
+            data.memories || [],
+            settings
+        );
 
         // Stamp embedding model ID on first successful embedding generation
         if (events.length > 0 && !data.embedding_model_id && events.some((e) => hasEmbedding(e))) {
@@ -954,7 +953,10 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Stage 4: Graph updates
         initGraphState(data);
         const { graphSyncChanges } = await processGraphUpdates(
-            data.graph, graphResult.entities, graphResult.relationships, settings
+            data.graph,
+            graphResult.entities,
+            graphResult.relationships,
+            settings
         );
         data.graph_message_count = (data.graph_message_count || 0) + messages.length;
 
@@ -1093,17 +1095,9 @@ export async function runPhase2Enrichment(data, settings, targetChatId, options 
  */
 export async function extractAllMessages(optionsOrCallback) {
     // v6: Normalize options to handle legacy function argument
-    const opts = typeof optionsOrCallback === 'function'
-        ? { onComplete: optionsOrCallback }
-        : (optionsOrCallback || {});
+    const opts = typeof optionsOrCallback === 'function' ? { onComplete: optionsOrCallback } : optionsOrCallback || {};
 
-    const {
-        isEmergencyCut = false,
-        progressCallback = null,
-        abortSignal = null,
-        onComplete = null,
-        onPhase2Start = null,
-    } = opts;
+    const { isEmergencyCut = false, progressCallback = null, abortSignal = null, onComplete = null } = opts;
 
     const updateEventListenersFn = onComplete;
     const context = getDeps().getContext();
@@ -1138,7 +1132,7 @@ export async function extractAllMessages(optionsOrCallback) {
         chat,
         data,
         tokenBudget,
-        isEmergencyCut  // Bypass token budget check for Emergency Cut
+        isEmergencyCut // Bypass token budget check for Emergency Cut
     );
     const processedFps = getProcessedFingerprints(data);
 
@@ -1156,10 +1150,9 @@ export async function extractAllMessages(optionsOrCallback) {
     }
 
     // Show persistent progress toast (skip for Emergency Cut - uses modal instead)
-    let toast = null;
     if (!isEmergencyCut) {
         setStatus('extracting');
-        toast = toastr?.info(`Backfill: 0/${initialBatchCount} batches (0%)`, 'OpenVault - Extracting', {
+        const _toast = toastr?.info(`Backfill: 0/${initialBatchCount} batches (0%)`, 'OpenVault - Extracting', {
             timeOut: 0,
             extendedTimeOut: 0,
             tapToDismiss: false,
@@ -1205,7 +1198,7 @@ export async function extractAllMessages(optionsOrCallback) {
                 freshChat,
                 freshData,
                 tokenBudget,
-                isEmergencyCut  // Bypass token budget check for Emergency Cut
+                isEmergencyCut // Bypass token budget check for Emergency Cut
             );
 
             logDebug(
@@ -1279,7 +1272,9 @@ export async function extractAllMessages(optionsOrCallback) {
             if (cumulativeBackoffMs >= MAX_BACKOFF_TOTAL_MS) {
                 // v6: Throw for Emergency Cut instead of silent success
                 if (isEmergencyCut) {
-                    throw new Error(`Extraction failed after ${Math.round(cumulativeBackoffMs / 1000)}s of API errors.`);
+                    throw new Error(
+                        `Extraction failed after ${Math.round(cumulativeBackoffMs / 1000)}s of API errors.`
+                    );
                 }
 
                 logDebug(
