@@ -41,7 +41,7 @@ describe('Unified Reflection Integration', () => {
             })
         );
 
-        const result = await generateReflections(
+        const { reflections: result } = await generateReflections(
             'Alice',
             [
                 {
@@ -91,7 +91,7 @@ describe('Unified Reflection Integration', () => {
             })
         );
 
-        const result = await generateReflections(
+        const { reflections: result } = await generateReflections(
             'Alice',
             [
                 {
@@ -135,7 +135,7 @@ describe('Unified Reflection Integration', () => {
             })
         );
 
-        const result = await generateReflections(
+        const { reflections: result } = await generateReflections(
             'Alice',
             [
                 {

@@ -40,6 +40,26 @@ async function rpmDelay(settings, label = 'Rate limit') {
     lastApiCallTime = Date.now();
 }
 
+/**
+ * Apply ST Vector Storage sync changes from domain function return values.
+ * Handles both sync (insert) and delete operations in bulk.
+ * @param {{ toSync?: Array<{hash: number, text: string, item: object}>, toDelete?: Array<{hash: number}> }} stChanges
+ */
+async function applySyncChanges(stChanges) {
+    if (!isStVectorSource()) return;
+    const chatId = getCurrentChatId();
+    if (stChanges.toSync?.length > 0) {
+        const items = stChanges.toSync.map((c) => ({ hash: c.hash, text: c.text, index: 0 }));
+        const success = await syncItemsToST(items, chatId);
+        if (success) {
+            for (const c of stChanges.toSync) markStSynced(c.item);
+        }
+    }
+    if (stChanges.toDelete?.length > 0) {
+        await deleteItemsFromST(stChanges.toDelete.map((c) => c.hash), chatId);
+    }
+}
+
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
 import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
@@ -67,6 +87,7 @@ import { clearAllLocks } from '../state.js';
 import { refreshAllUI } from '../ui/render.js';
 import { setStatus } from '../ui/status.js';
 import {
+    deleteItemsFromST,
     getCurrentChatId,
     getOpenVaultData,
     isStVectorSource,
@@ -630,12 +651,13 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Stage 4.5: Graph Update — upsert entities and relationships
         initGraphState(data);
         const entityCap = settings.entityDescriptionCap;
+        const graphSyncChanges = { toSync: [], toDelete: [] };
         if (validated.entities) {
             const t0Merge = performance.now();
             const existingNodeCount = Object.keys(data.graph.nodes).length;
             for (const entity of validated.entities) {
                 if (entity.name === 'Unknown') continue;
-                await mergeOrInsertEntity(
+                const { stChanges: entityChanges } = await mergeOrInsertEntity(
                     data.graph,
                     entity.name,
                     entity.type,
@@ -643,6 +665,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                     entityCap,
                     settings
                 );
+                graphSyncChanges.toSync.push(...entityChanges.toSync);
+                graphSyncChanges.toDelete.push(...entityChanges.toDelete);
             }
             record(
                 'entity_merge',
@@ -700,6 +724,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                     for (const e of unsyncedEvents) markStSynced(e);
                 }
             }
+            // Sync graph nodes to ST Vector Storage
+            await applySyncChanges(graphSyncChanges);
         }
 
         // ===== PHASE 2: Enrichment (non-critical) =====
@@ -733,7 +759,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                         reflectionPromises.push(
                             ladderQueue
                                 .add(async () => {
-                                    const reflections = await generateReflections(
+                                    const { reflections, stChanges } = await generateReflections(
                                         characterName,
                                         data[MEMORIES_KEY] || [],
                                         data[CHARACTERS_KEY] || {}
@@ -743,6 +769,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                                     }
                                     // Reset accumulator after reflection
                                     data.reflection_state[characterName].importance_sum = 0;
+                                    await applySyncChanges(stChanges);
                                 })
                                 .catch((error) => {
                                     if (error.name === 'AbortError') throw error;
@@ -771,10 +798,11 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                     if (communityResult) {
                         // Consolidate bloated edges before summarization
                         if (data.graph._edgesNeedingConsolidation?.length > 0) {
-                            const consolidated = await consolidateEdges(data.graph, settings);
+                            const { count: consolidated, stChanges: edgeChanges } = await consolidateEdges(data.graph, settings);
                             if (consolidated > 0) {
                                 logDebug(`Consolidated ${consolidated} graph edges before community summarization`);
                             }
+                            await applySyncChanges(edgeChanges);
                         }
 
                         const groups = buildCommunityGroups(data.graph, communityResult.communities);
@@ -792,6 +820,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                         if (communityUpdateResult.global_world_state) {
                             data.global_world_state = communityUpdateResult.global_world_state;
                         }
+                        await applySyncChanges(communityUpdateResult.stChanges);
                         logDebug(`Community detection: ${communityResult.count} communities found`);
                     }
                 } catch (error) {
@@ -881,7 +910,7 @@ export async function runPhase2Enrichment(data, settings, targetChatId, options 
                 reflectionPromises.push(
                     ladderQueue
                         .add(async () => {
-                            const reflections = await generateReflections(
+                            const { reflections, stChanges } = await generateReflections(
                                 characterName,
                                 memories,
                                 data[CHARACTERS_KEY] || {}
@@ -891,6 +920,7 @@ export async function runPhase2Enrichment(data, settings, targetChatId, options 
                             }
                             // Reset accumulator after reflection
                             data.reflection_state[characterName].importance_sum = 0;
+                            await applySyncChanges(stChanges);
                         })
                         .catch((error) => {
                             if (error.name === 'AbortError') throw error;
@@ -916,10 +946,11 @@ export async function runPhase2Enrichment(data, settings, targetChatId, options 
             if (communityResult) {
                 // Consolidate bloated edges before summarization
                 if (data.graph._edgesNeedingConsolidation?.length > 0) {
-                    const consolidated = await consolidateEdges(data.graph, settings);
+                    const { count: consolidated, stChanges: edgeChanges } = await consolidateEdges(data.graph, settings);
                     if (consolidated > 0) {
                         logDebug(`Consolidated ${consolidated} graph edges before community summarization`);
                     }
+                    await applySyncChanges(edgeChanges);
                 }
 
                 const groups = buildCommunityGroups(data.graph, communityResult.communities);
@@ -937,6 +968,7 @@ export async function runPhase2Enrichment(data, settings, targetChatId, options 
                 if (communityUpdateResult.global_world_state) {
                     data.global_world_state = communityUpdateResult.global_world_state;
                 }
+                await applySyncChanges(communityUpdateResult.stChanges);
                 logDebug(`runPhase2Enrichment: ${communityResult.count} communities processed`);
             }
         } catch (error) {
