@@ -446,6 +446,25 @@ class OllamaStrategy extends EmbeddingStrategy {
     }
 }
 
+/**
+ * Test Ollama connection by fetching model list
+ * @param {string} url - Ollama base URL (e.g., 'http://localhost:11434')
+ * @returns {Promise<boolean>} True if connection successful
+ * @throws {Error} If HTTP error or network error occurs
+ */
+export async function testOllamaConnection(url) {
+    const cleanUrl = url.replace(/\/+$/, '');
+    const response = await getDeps().fetch(`${cleanUrl}/api/tags`, {
+        method: 'GET',
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+
+    return true;
+}
+
 // =============================================================================
 // ST Vector Storage Strategy
 // =============================================================================

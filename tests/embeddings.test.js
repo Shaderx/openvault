@@ -205,3 +205,36 @@ describe('OllamaStrategy with injected params', () => {
         vi.restoreAllMocks();
     });
 });
+
+describe('testOllamaConnection', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('returns true on successful connection', async () => {
+        global.fetch = vi.fn(() => Promise.resolve({ ok: true }));
+        const { testOllamaConnection } = await import('../src/embeddings.js');
+
+        const result = await testOllamaConnection('http://localhost:11434');
+
+        expect(result).toBe(true);
+        expect(fetch).toHaveBeenCalledWith(
+            'http://localhost:11434/api/tags',
+            expect.objectContaining({ method: 'GET' }),
+        );
+    });
+
+    it('throws on HTTP error response', async () => {
+        global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500 }));
+        const { testOllamaConnection } = await import('../src/embeddings.js');
+
+        await expect(testOllamaConnection('http://localhost:11434')).rejects.toThrow('HTTP 500');
+    });
+
+    it('throws on network error', async () => {
+        global.fetch = vi.fn(() => Promise.reject(new Error('ECONNREFUSED')));
+        const { testOllamaConnection } = await import('../src/embeddings.js');
+
+        await expect(testOllamaConnection('http://localhost:11434')).rejects.toThrow('ECONNREFUSED');
+    });
+});
