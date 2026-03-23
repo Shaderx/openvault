@@ -445,7 +445,8 @@ async function handleExtractAll() {
         showToast('warning', 'Background extraction in progress. Please wait.', 'OpenVault');
         return;
     }
-    await extractAllMessages(updateEventListeners);
+    // v6: Use options object signature
+    await extractAllMessages({ onComplete: updateEventListeners });
 }
 
 async function handleDeleteChatData() {
