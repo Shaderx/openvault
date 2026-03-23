@@ -17,8 +17,15 @@ import {
     UI_DEFAULT_HINTS,
 } from '../constants.js';
 import { getDeps } from '../deps.js';
-import { getEmbeddingStatus, getStrategy, isEmbeddingsEnabled, setEmbeddingStatusCallback } from '../embeddings.js';
+import {
+    getEmbeddingStatus,
+    getStrategy,
+    isEmbeddingsEnabled,
+    setEmbeddingStatusCallback,
+    testOllamaConnection,
+} from '../embeddings.js';
 import { updateEventListeners } from '../events.js';
+import { executeEmergencyCut } from '../extraction/extract.js';
 import { formatForClipboard, getAll as getPerfData } from '../perf/store.js';
 import { getSettings, setSetting } from '../settings.js';
 import { logError, logInfo, logWarn } from '../utils/logging.js';
@@ -47,7 +54,7 @@ export function showEmergencyCutModal() {
     $modal.removeClass('hidden');
 
     // Keyboard trap with modal accessibility
-    $(document).on('keydown.emergencyCut', function (e) {
+    $(document).on('keydown.emergencyCut', (e) => {
         // Escape - always check first (handles focus loss on overlay click)
         if (e.key === 'Escape') {
             e.preventDefault();
@@ -103,172 +110,58 @@ export function updateEmergencyCutProgress(batchNum, totalBatches, eventsCreated
  * Disable the cancel button when entering Phase 2 (uncancellable).
  */
 export function disableEmergencyCutCancel() {
-    $('#openvault_emergency_cancel')
-        .prop('disabled', true)
-        .text('Synthesizing...');
+    $('#openvault_emergency_cancel').prop('disabled', true).text('Synthesizing...');
     $('#openvault_emergency_phase').text('Running final synthesis...');
 }
 
 /**
- * Hide all extracted messages from LLM context by setting is_system=true.
- * Only hides messages that have been successfully processed (fingerprint in processed set).
- * @returns {Promise<number>} Number of messages hidden
+ * Handle Emergency Cut button click — thin UI wrapper around domain function.
  */
-export async function hideExtractedMessages() {
-    const { getDeps } = await import('../deps.js');
-    const { getProcessedFingerprints, getFingerprint } = await import('../extraction/scheduler.js');
-    const { getOpenVaultData } = await import('../utils/data.js');
-
-    const context = getDeps().getContext();
-    const chat = context.chat || [];
-    const data = getOpenVaultData();
-
-    const processedFps = getProcessedFingerprints(data);
-
-    // DEBUG: Log detailed state
-    logInfo(`[Emergency Cut Debug] Total chat messages: ${chat.length}`);
-    logInfo(`[Emergency Cut Debug] Processed fingerprints count: ${processedFps.size}`);
-
-    let hiddenCount = 0;
-    let processedCount = 0;
-    let alreadyHiddenCount = 0;
-    let notProcessedCount = 0;
-
-    for (let i = 0; i < chat.length; i++) {
-        const msg = chat[i];
-        const fp = getFingerprint(msg);
-        const isProcessed = processedFps.has(fp);
-        const isSystem = msg.is_system;
-
-        if (isProcessed) processedCount++;
-        if (isSystem) alreadyHiddenCount++;
-        if (!isProcessed && !isSystem) notProcessedCount++;
-
-        if (isProcessed && !isSystem) {
-            msg.is_system = true;
-            hiddenCount++;
-            logInfo(`[Emergency Cut Debug] Hiding message ${i}: fp=${fp}, is_user=${msg.is_user}, preview="${(msg.mes || '').substring(0, 50)}..."`);
-        }
-    }
-
-    logInfo(`[Emergency Cut Debug] Analysis: ${processedCount} processed, ${alreadyHiddenCount} already hidden, ${notProcessedCount} unprocessed, ${hiddenCount} to hide`);
-
-    if (hiddenCount > 0) {
-        logInfo(`[Emergency Cut Debug] Calling saveChatConditional...`);
-        await getDeps().saveChatConditional();
-        logInfo(`[Emergency Cut Debug] saveChatConditional completed`);
-        logInfo(`Emergency Cut: hid ${hiddenCount} messages (all extracted)`);
-    }
-
-    return hiddenCount;
-}
-
-/**
- * Handle Emergency Cut button click.
- * Extracts all unprocessed messages and hides them from LLM context.
- */
-export async function handleEmergencyCut() {
-    logInfo('[Emergency Cut Debug] === EMERGENCY CUT STARTED ===');
-
-    const { getBackfillStats, getProcessedFingerprints, getFingerprint } = await import('../extraction/scheduler.js');
-    const { operationState } = await import('../state.js');
-    const { isWorkerRunning } = await import('../extraction/worker.js');
-    const { getOpenVaultData } = await import('../utils/data.js');
-
-    if (isWorkerRunning()) {
-        showToast('warning', 'Background extraction in progress. Please wait a moment.');
-        return;
-    }
-
-    const context = getDeps().getContext();
-    const chat = context.chat || [];
-    const data = getOpenVaultData();
-
-    logInfo(`[Emergency Cut Debug] Chat length: ${chat.length}, Data memories: ${(data.memories || []).length}`);
-
-    const stats = getBackfillStats(chat, data);
-    logInfo(`[Emergency Cut Debug] Backfill stats: totalMessages=${stats.totalMessages}, extractedCount=${stats.extractedCount}, unextractedCount=${stats.unextractedCount}`);
-
-    let shouldExtract = true;
-    let confirmMessage = '';
-
-    if (stats.unextractedCount === 0) {
-        const processedFps = getProcessedFingerprints(data);
-        const hideableCount = chat.filter(m =>
-            !m.is_system && processedFps.has(getFingerprint(m))
-        ).length;
-
-        logInfo(`[Emergency Cut Debug] No unextracted messages. processedFps.size=${processedFps.size}, hideableCount=${hideableCount}`);
-
-        if (hideableCount === 0) {
-            showToast('info', 'No messages to hide');
-            return;
-        }
-
-        confirmMessage = `All messages are already extracted. Hide ${hideableCount} messages from the LLM to break the loop?\n\n` +
-            `The LLM will only see: preset, char card, lorebooks, and OpenVault memories.`;
-        shouldExtract = false;
-    } else {
-        confirmMessage = `Extract and hide ${stats.unextractedCount} unprocessed messages?\n\n` +
-            `The LLM will only see: preset, char card, lorebooks, and OpenVault memories.`;
-    }
-
-    if (!confirm(confirmMessage)) return;
-
-    if (!shouldExtract) {
-        logInfo('[Emergency Cut Debug] Skipping extraction - only hiding already-extracted messages');
-        const hiddenCount = await hideExtractedMessages();
-        showToast('success', `Emergency Cut complete. ${hiddenCount} messages hidden from context.`);
-        refreshAllUI();
-        return;
-    }
-
-    logInfo('[Emergency Cut Debug] Starting extraction phase...');
-    operationState.extractionInProgress = true;
-    $('#send_textarea').prop('disabled', true);
+async function handleEmergencyCutClick() {
     emergencyCutAbortController = new AbortController();
 
-    showEmergencyCutModal();
-
-    try {
-        const { extractAllMessages } = await import('../extraction/extract.js');
-        logInfo('[Emergency Cut Debug] Calling extractAllMessages...');
-        const result = await extractAllMessages({
-            isEmergencyCut: true,
-            progressCallback: updateEmergencyCutProgress,
-            abortSignal: emergencyCutAbortController.signal,
-            onPhase2Start: disableEmergencyCutCancel,
-        });
-        logInfo(`[Emergency Cut Debug] Extraction complete: ${result.messagesProcessed} messages processed, ${result.eventsCreated} events created`);
-
-        await hideExtractedMessages();
-
-        showToast('success',
-            `Emergency Cut complete. ${result.messagesProcessed} messages processed, ` +
-            `${result.eventsCreated} memories created. Chat history hidden.`
-        );
-        refreshAllUI();
-
-    } catch (err) {
-        logError('Emergency Cut failed', err);
-        const isCancel = err.name === 'AbortError';
-        const message = isCancel
-            ? 'Emergency Cut cancelled. No messages were hidden.'
-            : `Emergency Cut failed: ${err.message}. No messages were hidden.`;
-        showToast(isCancel ? 'info' : 'error', message);
-    } finally {
-        operationState.extractionInProgress = false;
-        $('#send_textarea').prop('disabled', false);
-        hideEmergencyCutModal();
-        emergencyCutAbortController = null;
-        logInfo('[Emergency Cut Debug] === EMERGENCY CUT FINISHED ===');
-    }
+    await executeEmergencyCut({
+        onWarning: (msg) => showToast('warning', msg),
+        onConfirmPrompt: (msg) => confirm(msg),
+        onStart: () => {
+            $('#send_textarea').prop('disabled', true);
+            showEmergencyCutModal();
+        },
+        onProgress: (batch, total, events) => updateEmergencyCutProgress(batch, total, events),
+        onPhase2Start: () => disableEmergencyCutCancel(),
+        onComplete: ({ messagesProcessed, eventsCreated, hiddenCount }) => {
+            if (messagesProcessed > 0) {
+                showToast(
+                    'success',
+                    `Emergency Cut complete. ${messagesProcessed} messages processed, ` +
+                        `${eventsCreated} memories created. Chat history hidden.`
+                );
+            } else {
+                showToast('success', `Emergency Cut complete. ${hiddenCount} messages hidden from context.`);
+            }
+            $('#send_textarea').prop('disabled', false);
+            hideEmergencyCutModal();
+            emergencyCutAbortController = null;
+            refreshAllUI();
+        },
+        onError: (err, isCancel) => {
+            const message = isCancel
+                ? 'Emergency Cut cancelled. No messages were hidden.'
+                : `Emergency Cut failed: ${err.message}. No messages were hidden.`;
+            showToast(isCancel ? 'info' : 'error', message);
+            logError('Emergency Cut failed', err);
+            $('#send_textarea').prop('disabled', false);
+            hideEmergencyCutModal();
+            emergencyCutAbortController = null;
+        },
+        abortSignal: emergencyCutAbortController.signal,
+    });
 }
 
 /**
- * Test Ollama connection
+ * Handle Ollama test button click — thin UI wrapper around domain function.
  */
-async function testOllamaConnection() {
+async function handleOllamaTestClick() {
     const $btn = $('#openvault_test_ollama_btn');
     const url = $('#openvault_ollama_url').val().trim();
 
@@ -282,24 +175,15 @@ async function testOllamaConnection() {
     $btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Testing...');
 
     try {
-        const response = await fetch(`${url}/api/tags`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (response.ok) {
-            $btn.removeClass('error').addClass('success');
-            $btn.html('<i class="fa-solid fa-check"></i> Connected');
-        } else {
-            throw new Error(`HTTP ${response.status}`);
-        }
+        await testOllamaConnection(url);
+        $btn.removeClass('error').addClass('success');
+        $btn.html('<i class="fa-solid fa-check"></i> Connected');
     } catch (err) {
         $btn.removeClass('success').addClass('error');
         $btn.html('<i class="fa-solid fa-xmark"></i> Failed');
         logError('Ollama test failed', err);
     }
 
-    // Reset button after 3 seconds
     setTimeout(() => {
         $btn.removeClass('success error');
         $btn.html('<i class="fa-solid fa-plug"></i> Test');
@@ -869,7 +753,7 @@ function bindUIElements() {
     $('#openvault_extract_all_btn').on('click', handleExtractAll);
 
     // Emergency Cut button
-    $('#openvault_emergency_cut_btn').on('click', handleEmergencyCut);
+    $('#openvault_emergency_cut_btn').on('click', handleEmergencyCutClick);
 
     // Danger zone buttons
     $('#openvault_reset_settings_btn').on('click', handleResetSettings);
@@ -897,7 +781,7 @@ function bindUIElements() {
     });
 
     // Test Ollama connection button
-    $('#openvault_test_ollama_btn').on('click', testOllamaConnection);
+    $('#openvault_test_ollama_btn').on('click', handleOllamaTestClick);
 
     // Perf tab clipboard copy button
     $('#openvault_copy_perf_btn').on('click', () => {
