@@ -1173,30 +1173,23 @@ export async function extractAllMessages(optionsOrCallback) {
         }
     }
 
-    // ===== NEW: Run final Phase 2 synthesis =====
-    // v6: Notify Emergency Cut that Phase 2 is starting (uncancellable)
-    if (isEmergencyCut && onPhase2Start) {
-        onPhase2Start();
-    }
-
-    // Update existing progress toast for the final heavy lifting
-    logInfo('Backfill Phase 1 complete. Running final Phase 2 synthesis...');
+    // ===== NEW: Run final Phase 2 synthesis (skip for Emergency Cut - speed priority) =====
     if (!isEmergencyCut) {
+        // Update existing progress toast for the final heavy lifting
+        logInfo('Backfill Phase 1 complete. Running final Phase 2 synthesis...');
         $('.openvault-backfill-toast .toast-message').text(
             `Backfill: 100% - Synthesizing world state and reflections. This may take a minute...`
         );
-    }
 
-    try {
-        await runPhase2Enrichment(data, settings, targetChatId, { abortSignal }); // v6: Pass signal
-    } catch (error) {
-        // v6: Propagate AbortError for Emergency Cut
-        if (error.name === 'AbortError' && isEmergencyCut) {
-            throw error;
+        try {
+            await runPhase2Enrichment(data, settings, targetChatId, { abortSignal });
+        } catch (error) {
+            logError('Final Phase 2 enrichment failed', error);
+            showToast('warning', 'Events saved, but final summarization failed. You can re-run later.', 'OpenVault');
+            // Don't throw - Phase 1 data is safe
         }
-        logError('Final Phase 2 enrichment failed', error);
-        showToast('warning', 'Events saved, but final summarization failed. You can re-run later.', 'OpenVault');
-        // Don't throw - Phase 1 data is safe
+    } else {
+        logInfo('[Emergency Cut Debug] Skipping Phase 2 enrichment for speed');
     }
     // ===== END FINAL PHASE 2 =====
 
