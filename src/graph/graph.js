@@ -357,32 +357,31 @@ export function hasSufficientTokenOverlap(tokensA, tokensB, minOverlapRatio = 0.
 }
 
 /**
- * Determine if two entities should merge based on cosine similarity
- * and optional token overlap confirmation.
+ * Determine if two entities should merge based on cosine similarity,
+ * entity type, and optional token overlap confirmation.
  *
- * Above threshold: cosine alone is sufficient (catches true synonyms).
- * Grey zone (threshold - 0.10 to threshold): requires token overlap confirmation.
- * Below grey zone: no merge.
- *
- * tokensA is pre-computed by the caller (outer loop). tokensB is constructed
- * lazily from keyB only when cosine lands in the grey zone, avoiding
- * Set allocation on every iteration of the tight inner loop.
+ * PERSON entities: High similarity alone is sufficient (names are unique identifiers).
+ * OBJECT/CONCEPT/PLACE/ORGANIZATION: Always require token overlap to prevent
+ * false merges when embeddings are inflated by shared context.
  *
  * @param {number} cosine - Cosine similarity between embeddings
  * @param {number} threshold - entityMergeSimilarityThreshold from settings
  * @param {Set<string>} tokensA - Word tokens from entity A's key (pre-computed)
  * @param {string} keyA - Entity A's normalized key (for LCS/substring checks)
  * @param {string} keyB - Entity B's normalized key
+ * @param {string} [type='OBJECT'] - Entity type (PERSON, OBJECT, CONCEPT, etc.)
  * @returns {boolean}
  */
-export function shouldMergeEntities(cosine, threshold, tokensA, keyA, keyB) {
-    if (cosine >= threshold) return true;
-    const greyZoneFloor = threshold - 0.1;
-    if (cosine >= greyZoneFloor) {
-        const tokensB = new Set(keyB.split(/\s+/));
-        return hasSufficientTokenOverlap(tokensA, tokensB, 0.6, keyA, keyB);
-    }
-    return false;
+export function shouldMergeEntities(cosine, threshold, tokensA, keyA, keyB, type = 'OBJECT') {
+    // PERSON entities: names are unique identifiers, high similarity is sufficient
+    if (type === 'PERSON' && cosine >= threshold) return true;
+
+    // All other types: always require token overlap confirmation
+    // This prevents false merges when embeddings are inflated by shared context
+    if (cosine < threshold - 0.1) return false;
+
+    const tokensB = new Set(keyB.split(/\s+/));
+    return hasSufficientTokenOverlap(tokensA, tokensB, 0.6, keyA, keyB);
 }
 
 /**
@@ -487,7 +486,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
         }
 
         const sim = cosineSimilarity(newEmbedding, existingEmbedding);
-        if (!shouldMergeEntities(sim, threshold, newTokens, key, existingKey)) {
+        if (!shouldMergeEntities(sim, threshold, newTokens, key, existingKey, type)) {
             continue;
         }
         if (sim > bestScore) {

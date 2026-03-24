@@ -198,9 +198,9 @@ export const IMPORTANCE_5_FLOOR = 5;
 
 /**
  * Entity merge: semantic similarity threshold for clustering.
- * Note: 0.8 produced false positives where unrelated entities merged due to
- * inflated embedding similarity scores. Different entity types and semantically
- * distinct concepts (e.g., "rain" vs "milk") incorrectly merged at 0.80-0.87.
+ * PERSON entities: high cosine alone is sufficient (names are unique identifiers).
+ * OBJECT/CONCEPT/PLACE/ORGANIZATION: always require token overlap confirmation
+ * to prevent false merges when embeddings are inflated by shared context.
  */
 export const ENTITY_MERGE_THRESHOLD = 0.9;
 

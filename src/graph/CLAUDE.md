@@ -16,15 +16,17 @@ Flat-JSON entity and relationship storage with rigorous semantic deduplication, 
 - **LLM Consolidation**: Uses `LLM_CONFIGS.edge_consolidation` and `buildEdgeConsolidationPrompt()` (standard `buildMessages()` pattern with preamble + prefill). Bloated pipe-separated descriptions synthesized into single coherent summary (<100 tokens), re-embedded for RAG accuracy.
 
 ## SEMANTIC MERGE LOGIC
-Prevents duplicate nodes (e.g., "The King" vs "King Aldric"). Uses `shouldMergeEntities()` DRY helper (cosine-first check order). Extraction uses delta approach — focuses on NEW entities or CHANGES to existing ones, not re-describing static relationships. Schema limits to 5 entities/relationships per batch.
+Prevents duplicate nodes (e.g., "The King" vs "King Aldric"). Uses `shouldMergeEntities()` DRY helper with type-aware logic. Extraction uses delta approach — focuses on NEW entities or CHANGES to existing ones, not re-describing static relationships. Schema limits to 5 entities/relationships per batch.
+
+**Type-Aware Merging**: PERSON entities can merge on high cosine similarity alone (names are unique identifiers). All other types (OBJECT, CONCEPT, PLACE, ORGANIZATION) ALWAYS require token overlap confirmation to prevent false merges when embeddings are inflated by shared context.
 
 **stChanges Return Pattern (PR2)**: `mergeOrInsertEntity()` returns `{ key, stChanges: { toSync: [], toDelete: [] } }`. New nodes push `{ hash, text, item }` to `toSync`. Semantic merge deletions push `{ hash }` to `toDelete`. Orchestrator applies bulk network I/O. `consolidateEdges()` returns `{ count, stChanges }`. Dead functions `consolidateGraph()` and `redirectEdges()` were deleted.
 1. **Fast Path**: Exact key match -> basic upsert.
-2. **Slow Path**: Embeds `Type: Name - Description`. Cosine computed first, then routed:
-   - **Above threshold** (>= 0.94): Merge directly (cosine alone sufficient).
-   - **Grey zone** (threshold - 0.10 to threshold): Token overlap confirmation required. `tokensB` lazily constructed only here.
+2. **Slow Path**: Embeds `Type: Name - Description`. Cosine computed first, then routed by type:
+   - **PERSON**: High cosine (>= threshold) → merge directly. Grey zone → require token overlap.
+   - **Other types**: Always require token overlap regardless of cosine.
    - **Below grey zone**: Skip (no merge).
-3. **Token Overlap Guard** (grey zone only): Strips base EN+RU stopwords (via `stopword` lib). Requires >= 60% stem/token overlap OR direct substring match OR fuzzy LCS match (≥ 70% ratio AND ≥ 4 absolute chars; short keys ≤ 4 chars: ≥ 60% ratio AND ≥ 2 chars).
+3. **Token Overlap Guard**: Strips base EN+RU stopwords (via `stopword` lib). Requires >= 60% stem/token overlap OR direct substring match OR fuzzy LCS match (≥ 70% ratio AND ≥ 4 absolute chars; short keys ≤ 4 chars: ≥ 60% ratio AND ≥ 2 chars).
 4. **Aliases**: If merged, the absorbed name is pushed to the surviving node's `aliases` array for future retrieval matching.
 4b. **Cross-Script Merge** (PERSON only): Before creating a new node, `mergeOrInsertEntity` checks if the transliterated name matches any known main character (Levenshtein ≤ 2). Force-merges Cyrillic variants (Сузи→Suzy, Вова→Vova) into the English node. English name stays primary, Cyrillic added as alias.
 4c. **Cross-Script Guard** (semantic merge loop): PERSON entities with keys in different scripts (Latin vs Cyrillic) are skipped in the semantic merge loop. Cross-script PERSON merges should ONLY happen via transliteration match, not semantic similarity. Prevents false merges when descriptions share context but names are unrelated.

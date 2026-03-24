@@ -396,26 +396,27 @@ describe('mergeOrInsertEntity', () => {
         expect(Object.keys(graphData.nodes)).toHaveLength(2);
     });
 
-    it('merges into existing node when semantic similarity exceeds threshold', async () => {
+    it('merges into existing node when semantic similarity exceeds threshold (PERSON)', async () => {
         const { getDocumentEmbedding } = await import('../../src/embeddings.js');
         // Return very similar embedding for "Vova's Apartment"
         getDocumentEmbedding.mockResolvedValue([0.9, 0.1, 0]);
 
-        upsertEntity(graphData, "Vova's House", 'PLACE', 'Home');
-        graphData.nodes['vova house'].embedding = [0.9, 0.1, 0];
+        upsertEntity(graphData, 'Dragon', 'PERSON', 'A creature');
+        graphData.nodes.dragon.embedding = [0.9, 0.1, 0];
 
         const { key, stChanges } = await mergeOrInsertEntity(
             graphData,
-            "Vova's Apartment",
-            'PLACE',
-            'Flat',
+            'Draco',
+            'PERSON',
+            'Another name',
             3,
             mockSettings
         );
-        expect(key).toBe('vova house');
+        // PERSON can merge on high similarity alone (names are unique identifiers)
+        expect(key).toBe('dragon');
         expect(stChanges.toSync).toHaveLength(0);
         expect(stChanges.toDelete).toHaveLength(0);
-        expect(graphData.nodes['vova house'].mentions).toBe(2);
+        expect(graphData.nodes.dragon.mentions).toBe(2);
         expect(Object.keys(graphData.nodes)).toHaveLength(1);
     });
 
@@ -721,18 +722,19 @@ describe('mergeOrInsertEntity', () => {
         const { getDocumentEmbedding } = await import('../../src/embeddings.js');
         getDocumentEmbedding.mockResolvedValue([0.9, 0.1, 0]);
 
-        upsertEntity(graphData, "Vova's House", 'PLACE', 'Home');
-        graphData.nodes['vova house'].embedding = [0.9, 0.1, 0];
+        upsertEntity(graphData, 'Dragon', 'PERSON', 'A creature');
+        graphData.nodes.dragon.embedding = [0.9, 0.1, 0];
 
         const { key, stChanges } = await mergeOrInsertEntity(
             graphData,
-            "Vova's Apartment",
-            'PLACE',
-            'Flat',
+            'Draco',
+            'PERSON',
+            'Another name',
             3,
             mockSettings
         );
-        expect(key).toBe('vova house');
+        // PERSON can merge on high similarity alone
+        expect(key).toBe('dragon');
         expect(stChanges.toSync).toHaveLength(0);
         expect(stChanges.toDelete).toHaveLength(0);
     });
@@ -742,12 +744,12 @@ describe('edge creation with semantic merge', () => {
     it('creates edges using resolved keys after mergeOrInsertEntity', async () => {
         const { getDocumentEmbedding } = await import('../../src/embeddings.js');
 
-        // Setup: "vova apartment" already exists with embedding
+        // Setup: "dragon" already exists with embedding (PERSON type)
         const graphData = createEmptyGraph();
-        graphData.nodes['vova apartment'] = {
-            name: "Vova's Apartment",
-            type: 'PLACE',
-            description: 'An apartment',
+        graphData.nodes.dragon = {
+            name: 'Dragon',
+            type: 'PERSON',
+            description: 'A character',
             mentions: 5,
             embedding: [1, 0, 0],
         };
@@ -758,30 +760,30 @@ describe('edge creation with semantic merge', () => {
             mentions: 10,
         };
 
-        // Mock: "Vova's Room" embeds to something very similar to "Vova's Apartment"
+        // Mock: "Draco" embeds to something very similar to "dragon"
         getDocumentEmbedding.mockResolvedValue([0.99, 0.1, 0]);
 
         const settings = { entityMergeSimilarityThreshold: 0.8 };
 
-        // mergeOrInsertEntity should merge "Vova's Room" into "vova apartment"
+        // mergeOrInsertEntity should merge "Draco" into "dragon" (PERSON type)
         const { key: resolvedKey } = await mergeOrInsertEntity(
             graphData,
-            "Vova's Room",
-            'PLACE',
-            'A room',
+            'Draco',
+            'PERSON',
+            'A character alias',
             3,
             settings
         );
-        expect(resolvedKey).toBe('vova apartment');
+        expect(resolvedKey).toBe('dragon');
 
-        // Now create a relationship using the ORIGINAL name "Vova's Room"
+        // Now create a relationship using the ORIGINAL name "Draco"
         // This should work because we use the resolved key
-        upsertRelationship(graphData, 'Suzy', "Vova's Room", 'Lives in', 5);
+        upsertRelationship(graphData, 'Suzy', 'Draco', 'Friends with', 5);
 
-        // Edge should exist (suzy -> vova apartment), NOT be silently dropped
-        const edgeKey = 'suzy__vova apartment';
+        // Edge should exist (suzy -> dragon), NOT be silently dropped
+        const edgeKey = 'suzy__dragon';
         expect(graphData.edges[edgeKey]).toBeDefined();
-        expect(graphData.edges[edgeKey].description).toBe('Lives in');
+        expect(graphData.edges[edgeKey].description).toBe('Friends with');
     });
 });
 
@@ -1004,58 +1006,62 @@ describe('consolidateEdges', () => {
 });
 
 describe('shouldMergeEntities', () => {
-    it('returns true when cosine is above threshold (token overlap skipped)', () => {
-        // cosine=0.96, threshold=0.94 → above threshold → merge directly
-        const tokensA = new Set(['king', 'aldric']);
-        expect(shouldMergeEntities(0.96, 0.94, tokensA, 'king aldric', 'completely different')).toBe(true);
+    describe('PERSON type', () => {
+        it('merges on high similarity alone (names are unique identifiers)', () => {
+            const tokensA = new Set(['alex']);
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'alex', 'alexander', 'PERSON')).toBe(true);
+        });
+
+        it('merges at exact threshold', () => {
+            const tokensA = new Set(['john']);
+            expect(shouldMergeEntities(0.9, 0.9, tokensA, 'john', 'jonathan', 'PERSON')).toBe(true);
+        });
+
+        it('requires token overlap in grey zone', () => {
+            const tokensA = new Set(['mary']);
+            // cosine=0.85, threshold=0.9, grey zone = 0.8-0.9, no overlap → false
+            expect(shouldMergeEntities(0.85, 0.9, tokensA, 'mary', 'jane', 'PERSON')).toBe(false);
+        });
+
+        it('merges in grey zone with token overlap', () => {
+            const tokensA = new Set(['bob']);
+            // cosine=0.85, grey zone, substring containment ('bob' in 'bob smith')
+            expect(shouldMergeEntities(0.85, 0.9, tokensA, 'bob', 'bob smith', 'PERSON')).toBe(true);
+        });
     });
 
-    it('returns true when cosine is exactly at threshold', () => {
-        const tokensA = new Set(['king']);
-        expect(shouldMergeEntities(0.94, 0.94, tokensA, 'king', 'queen')).toBe(true);
+    describe('OBJECT/CONCEPT types', () => {
+        it('requires token overlap even at high similarity', () => {
+            const tokensA = new Set(['sword']);
+            // cosine=0.95, but OBJECT type requires token overlap, no overlap → false
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'sword', 'blade', 'OBJECT')).toBe(false);
+        });
+
+        it('merges when substring containment exists', () => {
+            const tokensA = new Set(['red', 'sword']);
+            // cosine=0.95, OBJECT type, 'sword' contained in 'red sword' → true
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'red sword', 'sword', 'OBJECT')).toBe(true);
+        });
+
+        it('rejects when cosine is below grey zone', () => {
+            const tokensA = new Set(['item']);
+            // cosine=0.75, threshold=0.9, below 0.8 floor → false
+            expect(shouldMergeEntities(0.75, 0.9, tokensA, 'item', 'item', 'OBJECT')).toBe(false);
+        });
+
+        it('defaults to OBJECT type when not specified', () => {
+            const tokensA = new Set(['apple']);
+            // No type specified, defaults to OBJECT, requires overlap
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'apple', 'orange')).toBe(false);
+        });
     });
 
-    it('returns true in grey zone when token overlap passes', () => {
-        // cosine=0.90, threshold=0.94, greyZoneFloor=0.84 → grey zone
-        // tokensA='king aldric castle', keyB='king aldric tower' → 2/3=0.67 overlap → pass
-        const tokensA = new Set(['king', 'aldric', 'castle']);
-        expect(shouldMergeEntities(0.9, 0.94, tokensA, 'king aldric castle', 'king aldric tower')).toBe(true);
-    });
-
-    it('returns false in grey zone when token overlap fails', () => {
-        // cosine=0.90, threshold=0.94, greyZoneFloor=0.84 → grey zone
-        // tokensA='alpha', keyB='omega' → no overlap → fail
-        const tokensA = new Set(['alpha']);
-        expect(shouldMergeEntities(0.9, 0.94, tokensA, 'alpha', 'omega')).toBe(false);
-    });
-
-    it('returns false when cosine is below grey zone', () => {
-        // cosine=0.80, threshold=0.94, greyZoneFloor=0.84 → below grey zone
-        const tokensA = new Set(['king', 'aldric']);
-        expect(shouldMergeEntities(0.8, 0.94, tokensA, 'king aldric', 'king aldric')).toBe(false);
-    });
-
-    it('does not construct tokensB when cosine is above threshold', () => {
-        // Even with completely non-overlapping keys, cosine >= threshold means merge
-        const tokensA = new Set(['абсолютно']);
-        expect(shouldMergeEntities(0.95, 0.94, tokensA, 'абсолютно', 'совершенно другое')).toBe(true);
-    });
-
-    it('does not construct tokensB when cosine is below grey zone', () => {
-        // cosine=0.70, threshold=0.94 → below 0.84 floor → skip
-        const tokensA = new Set(['king']);
-        expect(shouldMergeEntities(0.7, 0.94, tokensA, 'king', 'king')).toBe(false);
-    });
-
-    it('respects custom threshold values', () => {
-        // threshold=0.80, greyZoneFloor=0.70
-        const tokensA = new Set(['castle']);
-        // cosine=0.82 → above 0.80 threshold → true
-        expect(shouldMergeEntities(0.82, 0.8, tokensA, 'castle', 'fortress')).toBe(true);
-        // cosine=0.75 → grey zone (0.70-0.80) → depends on token overlap
-        expect(shouldMergeEntities(0.75, 0.8, tokensA, 'castle', 'fortress')).toBe(false); // no overlap
-        // cosine=0.65 → below 0.70 floor → false
-        expect(shouldMergeEntities(0.65, 0.8, tokensA, 'castle', 'castle')).toBe(false);
+    describe('CONCEPT type', () => {
+        it('requires token overlap like OBJECT', () => {
+            const tokensA = new Set(['honor']);
+            // CONCEPT type requires token overlap
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'honor', 'glory', 'CONCEPT')).toBe(false);
+        });
     });
 });
 
