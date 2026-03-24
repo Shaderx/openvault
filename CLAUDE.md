@@ -36,6 +36,7 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **ST API CSRF**: All `fetch()` calls to ST endpoints (`/api/vector/*`) MUST use `getDeps().getRequestHeaders()` — never manual headers. ST requires `X-CSRF-Token` header on POST requests.
 - **Session Kill-Switch**: Use `isSessionDisabled()`/`setSessionDisabled()` in `state.js` for per-session failure states. NEVER mutate global settings to disable — affects all chats.
 - **Schema vs Embedding Migrations**: Schema migrations (`src/store/migrations/`) handle structural changes. Embedding model migrations (`src/embeddings/migration.js`) handle runtime environment changes (Ollama → WebGPU). Different pipelines, different triggers.
+- **Data Schema Completeness**: When adding fields to OpenVault data, update BOTH: (1) `getOpenVaultData()` in `store/chat-data.js` for new chats, (2) the migration backfill function (e.g., `initGraphState()` in `migrations/v2.js`) for existing chats, (3) tests in `tests/store/chat-data.test.js` and `tests/store/migrations.test.js`. Domain code assumes schema shape — no defensive `if (!data.field)` checks.
 
 ## ARCHITECTURE MAP (Lazy Loaded Context)
 - `src/deps.js` - Dependency injection for testability (SillyTavern globals, browser APIs)

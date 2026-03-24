@@ -26,6 +26,7 @@ export function getOpenVaultData() {
             [MEMORIES_KEY]: [],
             [CHARACTERS_KEY]: {},
             [PROCESSED_MESSAGES_KEY]: [],
+            reflection_state: {},
             graph: createEmptyGraph(),
             communities: {},
             graph_message_count: 0,

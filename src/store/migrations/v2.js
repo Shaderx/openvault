@@ -105,6 +105,7 @@ function initGraphState(data) {
     if (!data.graph) data.graph = createEmptyGraph();
     if (!data.communities) data.communities = {};
     if (data.graph_message_count == null) data.graph_message_count = 0;
+    if (!data.reflection_state) data.reflection_state = {};
 }
 
 /**

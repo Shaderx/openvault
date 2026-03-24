@@ -56,6 +56,7 @@ describe('store/chat-data', () => {
                 [MEMORIES_KEY]: [],
                 [CHARACTERS_KEY]: {},
                 processed_message_ids: [],
+                reflection_state: {},
                 graph: expect.any(Object),
                 communities: {},
                 graph_message_count: 0,

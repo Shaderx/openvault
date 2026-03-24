@@ -70,7 +70,7 @@ describe('v2 migration', () => {
         expect(data.graph.nodes[0].embedding_b64).toBeTypeOf('string');
     });
 
-    it('initializes missing graph/communities/graph_message_count', () => {
+    it('initializes missing graph/communities/graph_message_count/reflection_state', () => {
         const data = {};
 
         runSchemaMigrations(data, chat);
@@ -78,6 +78,7 @@ describe('v2 migration', () => {
         expect(data.graph).toBeDefined();
         expect(data.communities).toBeDefined();
         expect(data.graph_message_count).toBe(0);
+        expect(data.reflection_state).toEqual({});
     });
 
     it('sets schema_version to 2', () => {
