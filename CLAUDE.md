@@ -22,6 +22,7 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **Plans Archive**: `docs/plans/` contains execution plans. Move to `docs/designs/` after completion.
 
 ## GOTCHAS & DEBUG SAUCE
+- **Empty Array Fallback**: `[] || fallback` never falls back — empty arrays are truthy. Use `array?.length > 0 ? array : fallback` when checking for populated arrays. Critical when processing LLM responses that may return empty arrays as valid schema outputs.
 - **Bucket Utilities**: `assignMemoriesToBuckets()` and `getMemoryPosition()` moved from `formatting.js` to `utils/text.js` to avoid circular deps with `scoring.js`.
 - **IDF Cache**: Pre-computed BM25 IDF map cached in `chatMetadata.openvault.idf_cache` after Phase 1 commit. Eliminates O(N) tokenization during retrieval.
 - **Two-Pass Retrieval**: Fast pass (Base + BM25) scores all memories; slow pass calculates expensive cosine similarity only on top `VECTOR_PASS_LIMIT` (200) candidates. Keeps critical path under 100ms even with 2000+ memories.
