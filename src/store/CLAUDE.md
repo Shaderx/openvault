@@ -23,7 +23,7 @@ Repository pattern for local chat metadata mutations. Encapsulates all CRUD oper
 
 ## MIGRATIONS
 
-Located in `migrations/` subfolder:
+Located in `migrations/` subfolder. See `migrations/CLAUDE.md` for versioning strategy and patterns.
 - `index.js` - Orchestrator: checks `schema_version`, runs required migrations sequentially
 - `v2.js` - v1→v2 conversion: processed message fingerprints, embedding arrays→base64, graph state backfill
 

@@ -24,8 +24,6 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 ## GOTCHAS & DEBUG SAUCE
 - **Empty Array Fallback**: `[] || fallback` never falls back — empty arrays are truthy. Use `array?.length > 0 ? array : fallback` when checking for populated arrays. Critical when processing LLM responses that may return empty arrays as valid schema outputs.
 - **Bucket Utilities**: `assignMemoriesToBuckets()` and `getMemoryPosition()` moved from `formatting.js` to `utils/text.js` to avoid circular deps with `scoring.js`.
-- **IDF Cache**: Pre-computed BM25 IDF map cached in `chatMetadata.openvault.idf_cache` after Phase 1 commit. Eliminates O(N) tokenization during retrieval.
-- **Two-Pass Retrieval**: Fast pass (Base + BM25) scores all memories; slow pass calculates expensive cosine similarity only on top `VECTOR_PASS_LIMIT` (200) candidates. Keeps critical path under 100ms even with 2000+ memories.
 - **`thinking`/`/thinking` Tags**: LLMs often return reasoning or tool wrappers before JSON. ALWAYS pass output through `stripThinkingTags()` (`src/utils/text.js`) before parsing. Handles paired tags (with attributes), bracket variants, and orphaned closing tags (from prefill continuations). Preambles contain explicit anti-tool-call directives; `extractBalancedJSON` returns the LAST balanced block as safety net (LLMs output noise before payload). Few-shot examples use `thinking` property (wrapped in `<thinking>` tags by `format-examples.js`) — schemas permit optional `<thinking>` tags for backward compatibility.
 - **Payload Calculator**: `PAYLOAD_CALC` in `src/constants.js` is the single source of truth for LLM context overhead (12k tokens). Don't hardcode it elsewhere.
 - **Thread Yielding**: Use `yieldToMain()` (`src/utils/st-helpers.js`). It polyfills `scheduler.yield()` with `setTimeout(0)` fallback.
@@ -35,13 +33,13 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **Proxy Vector Scores**: When using `st_vector`, retrieval uses rank-position proxy scores (not cosine similarity). Higher rank = higher proxy score.
 - **ST API CSRF**: All `fetch()` calls to ST endpoints (`/api/vector/*`) MUST use `getDeps().getRequestHeaders()` — never manual headers. ST requires `X-CSRF-Token` header on POST requests.
 - **Session Kill-Switch**: Use `isSessionDisabled()`/`setSessionDisabled()` in `state.js` for per-session failure states. NEVER mutate global settings to disable — affects all chats.
-- **Schema vs Embedding Migrations**: Schema migrations (`src/store/migrations/`) handle structural changes. Embedding model migrations (`src/embeddings/migration.js`) handle runtime environment changes (Ollama → WebGPU). Different pipelines, different triggers.
 - **Data Schema Completeness**: When adding fields to OpenVault data, update BOTH: (1) `getOpenVaultData()` in `store/chat-data.js` for new chats, (2) the migration backfill function (e.g., `initGraphState()` in `migrations/v2.js`) for existing chats, (3) tests in `tests/store/chat-data.test.js` and `tests/store/migrations.test.js`. Domain code assumes schema shape — no defensive `if (!data.field)` checks.
 
 ## ARCHITECTURE MAP (Lazy Loaded Context)
 - `src/deps.js` - Dependency injection for testability (SillyTavern globals, browser APIs)
 - `src/state.js` - Operation state machine, generation locks, chat loading cooldown, worker singleton
 - `src/store/chat-data.js` - Repository for local chat metadata mutations (CRUD, batch operations)
+- `src/store/migrations/CLAUDE.md` - Schema versioning, migration patterns, rollback strategy.
 - `src/services/st-vector.js` - Network I/O boundary for ST Vector REST API (sync, delete, purge, query)
 - `src/embeddings/migration.js` - Embedding model mismatch detection, stale embedding cleanup, ST fingerprinting
 - `src/embeddings.js` - Embedding strategies: Transformers.js (local), Ollama (remote), ST Vector Storage (external)
@@ -59,5 +57,4 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 ## ARCHITECTURAL PATTERNS
 - **Settings Injection**: Domain functions receive settings via extended context objects (`queryConfig`, `scoringConfig`) instead of calling `getDeps().getExtensionSettings()` directly. Enables pure unit tests.
 - **Callback Injection**: UI provides callbacks (`onStart`, `onProgress`, `onComplete`, `onError`) to domain functions. Domain becomes testable without DOM mocking. UI becomes thin wiring layer.
-- **stChanges Return Pattern**: Domain functions (`mergeOrInsertEntity`, `generateReflections`, `updateCommunitySummaries`) return `{ ..., stChanges }` containing items to sync/delete. Orchestrator collects and applies bulk network I/O at phase boundaries.
 - **Repository Pattern**: Data mutations go through explicit methods (`addMemories`, `markMessagesProcessed`, `incrementGraphMessageCount`) in `store/chat-data.js`, not direct array pushes.
