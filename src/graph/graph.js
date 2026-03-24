@@ -261,7 +261,7 @@ export function createEmptyGraph() {
  * Does not overwrite existing fields.
  * @param {Object} data - The openvault data object (mutated in place)
  */
-function initGraphState(data) {
+function _initGraphState(data) {
     if (!data.graph) data.graph = createEmptyGraph();
     if (!data.communities) data.communities = {};
     if (!data.reflection_state) data.reflection_state = {};
@@ -399,7 +399,7 @@ export function shouldMergeEntities(cosine, threshold, tokensA, keyA, keyB, type
  * @param {string[]} [mainCharacterNames=[]] - Known main character names for cross-script merge
  * @returns {Promise<string>} The key of the node (existing or new)
  */
-export async function mergeOrInsertEntity(graphData, name, type, description, cap, settings) {
+export async function mergeOrInsertEntity(graphData, name, type, description, cap, _settings) {
     const key = normalizeKey(name);
     const stChanges = { toSync: [], toDelete: [] };
 

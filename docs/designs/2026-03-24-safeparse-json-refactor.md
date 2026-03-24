@@ -1,7 +1,7 @@
 # Design: Bulletproof `safeParseJSON` Refactor
 
 **Date:** 2026-03-24
-**Status:** Draft
+**Status:** Implemented
 **Scope:** `src/utils/text.js`, `src/extraction/structured.js`
 
 ---

@@ -1,7 +1,7 @@
-import { readFileSync, readdirSync, statSync } from 'fs';
-import { join, extname } from 'path';
+import { readdirSync, readFileSync, statSync } from 'fs';
+import { extname, join } from 'path';
 
-const JSDOC_RE = /\/\*\*[\s\S]*?\*\//g;
+const _JSDOC_RE = /\/\*\*[\s\S]*?\*\//g;
 
 function checkFile(filepath) {
     const src = readFileSync(filepath, 'utf8');
@@ -62,20 +62,16 @@ function checkFile(filepath) {
         // Orphaned JSDoc: not followed by a declaration
         const isDeclaration =
             // Export/async function/class/const/etc
-            /^(export\s+)?(async\s+)?(function|class|const|let|var|type|interface|\*)/.test(
-                nextLine,
-            ) ||
+            /^(export\s+)?(async\s+)?(function|class|const|let|var|type|interface|\*)/.test(nextLine) ||
             // Method declarations (async methodName, *generator, [computed], get/set getterSetter)
-            /^(async\s+)?(\*\s*)?[\[\w$]/.test(nextLine) ||
+            /^(async\s+)?(\*\s*)?[[\w$]/.test(nextLine) ||
             // Arrow functions assigned to const/let/var (next line check won't catch this well, but try)
             /^(const|let|var)\s+\w+\s*=/.test(nextLine) ||
             // End of file - JSDoc at EOF is orphaned
             nextLine === '';
 
         if (!isDeclaration && !inClassBody) {
-            issues.push(
-                `${filepath}:${b.start} — JSDoc not followed by declaration (got: "${nextLine.slice(0, 60)}")`,
-            );
+            issues.push(`${filepath}:${b.start} — JSDoc not followed by declaration (got: "${nextLine.slice(0, 60)}")`);
         }
     }
 
@@ -86,11 +82,7 @@ function walk(dir) {
     const results = [];
     for (const f of readdirSync(dir)) {
         const full = join(dir, f);
-        if (
-            statSync(full).isDirectory() &&
-            !f.startsWith('.') &&
-            f !== 'node_modules'
-        ) {
+        if (statSync(full).isDirectory() && !f.startsWith('.') && f !== 'node_modules') {
             results.push(...walk(full));
         } else if (['.ts', '.tsx', '.js', '.jsx', '.mjs'].includes(extname(f))) {
             results.push(full);

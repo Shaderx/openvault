@@ -1,7 +1,7 @@
 import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../../constants.js';
 import { getFingerprint } from '../../extraction/scheduler.js';
-import { _migrateEncodeBase64 } from '../../utils/embedding-codec.js';
 import { createEmptyGraph } from '../../graph/graph.js';
+import { _migrateEncodeBase64 } from '../../utils/embedding-codec.js';
 
 /**
  * Parse ST's send_date into ms timestamp.

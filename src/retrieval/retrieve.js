@@ -19,7 +19,14 @@
  * @property {Object[]} allAvailableMemories - All memories for expanded IDF corpus
  */
 
-import { CHARACTERS_KEY, COMBINED_BOOST_WEIGHT, extensionName, IMPORTANCE_5_FLOOR, MEMORIES_KEY, REFLECTION_DECAY_THRESHOLD } from '../constants.js';
+import {
+    CHARACTERS_KEY,
+    COMBINED_BOOST_WEIGHT,
+    extensionName,
+    IMPORTANCE_5_FLOOR,
+    MEMORIES_KEY,
+    REFLECTION_DECAY_THRESHOLD,
+} from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import { cachedContent } from '../injection/macros.js';

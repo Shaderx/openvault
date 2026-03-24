@@ -8,7 +8,6 @@ import { extensionName, MEMORIES_KEY, METADATA_KEY, RETRIEVAL_TIMEOUT_MS } from 
 import { getDeps } from './deps.js';
 import './settings.js'; // Side-effect import to initialize settings with lodash.merge
 import { loadFromChat as loadPerfFromChat, record } from './perf/store.js';
-import { runSchemaMigrations } from './store/migrations/index.js';
 import {
     clearGenerationLock,
     isChatLoadingCooldown,
@@ -21,6 +20,7 @@ import {
     setSessionDisabled,
 } from './state.js';
 import { getOpenVaultData } from './store/chat-data.js';
+import { runSchemaMigrations } from './store/migrations/index.js';
 import { refreshAllUI, resetMemoryBrowserPage } from './ui/render.js';
 import { setStatus } from './ui/status.js';
 import { showToast } from './utils/dom.js';

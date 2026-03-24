@@ -13,7 +13,12 @@
  *   align with existing insights (>85%).
  */
 
-import { extensionName, REFLECTION_CANDIDATE_LIMIT, REFLECTION_DEDUP_REJECT_THRESHOLD, REFLECTION_DEDUP_REPLACE_THRESHOLD } from '../constants.js';
+import {
+    extensionName,
+    REFLECTION_CANDIDATE_LIMIT,
+    REFLECTION_DEDUP_REJECT_THRESHOLD,
+    REFLECTION_DEDUP_REPLACE_THRESHOLD,
+} from '../constants.js';
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
 import { parseUnifiedReflectionResponse } from '../extraction/structured.js';

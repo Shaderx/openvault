@@ -5,7 +5,14 @@
  * Previously: ExtractionPipeline class + 5 separate stage files.
  */
 
-import { CHARACTERS_KEY, COMMUNITY_STALENESS_THRESHOLD, EDGE_DESCRIPTION_CAP, ENTITY_DESCRIPTION_CAP, extensionName, MEMORIES_KEY } from '../constants.js';
+import {
+    CHARACTERS_KEY,
+    COMMUNITY_STALENESS_THRESHOLD,
+    EDGE_DESCRIPTION_CAP,
+    ENTITY_DESCRIPTION_CAP,
+    extensionName,
+    MEMORIES_KEY,
+} from '../constants.js';
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
 import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';

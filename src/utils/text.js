@@ -2,7 +2,6 @@ import { cdnImport } from './cdn.js';
 
 const { jsonrepair } = await cdnImport('jsonrepair');
 
-import { logError, logWarn } from './logging.js';
 import { countTokens } from './tokens.js';
 
 /**
@@ -17,15 +16,18 @@ import { countTokens } from './tokens.js';
 export function normalizeText(text) {
     if (!text || typeof text !== 'string') return text;
 
-    return text
-        // Replace smart double quotes
-        .replace(/[""]/g, '"')
-        // Replace smart single quotes
-        .replace(/['']/g, "'")
-        // Strip Unicode line/paragraph separators
-        .replace(/[\u2028\u2029]/g, '')
-        // Strip unescaped control characters (preserve \n \r \t)
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+    return (
+        text
+            // Replace smart double quotes
+            .replace(/[""]/g, '"')
+            // Replace smart single quotes
+            .replace(/['']/g, "'")
+            // Strip Unicode line/paragraph separators
+            .replace(/[\u2028\u2029]/g, '')
+            // Strip unescaped control characters (preserve \n \r \t)
+            // biome-ignore lint: control character stripping is intentional
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    );
 }
 
 /**
@@ -37,7 +39,7 @@ export function normalizeText(text) {
  * @param {number} options.minSize - Minimum block size (default: 0)
  * @returns {Array<{start: number, end: number, text: string, isObject: boolean}>}
  */
-export function extractJsonBlocks(text, options = {}) {
+export function extractJsonBlocks(text, _options = {}) {
     if (!text || typeof text !== 'string') return [];
 
     const blocks = [];
@@ -375,9 +377,7 @@ export function safeParseJSON(input, options = {}) {
         // Select last substantial block
         const substantialBlocks = blocks.filter((b) => b.text.length >= minimumBlockSize);
         const selectedBlock =
-            substantialBlocks.length > 0
-                ? substantialBlocks[substantialBlocks.length - 1]
-                : blocks[blocks.length - 1]; // Fallback to last (or largest if only tiny blocks)
+            substantialBlocks.length > 0 ? substantialBlocks[substantialBlocks.length - 1] : blocks[blocks.length - 1]; // Fallback to last (or largest if only tiny blocks)
 
         const repaired = jsonrepair(selectedBlock.text);
         const parsed = JSON.parse(repaired);
@@ -397,9 +397,7 @@ export function safeParseJSON(input, options = {}) {
 
         const substantialBlocks = blocks.filter((b) => b.text.length >= minimumBlockSize);
         const selectedBlock =
-            substantialBlocks.length > 0
-                ? substantialBlocks[substantialBlocks.length - 1]
-                : blocks[blocks.length - 1];
+            substantialBlocks.length > 0 ? substantialBlocks[substantialBlocks.length - 1] : blocks[blocks.length - 1];
 
         // Apply aggressive scrubbing
         const scrubbed = scrubConcatenation(selectedBlock.text);

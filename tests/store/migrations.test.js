@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../../src/constants.js';
-import { runSchemaMigrations, CURRENT_SCHEMA_VERSION } from '../../src/store/migrations/index.js';
 import { getFingerprint } from '../../src/extraction/scheduler.js';
+import { CURRENT_SCHEMA_VERSION, runSchemaMigrations } from '../../src/store/migrations/index.js';
 
 describe('migration orchestrator', () => {
     describe('runSchemaMigrations', () => {

@@ -445,9 +445,7 @@ describe('onChatChanged migration', () => {
             [PROCESSED_MESSAGES_KEY]: [0], // v1 format: indices
             [MEMORIES_KEY]: [],
         };
-        mockContext.chat = [
-            { mes: 'Hello', is_user: true, send_date: '1000000' },
-        ];
+        mockContext.chat = [{ mes: 'Hello', is_user: true, send_date: '1000000' }];
 
         const { onChatChanged } = await import('../src/events.js');
         await onChatChanged();
@@ -465,9 +463,7 @@ describe('onChatChanged migration', () => {
         mockContext.chatMetadata[METADATA_KEY] = {
             [PROCESSED_MESSAGES_KEY]: [999], // Invalid index
         };
-        mockContext.chat = [
-            { mes: 'Hello', is_user: true, send_date: '1000000' },
-        ];
+        mockContext.chat = [{ mes: 'Hello', is_user: true, send_date: '1000000' }];
 
         const { onChatChanged } = await import('../src/events.js');
         await onChatChanged();
@@ -475,7 +471,7 @@ describe('onChatChanged migration', () => {
         // Migration should have succeeded (the v2 migration handles missing messages gracefully)
         // So we test a different scenario: data that causes actual failure
         // Let's test that session disabled flag works correctly
-        const { isSessionDisabled, setSessionDisabled } = await import('../src/state.js');
+        const { setSessionDisabled } = await import('../src/state.js');
 
         // Manually set session disabled and verify onChatChanged respects it
         setSessionDisabled(true);
@@ -507,7 +503,7 @@ describe('onChatChanged migration', () => {
         expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(2);
         // Should not show migration toast (only embedding-related toast might show)
         const optimizedToasts = mockToast.mock.calls.filter(
-            call => call[1]?.includes?.('optimized') || call[1]?.includes?.('Migration')
+            (call) => call[1]?.includes?.('optimized') || call[1]?.includes?.('Migration')
         );
         expect(optimizedToasts.length).toBe(0);
     });
@@ -559,9 +555,7 @@ describe('session disabled guards', () => {
         await onBeforeGeneration('normal', {});
 
         // Should have logged that it's skipping due to session disabled
-        const skipLog = mockConsole.log.mock.calls.find(call =>
-            call[0]?.includes?.('session disabled')
-        );
+        const skipLog = mockConsole.log.mock.calls.find((call) => call[0]?.includes?.('session disabled'));
         expect(skipLog).toBeDefined();
 
         // Reset
@@ -576,9 +570,7 @@ describe('session disabled guards', () => {
         await onMessageReceived(0);
 
         // Should have logged that it's skipping due to session disabled
-        const skipLog = mockConsole.log.mock.calls.find(call =>
-            call[0]?.includes?.('session disabled')
-        );
+        const skipLog = mockConsole.log.mock.calls.find((call) => call[0]?.includes?.('session disabled'));
         expect(skipLog).toBeDefined();
 
         // Reset

@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetDeps } from '../../src/deps.js';
 import {
+    extractJsonBlocks,
+    normalizeText,
     safeParseJSON,
+    scrubConcatenation,
     sliceToTokenBudget,
     sortMemoriesBySequence,
-    stripThinkingTags,
-    normalizeText,
     stripMarkdownFences,
-    extractJsonBlocks,
-    scrubConcatenation,
+    stripThinkingTags,
 } from '../../src/utils/text.js';
 
 describe('text', () => {
