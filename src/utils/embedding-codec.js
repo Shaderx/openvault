@@ -125,3 +125,10 @@ export function cyrb53(str, seed = 0) {
     h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
     return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }
+
+/**
+ * Export encode as _migrateEncodeBase64 for migrations only.
+ * The underscore prefix signals it's NOT part of the standard codec API.
+ * Use setEmbedding() for normal operations — this is only for v1->v2 migration.
+ */
+export { encode as _migrateEncodeBase64 };
