@@ -1,9 +1,9 @@
 import { cdnImport } from '../utils/cdn.js';
 
-const [{ jsonrepair }, { z }] = await Promise.all([cdnImport('jsonrepair'), cdnImport('zod')]);
+const { z } = await cdnImport('zod');
 
 import { logError, logWarn } from '../utils/logging.js';
-import { stripThinkingTags } from '../utils/text.js';
+import { safeParseJSON, stripMarkdownFences } from '../utils/text.js';
 
 // --- Schemas (inlined from schemas/) ---
 
@@ -85,25 +85,6 @@ function toJsonSchema(zodSchema, schemaName) {
 }
 
 /**
- * Strip markdown code blocks from content
- * Handles both ```json and ``` variants
- *
- * @param {string} content - Content that may contain markdown
- * @returns {string} Content with markdown stripped
- */
-function stripMarkdown(content) {
-    const trimmed = content.trim();
-    // Complete fences: ```json ... ```
-    const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-    if (fenceMatch) return fenceMatch[1].trim();
-    // Unclosed opening fence: ```json\n{...}
-    let result = trimmed.replace(/^```(?:json)?\s*/i, '');
-    // Orphan closing fence: {...}\n```
-    result = result.replace(/\s*```\s*$/i, '');
-    return result.trim();
-}
-
-/**
  * Parse LLM response with markdown stripping, thinking tag removal, and Zod validation
  *
  * @param {string} content - Raw LLM response
@@ -112,31 +93,22 @@ function stripMarkdown(content) {
  * @throws {Error} If JSON parsing or validation fails
  */
 function parseStructuredResponse(content, schema) {
-    // Strip thinking/reasoning tags first (models may return extended thinking)
-    const cleanedContent = stripThinkingTags(content);
-    // Then strip markdown code blocks
-    const jsonContent = stripMarkdown(cleanedContent);
-
-    let parsed;
-    try {
-        // Use jsonrepair to handle common LLM JSON issues (unescaped control chars, etc)
-        const repaired = jsonrepair(jsonContent);
-        parsed = JSON.parse(repaired);
-    } catch (e) {
-        // Show both start and end for better debugging of truncation issues
+    // Use safeParseJSON with new API (handles thinking tags and markdown internally)
+    const result = safeParseJSON(content);
+    if (!result.success) {
         const start = content.slice(0, 500);
         const end = content.slice(-500);
-        logError('JSON parse failed in structured response', e, {
+        logError('JSON parse failed in structured response', result.error, {
             rawContentStart: start,
             rawContentEnd: end,
             length: content.length,
         });
-        throw new Error(`JSON parse failed: ${e.message}`);
+        throw new Error(`JSON parse failed: ${result.error.message}`);
     }
 
-    // Array recovery — unwrap bare arrays to first element before Zod validation.
-    // LLMs occasionally return [{...}] instead of {...}. The Zod schema provides
-    // real structural validation, so permissive unwrapping here is safe.
+    let parsed = result.data;
+
+    // Array recovery — unwrap bare arrays to first element
     if (Array.isArray(parsed)) {
         if (parsed.length === 0) {
             throw new Error('LLM returned empty array');
@@ -145,12 +117,12 @@ function parseStructuredResponse(content, schema) {
         parsed = parsed[0];
     }
 
-    const result = schema.safeParse(parsed);
-    if (!result.success) {
-        throw new Error(`Schema validation failed: ${result.error.message}`);
+    const schemaResult = schema.safeParse(parsed);
+    if (!schemaResult.success) {
+        throw new Error(`Schema validation failed: ${schemaResult.error.message}`);
     }
 
-    return result.data;
+    return schemaResult.data;
 }
 
 /**
@@ -176,51 +148,45 @@ export function getGraphExtractionJsonSchema() {
  * @returns {Object} Validated event extraction response with {events}
  */
 export function parseEventExtractionResponse(content) {
-    const cleanedContent = stripThinkingTags(content);
-    const jsonContent = stripMarkdown(cleanedContent);
-
-    let parsed;
-    try {
-        const repaired = jsonrepair(jsonContent);
-        parsed = JSON.parse(repaired);
-    } catch (e) {
-        // Show both start and end for better debugging of truncation issues
+    const result = safeParseJSON(content);
+    if (!result.success) {
         const start = content.slice(0, 500);
         const end = content.slice(-500);
-        logError('JSON parse failed in event extraction', e, {
+        logError('JSON parse failed in event extraction', result.error, {
             rawContentStart: start,
             rawContentEnd: end,
             length: content.length,
         });
-        throw new Error(`JSON parse failed: ${e.message}`);
+        throw new Error(`JSON parse failed: ${result.error.message}`);
     }
 
-    // Array recovery
+    let parsed = result.data;
+
+    // Domain-specific array recovery: wrap bare arrays in events object
     if (Array.isArray(parsed)) {
+        logWarn('LLM returned bare array, wrapping in events object');
         parsed = { events: parsed };
     }
 
-    // Per-event validation: salvage valid events instead of rejecting the entire batch
+    // Per-event validation
     const rawEvents = parsed?.events;
     if (!Array.isArray(rawEvents)) {
         throw new Error('Schema validation failed: events array is missing');
     }
 
-    // Allow empty arrays as a valid successful extraction (no events found)
     if (rawEvents.length === 0) {
         return { events: [] };
     }
 
     const validEvents = [];
     for (const raw of rawEvents) {
-        const result = EventSchema.safeParse(raw);
-        if (result.success) {
-            validEvents.push(result.data);
+        const eventResult = EventSchema.safeParse(raw);
+        if (eventResult.success) {
+            validEvents.push(eventResult.data);
         }
     }
 
     if (validEvents.length === 0) {
-        // All events were invalid - return empty array (salvage behavior)
         return { events: [] };
     }
 
@@ -234,26 +200,27 @@ export function parseEventExtractionResponse(content) {
  * @returns {Object} Validated graph extraction response with {entities, relationships}
  */
 export function parseGraphExtractionResponse(content) {
-    const cleanedContent = stripThinkingTags(content);
-    const jsonContent = stripMarkdown(cleanedContent);
-
-    let parsed;
-    try {
-        const repaired = jsonrepair(jsonContent);
-        parsed = JSON.parse(repaired);
-    } catch (e) {
-        // Show both start and end for better debugging of truncation issues
+    const result = safeParseJSON(content);
+    if (!result.success) {
         const start = content.slice(0, 500);
         const end = content.slice(-500);
-        logError('JSON parse failed in graph extraction', e, {
+        logError('JSON parse failed in graph extraction', result.error, {
             rawContentStart: start,
             rawContentEnd: end,
             length: content.length,
         });
-        throw new Error(`JSON parse failed: ${e.message}`);
+        throw new Error(`JSON parse failed: ${result.error.message}`);
     }
 
-    // Per-item validation: salvage valid entities/relationships instead of rejecting the entire batch
+    let parsed = result.data;
+
+    // Domain-specific array recovery: bare arrays are entities (primary output)
+    if (Array.isArray(parsed)) {
+        logWarn('LLM returned bare array, mapping to entities');
+        parsed = { entities: parsed, relationships: [] };
+    }
+
+    // Per-item validation
     const validEntities = [];
     for (const raw of parsed?.entities || []) {
         const res = EntitySchema.safeParse(raw);
@@ -285,7 +252,7 @@ export function parseEvent(content) {
  * @returns {string}
  */
 export function _testStripMarkdown(content) {
-    return stripMarkdown(content);
+    return stripMarkdownFences(content);
 }
 
 // --- Reflection Schemas ---
