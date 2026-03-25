@@ -13,7 +13,7 @@
 
 import { cdnImport } from './cdn.js';
 
-/** @typedef {import('../types.js').LadderQueue} LadderQueue */
+/** @typedef {import('../types.d.ts').LadderQueue} LadderQueue */
 
 /** @type {typeof import('p-queue').default | null} */
 let PQueue;
