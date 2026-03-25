@@ -7,11 +7,11 @@
 
 // @ts-check
 
-/** @typedef {import('../types.js').GraphData} GraphData */
-/** @typedef {import('../types.js').GraphNode} GraphNode */
-/** @typedef {import('../types.js').GraphEdge} GraphEdge */
-/** @typedef {import('../types.js').MergeEntityResult} MergeEntityResult */
-/** @typedef {import('../types.js').ConsolidateEdgesResult} ConsolidateEdgesResult */
+/** @typedef {import('../types').GraphData} GraphData */
+/** @typedef {import('../types').GraphNode} GraphNode */
+/** @typedef {import('../types').GraphEdge} GraphEdge */
+/** @typedef {import('../types').MergeEntityResult} MergeEntityResult */
+/** @typedef {import('../types').ConsolidateEdgesResult} ConsolidateEdgesResult */
 
 import { CONSOLIDATION, ENTITY_MERGE_THRESHOLD, extensionName } from '../constants.js';
 import { getDeps } from '../deps.js';
