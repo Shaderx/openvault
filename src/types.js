@@ -174,3 +174,6 @@
  * @property {Object.<string, number>} idfMap - Serialized term -> IDF mapping
  * @property {number} avgDL - Average document length
  */
+
+// Empty export to make this file a module for JSDoc imports
+export {};
