@@ -1,12 +1,17 @@
+// @ts-check
 import { getDeps } from '../deps.js';
 import { showToast } from '../utils/dom.js';
 import { logError, logWarn } from '../utils/logging.js';
+
+/** @typedef {import('../types.js').StVectorItem} StVectorItem */
+/** @typedef {import('../types.js').StVectorQueryResult} StVectorQueryResult */
 
 // Cache of validated chats for this session (module-level state)
 const validatedChats = new Set();
 
 /**
  * Clear the validated chats cache. Used for testing.
+ * @returns {void}
  */
 export function _clearValidatedChatsCache() {
     validatedChats.clear();
@@ -198,7 +203,7 @@ export function isStVectorSource() {
 
 /**
  * Sync items to ST Vector Storage via /api/vector/insert.
- * @param {Array<{hash: number, text: string}>} items - Items to insert
+ * @param {StVectorItem[]} items - Items to insert
  * @param {string} chatId - Current chat ID
  * @returns {Promise<boolean>} True if successful
  */
@@ -296,7 +301,7 @@ export async function purgeSTCollection(chatId) {
  * @param {number} topK - Number of results
  * @param {number} threshold - Similarity threshold
  * @param {string} chatId - Current chat ID
- * @returns {Promise<Array<{id: string, hash: number, text: string}>>} Results with extracted OV IDs
+ * @returns {Promise<StVectorQueryResult[]>} Results with extracted OV IDs
  */
 export async function querySTVector(searchText, topK, threshold, chatId) {
     // Check for orphans (with session cache)
