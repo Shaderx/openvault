@@ -9,7 +9,11 @@
  * Phase 1 (event → graph extraction) is always sequential — do NOT use this there.
  */
 
+// @ts-check
+
 import { cdnImport } from './cdn.js';
+
+/** @typedef {import('../types.js').LadderQueue} LadderQueue */
 
 /** @type {typeof import('p-queue').default | null} */
 let PQueue;
@@ -31,7 +35,7 @@ function isRateLimitError(error) {
  *
  * @param {number} [maxConcurrency=1] - Absolute ceiling for parallel tasks.
  *   Defaults to 1 (sequential) to protect local/VRAM-bound LLM users.
- * @returns {Promise<{ add: Function, onIdle: Function, concurrency: number }>}
+ * @returns {Promise<LadderQueue>}
  */
 export async function createLadderQueue(maxConcurrency = 1) {
     if (!PQueue) {
