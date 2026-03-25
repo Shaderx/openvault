@@ -244,5 +244,60 @@
  * @property {boolean} [_st_synced] - ST Vector sync status
  */
 
+/**
+ * Complete OpenVault data structure from chat metadata
+ * @typedef {Object} OpenVaultData
+ * @property {number} schema_version - Data schema version (current: 2)
+ * @property {Memory[]} [memories] - Stored memory objects
+ * @property {Object.<string, CharacterData>} [characters] - Character data keyed by name
+ * @property {string[]} [processed_messages] - Message fingerprints already extracted
+ * @property {GraphData} [graph] - Entity relationship graph
+ * @property {Object.<string, CommunitySummary>} [communities] - Community summaries
+ * @property {ReflectionState} [reflection_state] - Reflection tracking
+ * @property {number} [graph_message_count] - Messages processed since last community detection
+ * @property {GlobalWorldState} [global_world_state] - Macro-level world state synthesis
+ */
+
+/**
+ * Character tracking data
+ * @typedef {Object} CharacterData
+ * @property {number} [firstSeen] - First message ID where character appeared
+ * @property {number} [lastSeen] - Most recent message ID
+ * @property {number} [mentionCount] - How many times character mentioned
+ */
+
+/**
+ * Reflection state tracking
+ * @typedef {Object} ReflectionState
+ * @property {number} [lastMessageId] - Last message processed for reflections
+ * @property {number} [reflectionCount] - Number of reflections generated
+ */
+
+/**
+ * Global world state synthesis
+ * @typedef {Object} GlobalWorldState
+ * @property {string} summary - Global narrative summary
+ * @property {number} last_updated - Message ID when last updated
+ * @property {number} community_count - Number of communities at time of synthesis
+ */
+
+/**
+ * Memory update fields for updateMemory()
+ * @typedef {Object} MemoryUpdate
+ * @property {string} [summary] - New summary text
+ * @property {number} [importance] - New importance (1-5)
+ * @property {string[]} [tags] - New tags
+ * @property {boolean} [is_secret] - Secret flag
+ */
+
+/**
+ * Community summary from GraphRAG Louvain clustering
+ * @typedef {Object} CommunitySummary
+ * @property {string} id - Community identifier
+ * @property {string} summary - Community narrative summary
+ * @property {string[]} [entities] - Entity keys in this community
+ * @property {number} [last_updated] - Message ID when last updated
+ */
+
 // Empty export to make this file a module for JSDoc imports
 export {};
