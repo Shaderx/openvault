@@ -21,6 +21,22 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **Pre-commit**: Biome lints/formats automatically. DO NOT format manually. `npm run test` uses Vitest + JSDOM.
 - **Plans Archive**: `docs/plans/` contains execution plans. Move to `docs/designs/` after completion.
 
+### Code Intelligence
+
+Prefer LSP over Grep/Glob/Read for code navigation:
+- `goToDefinition` / `goToImplementation` to jump to source
+- `findReferences` to see all usages across the codebase
+- `workspaceSymbol` to find where something is defined
+- `documentSymbol` to list all symbols in a file
+- `hover` for type info without reading the file
+- `incomingCalls` / `outgoingCalls` for call hierarchy
+
+Before refactoring, use `findReferences` to find all call sites. Use Grep/Glob only for
+text/pattern searches (comments, strings, config values) where LSP doesn't help.
+
+After writing or editing code, check LSP diagnostics before moving on. Fix any type errors
+or missing imports immediately.
+
 ## GOTCHAS & DEBUG SAUCE
 - **Empty Array Fallback**: `[] || fallback` never falls back — empty arrays are truthy. Use `array?.length > 0 ? array : fallback` when checking for populated arrays. Critical when processing LLM responses that may return empty arrays as valid schema outputs.
 - **Bucket Utilities**: `assignMemoriesToBuckets()` and `getMemoryPosition()` moved from `formatting.js` to `utils/text.js` to avoid circular deps with `scoring.js`.
