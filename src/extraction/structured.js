@@ -5,7 +5,15 @@ const { z } = await cdnImport('zod');
 import { logError, logWarn } from '../utils/logging.js';
 import { safeParseJSON, stripMarkdownFences } from '../utils/text.js';
 
-// --- Schemas (inlined from schemas/) ---
+// Import base schemas from store/schemas.js
+import {
+    BaseEntitySchema,
+    BaseRelationshipSchema,
+    EventSchema,
+    EventExtractionSchema,
+} from '../store/schemas.js';
+
+// --- Schemas Extended with .catch() Fallbacks for LLM Validation ---
 
 /**
  * Schema for relationship impact between characters
@@ -14,17 +22,9 @@ export const RelationshipImpactSchema = z.record(z.string(), z.any());
 
 /**
  * Schema for a single memory event
+ * Re-exported from store/schemas.js
  */
-export const EventSchema = z.object({
-    summary: z.string().min(20, 'Summary must be a complete descriptive sentence (min 20 characters)'),
-    importance: z.number().int().min(1).max(5).default(3),
-    characters_involved: z.array(z.string()).default([]),
-    witnesses: z.array(z.string()).default([]),
-    location: z.string().nullable().default(null),
-    is_secret: z.boolean().default(false),
-    emotional_impact: z.record(z.string(), z.any()).optional().default({}),
-    relationship_impact: RelationshipImpactSchema.optional().default({}),
-});
+export { EventSchema, EventExtractionSchema };
 
 /**
  * Schema for an entity (person, place, organization, object, or concept)
@@ -32,9 +32,9 @@ export const EventSchema = z.object({
  * invalid entries (name = "Unknown") are dropped downstream.
  */
 export const EntitySchema = z.object({
-    name: z.string().min(1).catch('Unknown').describe('Entity name, capitalized'),
-    type: z.enum(['PERSON', 'PLACE', 'ORGANIZATION', 'OBJECT', 'CONCEPT']).catch('OBJECT'),
-    description: z.string().catch('No description available').describe('Comprehensive description of the entity'),
+    name: BaseEntitySchema.shape.name.catch('Unknown').describe('Entity name, capitalized'),
+    type: BaseEntitySchema.shape.type.catch('OBJECT'),
+    description: BaseEntitySchema.shape.description.catch('No description available').describe('Comprehensive description of the entity'),
 });
 
 /**
@@ -43,16 +43,9 @@ export const EntitySchema = z.object({
  * invalid entries (source/target = "Unknown") are dropped downstream.
  */
 export const RelationshipSchema = z.object({
-    source: z.string().min(1).catch('Unknown').describe('Source entity name'),
-    target: z.string().min(1).catch('Unknown').describe('Target entity name'),
-    description: z.string().min(1).catch('No description').describe('Description of the relationship'),
-});
-
-/**
- * Schema for Stage 1: Event extraction only
- */
-export const EventExtractionSchema = z.object({
-    events: z.array(EventSchema),
+    source: BaseRelationshipSchema.shape.source.catch('Unknown').describe('Source entity name'),
+    target: BaseRelationshipSchema.shape.target.catch('Unknown').describe('Target entity name'),
+    description: BaseRelationshipSchema.shape.description.catch('No description').describe('Description of the relationship'),
 });
 
 /**
