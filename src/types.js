@@ -394,8 +394,10 @@ const EMPTY_PROMPT_CONTEXT = {};
  * Community summary from GraphRAG Louvain clustering
  * @typedef {Object} CommunitySummary
  * @property {string} id - Community identifier
+ * @property {string} title - Community title
  * @property {string} summary - Community narrative summary
  * @property {string[]} [entities] - Entity keys in this community
+ * @property {string[]} [findings] - Key findings
  * @property {number} [last_updated] - Message ID when last updated
  */
 
