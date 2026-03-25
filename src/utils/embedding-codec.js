@@ -1,11 +1,15 @@
+// @ts-check
+
 /**
  * OpenVault Embedding Codec
  *
  * Encodes/decodes embedding vectors as Base64 Float32Array strings.
  * Provides accessor functions for lazy migration from legacy number[] format.
- *
+ */
+
+/**
  * Encode a number array to a Base64 string via Float32Array.
- * @param {number[]|Float32Array} vec - Embedding vector
+ * @param {number[] | Float32Array} vec - Embedding vector
  * @returns {string} Base64-encoded string
  */
 function encode(vec) {
@@ -34,8 +38,8 @@ function decode(b64) {
 
 /**
  * Read embedding from an object. Prefers Base64 format, falls back to legacy array.
- * @param {Object} obj - Object with embedding_b64 or embedding property
- * @returns {Float32Array|null} Embedding vector or null
+ * @param {Record<string, any>} obj - Object with embedding_b64 or embedding property
+ * @returns {Float32Array | null} Embedding vector or null
  */
 export function getEmbedding(obj) {
     if (!obj) return null;
@@ -48,8 +52,9 @@ export function getEmbedding(obj) {
 
 /**
  * Write embedding to an object in Base64 format. Removes legacy key.
- * @param {Object} obj - Target object (mutated)
- * @param {number[]|Float32Array} vec - Embedding vector
+ * @param {Record<string, any>} obj - Target object (mutated)
+ * @param {number[] | Float32Array} vec - Embedding vector
+ * @returns {void}
  */
 export function setEmbedding(obj, vec) {
     obj.embedding_b64 = encode(vec);
@@ -58,7 +63,7 @@ export function setEmbedding(obj, vec) {
 
 /**
  * Check if an object has an embedding (either format).
- * @param {Object} obj - Object to check
+ * @param {Record<string, any>} obj - Object to check
  * @returns {boolean}
  */
 export function hasEmbedding(obj) {
@@ -71,7 +76,8 @@ export function hasEmbedding(obj) {
 
 /**
  * Remove embedding from an object (both formats).
- * @param {Object} obj - Object to clean (mutated)
+ * @param {Record<string, any>} obj - Object to clean (mutated)
+ * @returns {void}
  */
 export function deleteEmbedding(obj) {
     if (!obj) return;
@@ -82,7 +88,8 @@ export function deleteEmbedding(obj) {
 
 /**
  * Mark an object as synced to ST Vector Storage.
- * @param {Object} obj - Object to mark
+ * @param {Record<string, any>} obj - Object to mark
+ * @returns {void}
  */
 export function markStSynced(obj) {
     if (obj) obj._st_synced = true;
@@ -90,7 +97,7 @@ export function markStSynced(obj) {
 
 /**
  * Check if an object has been synced to ST Vector Storage.
- * @param {Object} obj - Object to check
+ * @param {Record<string, any>} obj - Object to check
  * @returns {boolean}
  */
 export function isStSynced(obj) {
@@ -100,7 +107,8 @@ export function isStSynced(obj) {
 
 /**
  * Clear ST sync flag from an object.
- * @param {Object} obj - Object to clear
+ * @param {Record<string, any>} obj - Object to clear
+ * @returns {void}
  */
 export function clearStSynced(obj) {
     if (obj) delete obj._st_synced;
@@ -132,5 +140,10 @@ export function cyrb53(str, seed = 0) {
  * Export encode as _migrateEncodeBase64 for migrations only.
  * The underscore prefix signals it's NOT part of the standard codec API.
  * Use setEmbedding() for normal operations — this is only for v1->v2 migration.
+ * @param {number[] | Float32Array} vec - Embedding vector
+ * @returns {string} Base64-encoded string
  */
-export { encode as _migrateEncodeBase64 };
+export {
+    /** @param {number[] | Float32Array} vec */
+    encode as _migrateEncodeBase64,
+};
