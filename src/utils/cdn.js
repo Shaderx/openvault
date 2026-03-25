@@ -23,6 +23,12 @@
  * 3. Add mirror: (pkg) => pkg === 'package-name' ? '/vendor/package.mjs' : null
  * 4. Filter out nulls in the import loop
  */
+
+// @ts-check
+
+/** @typedef {import('../types.js').CdnMirrorFn} CdnMirrorFn */
+
+/** @type {CdnMirrorFn[]} */
 const MIRRORS = [
     (pkg) => `https://esm.sh/${pkg}`,
     (pkg) => `https://cdn.skypack.dev/${pkg}`,
@@ -38,7 +44,7 @@ const cache = new Map();
 
 /**
  * Test-only override map. Stored on globalThis to survive vi.resetModules().
- * @type {Map<string, object>}
+ * @type {() => Map<string, object>}
  */
 const getTestOverrides = () => {
     if (!globalThis.__openvault_cdn_test_overrides) {
@@ -52,6 +58,7 @@ const getTestOverrides = () => {
  * Must be called from vitest setupFiles BEFORE source modules are imported.
  * @param {string} packageSpec
  * @param {object} mod - The module namespace object
+ * @returns {void}
  */
 export function _setTestOverride(packageSpec, mod) {
     getTestOverrides().set(packageSpec, mod);
