@@ -1,3 +1,5 @@
+// @ts-check
+
 import { CHARACTERS_KEY, MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { createEmptyGraph } from '../graph/graph.js';
@@ -7,9 +9,13 @@ import { showToast } from '../utils/dom.js';
 import { deleteEmbedding } from '../utils/embedding-codec.js';
 import { logDebug, logError, logInfo, logWarn } from '../utils/logging.js';
 
+/** @typedef {import('../types.js').OpenVaultData} OpenVaultData */
+/** @typedef {import('../types.js').Memory} Memory */
+/** @typedef {import('../types.js').MemoryUpdate} MemoryUpdate */
+
 /**
- * Get OpenVault data from chat metadata
- * @returns {Object|null} Returns null if context is not available
+ * Get OpenVault data from chat metadata.
+ * @returns {OpenVaultData | null} Returns null if context is not available
  */
 export function getOpenVaultData() {
     const context = getDeps().getContext();
@@ -38,8 +44,8 @@ export function getOpenVaultData() {
 }
 
 /**
- * Get current chat ID for tracking across async operations
- * @returns {string|null}
+ * Get current chat ID for tracking across async operations.
+ * @returns {string | null} Chat ID or null if unavailable
  */
 export function getCurrentChatId() {
     const context = getDeps().getContext();
@@ -47,7 +53,7 @@ export function getCurrentChatId() {
 }
 
 /**
- * Save OpenVault data to chat metadata
+ * Save OpenVault data to chat metadata.
  * @param {string} [expectedChatId] - If provided, verify chat hasn't changed before saving
  * @returns {Promise<boolean>} True if save succeeded, false otherwise
  */
@@ -77,17 +83,17 @@ export async function saveOpenVaultData(expectedChatId = null) {
 }
 
 /**
- * Generate a unique ID
- * @returns {string}
+ * Generate a unique ID.
+ * @returns {string} Unique ID string
  */
 export function generateId() {
-    return `${getDeps().Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `${getDeps().Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
 /**
- * Update a memory by ID
+ * Update a memory by ID.
  * @param {string} id - Memory ID to update
- * @param {Object} updates - Fields to update (summary, importance, tags, is_secret)
+ * @param {MemoryUpdate} updates - Fields to update
  * @returns {Promise<boolean>} True if updated, false otherwise
  */
 export async function updateMemory(id, updates) {
@@ -97,7 +103,7 @@ export async function updateMemory(id, updates) {
         return false;
     }
 
-    const memory = data[MEMORIES_KEY]?.find((m) => m.id === id);
+    const memory = data[MEMORIES_KEY]?.find((/** @type {Memory} */ m) => m.id === id);
     if (!memory) {
         logDebug(`Memory ${id} not found`);
         return false;
@@ -125,7 +131,7 @@ export async function updateMemory(id, updates) {
 }
 
 /**
- * Delete a memory by ID
+ * Delete a memory by ID.
  * @param {string} id - Memory ID to delete
  * @returns {Promise<boolean>} True if deleted, false otherwise
  */
@@ -136,7 +142,7 @@ export async function deleteMemory(id) {
         return false;
     }
 
-    const idx = data[MEMORIES_KEY]?.findIndex((m) => m.id === id);
+    const idx = data[MEMORIES_KEY]?.findIndex((/** @type {Memory} */ m) => m.id === id);
     if (idx === -1) {
         logDebug(`Memory ${id} not found`);
         return false;
@@ -149,7 +155,7 @@ export async function deleteMemory(id) {
 }
 
 /**
- * Delete all OpenVault data for the current chat
+ * Delete all OpenVault data for the current chat.
  * @returns {Promise<boolean>} True if deleted, false otherwise
  */
 export async function deleteCurrentChatData() {
@@ -201,8 +207,9 @@ export async function deleteCurrentChatData() {
 }
 
 /**
- * Append new memories to the store
- * @param {Array} newMemories - Memory objects to add
+ * Append new memories to the store.
+ * @param {Memory[]} newMemories - Memory objects to add
+ * @returns {void}
  */
 export function addMemories(newMemories) {
     const data = getOpenVaultData();
@@ -212,8 +219,9 @@ export function addMemories(newMemories) {
 }
 
 /**
- * Record message fingerprints as processed
- * @param {Array<string>} fingerprints - Message fingerprints to mark
+ * Record message fingerprints as processed.
+ * @param {string[]} fingerprints - Message fingerprints to mark
+ * @returns {void}
  */
 export function markMessagesProcessed(fingerprints) {
     const data = getOpenVaultData();
@@ -223,8 +231,9 @@ export function markMessagesProcessed(fingerprints) {
 }
 
 /**
- * Increment the graph message count
+ * Increment the graph message count.
  * @param {number} count - Number of messages to add
+ * @returns {void}
  */
 export function incrementGraphMessageCount(count) {
     const data = getOpenVaultData();
