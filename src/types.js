@@ -1,6 +1,19 @@
 // @ts-check
 
 /**
+ * ⚠️ DEPRECATED: This file is being replaced by src/types.d.ts
+ *
+ * The types in this file are being migrated to auto-generated TypeScript
+ * declarations from Zod schemas (src/store/schemas.js).
+ *
+ * For new code, use: import('../types.d.ts').TypeName
+ *
+ * This file will be removed in a future update once all imports are migrated.
+ *
+ * @deprecated Use src/types.d.ts instead
+ */
+
+/**
  * Core memory object stored in chatMetadata.openvault.memories
  * @typedef {Object} Memory
  * @property {string} id - Unique identifier (cyrb53 hash)
