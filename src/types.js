@@ -402,5 +402,53 @@ const _EMPTY_PROMPT_CONTEXT = {};
  * @property {number} [last_updated] - Message ID when last updated
  */
 
+/**
+ * ST Vector Storage item for insert/sync operations
+ * @typedef {Object} StVectorItem
+ * @property {number} hash - Cyrb53 hash ID
+ * @property {string} text - Text content (with optional OV_ID prefix)
+ * @property {number} [index] - Optional index field
+ */
+
+/**
+ * ST Vector Storage query result
+ * @typedef {Object} StVectorQueryResult
+ * @property {string} id - Extracted OpenVault ID or hash as string
+ * @property {number} hash - Numeric hash
+ * @property {string} text - Stored text content
+ */
+
+/**
+ * LLM configuration preset for callLLM
+ * @typedef {Object} LLMConfig
+ * @property {string} profileSettingKey - Settings key for profile selection
+ * @property {number} maxTokens - Maximum output tokens
+ * @property {string} errorContext - Error message context
+ * @property {number} timeoutMs - Request timeout in milliseconds
+ * @property {function(): Object} [getJsonSchema] - Optional function returning Zod JSON schema
+ */
+
+/**
+ * LLM call options
+ * @typedef {Object} LLMCallOptions
+ * @property {boolean} [structured] - Enable structured output with jsonSchema
+ * @property {AbortSignal} [signal] - AbortSignal for cancellation
+ * @property {string} [profileId] - Override profile ID
+ * @property {string} [backupProfileId] - Backup profile for failover
+ */
+
+/**
+ * Ladder Queue interface returned by createLadderQueue
+ * @typedef {Object} LadderQueue
+ * @property {<T>(taskFn: () => Promise<T>) => Promise<T>} add - Add task to queue
+ * @property {function(): Promise<void>} onIdle - Promise resolving when queue is idle
+ * @property {number} concurrency - Current concurrency level
+ */
+
+/**
+ * CDN mirror function type
+ * @typedef {function(string): string} CdnMirrorFn
+ */
+
 // Empty export to make this file a module for JSDoc imports
 export {};
