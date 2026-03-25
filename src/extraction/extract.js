@@ -1,3 +1,13 @@
+// @ts-check
+
+/** @typedef {import('../types.js').Memory} Memory */
+/** @typedef {import('../types.js').Entity} Entity */
+/** @typedef {import('../types.js').Relationship} Relationship */
+/** @typedef {import('../types.js').ExtractedEvent} ExtractedEvent */
+/** @typedef {import('../types.js').GraphExtraction} GraphExtraction */
+/** @typedef {import('../types.js').StSyncChanges} StSyncChanges */
+/** @typedef {import('../types.js').ExtractionOptions} ExtractionOptions */
+
 /**
  * OpenVault Extraction - Simplified Procedural Interface
  *
@@ -80,6 +90,7 @@ let lastApiCallTime = 0;
  * Accounts for elapsed time since the last call — only sleeps the remaining delta.
  * @param {Object} settings - Extension settings containing backfillMaxRPM
  * @param {string} [label='Rate limit'] - Log label
+ * @returns {Promise<void>}
  */
 async function rpmDelay(settings, label = 'Rate limit') {
     const rpm = settings.backfillMaxRPM;
@@ -98,7 +109,8 @@ async function rpmDelay(settings, label = 'Rate limit') {
 /**
  * Apply ST Vector Storage sync changes from domain function return values.
  * Handles both sync (insert) and delete operations in bulk.
- * @param {{ toSync?: Array<{hash: number, text: string, item: object}>, toDelete?: Array<{hash: number}> }} stChanges
+ * @param {StSyncChanges} stChanges
+ * @returns {Promise<void>}
  */
 async function applySyncChanges(stChanges) {
     if (!isStVectorSource()) return;
@@ -152,7 +164,6 @@ export async function hideExtractedMessages() {
 /**
  * Execute an Emergency Cut — extract all unprocessed messages and hide them.
  * Domain orchestrator with callback injection for UI updates.
- *
  * @param {Object} options
  * @param {function(string): void} [options.onWarning] - Called for non-fatal warnings
  * @param {function(string): boolean} [options.onConfirmPrompt] - Called for user confirmation; return false to cancel
@@ -161,6 +172,7 @@ export async function hideExtractedMessages() {
  * @param {function({messagesProcessed: number, eventsCreated: number, hiddenCount: number}): void} [options.onComplete] - Called on success
  * @param {function(Error, boolean): void} [options.onError] - Called on failure (error, isCancel)
  * @param {AbortSignal} [options.abortSignal] - For cancellation
+ * @returns {Promise<void>}
  */
 export async function executeEmergencyCut(options = {}) {
     const { onWarning, onConfirmPrompt, onStart, onProgress, onComplete, onError, abortSignal } = options;
@@ -671,12 +683,15 @@ async function synthesizeCommunities(data, settings, characterName, userName) {
 }
 
 /**
- * Stage 1: Call LLM for event extraction and parse the response.
- *
- * @param {Object} contextParams - Shared context (messagesText, names, charDesc, personaDesc, preamble, prefill, outputLanguage)
+ * Stage 1: Fetch events from LLM.
+ * @param {Object} contextParams - Context parameters
+ * @param {string} contextParams.messagesText
+ * @param {string} contextParams.preamble
+ * @param {string} contextParams.prefill
+ * @param {string} contextParams.outputLanguage
  * @param {Array} existingMemories - Curated memory subset for prompt context
  * @param {AbortSignal} [abortSignal] - Abort signal for mid-request cancellation
- * @returns {Promise<{events: Array}>}
+ * @returns {Promise<{events: ExtractedEvent[]}>}
  */
 async function fetchEventsFromLLM(contextParams, existingMemories, abortSignal) {
     const prompt = buildEventExtractionPrompt({
@@ -702,13 +717,11 @@ async function fetchEventsFromLLM(contextParams, existingMemories, abortSignal) 
 }
 
 /**
- * Stage 2: Call LLM for graph extraction and parse the response.
- * Graceful degradation — catches non-AbortError and returns empty arrays.
- *
- * @param {Object} contextParams - Shared context
+ * Stage 2: Fetch graph entities and relationships from LLM.
+ * @param {Object} contextParams - Context parameters
  * @param {string[]} formattedEvents - Pre-formatted event strings for the prompt
  * @param {AbortSignal} [abortSignal] - Abort signal for mid-request cancellation
- * @returns {Promise<{entities: Array, relationships: Array}>}
+ * @returns {Promise<GraphExtraction>}
  */
 async function fetchGraphFromLLM(contextParams, formattedEvents, abortSignal) {
     try {
@@ -788,13 +801,12 @@ async function enrichAndDedupEvents(rawEvents, messageIdsArray, batchId, existin
 }
 
 /**
- * Stage 4: Upsert entities and relationships into the graph, collect ST sync changes.
- *
+ * Stage 4: Process graph updates (entity upserts, relationship upserts).
  * @param {Object} graphData - Graph data object (mutated in-place)
- * @param {Array} entities - Entities from graph extraction
- * @param {Array} relationships - Relationships from graph extraction
+ * @param {Entity[]} entities - Entities from graph extraction
+ * @param {Relationship[]} relationships - Relationships from graph extraction
  * @param {Object} settings - Extension settings
- * @returns {Promise<{graphSyncChanges: {toSync: Array, toDelete: Array}}>}
+ * @returns {Promise<{graphSyncChanges: StSyncChanges}>}
  */
 async function processGraphUpdates(graphData, entities, relationships, settings) {
     const graphSyncChanges = { toSync: [], toDelete: [] };
@@ -833,14 +845,12 @@ async function processGraphUpdates(graphData, entities, relationships, settings)
 }
 
 /**
- * Extract events from chat messages
- *
+ * Extract memories from a batch of messages.
+ * Phase 1: Events + Graph extraction (critical, gates UI)
+ * Phase 2: Reflections + Communities (non-critical, deferred during backfill)
  * @param {number[]} [messageIds=null] - Optional specific message IDs for targeted extraction
  * @param {string} [targetChatId=null] - Optional chat ID to verify before saving
- * @param {Object} [options={}] - Optional configuration
- * @param {boolean} [options.silent=false] - Suppress toast notifications
- * @param {boolean} [options.isBackfill=false] - Skip Phase 2 LLM synthesis (for backfill mode)
- * @param {AbortSignal} [options.abortSignal=null] - Abort signal for cancellation
+ * @param {ExtractionOptions} [options={}] - Extraction options
  * @returns {Promise<{status: string, events_created?: number, messages_processed?: number, reason?: string}>}
  */
 export async function extractMemories(messageIds = null, targetChatId = null, options = {}) {
