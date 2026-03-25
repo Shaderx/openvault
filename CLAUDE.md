@@ -20,6 +20,8 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **Anti-Test Creep**: Strictly enforce the Test Pyramid (`tests/CLAUDE.md`). Keep orchestrator integration tests thin (3-5 tests max). Test all edge cases, JSON parsing, and math exclusively in pure-function unit tests. Use `it.each` for permutations.
 - **Pre-commit**: Biome lints/formats automatically. DO NOT format manually. `npm run test` uses Vitest + JSDOM.
 - **Plans Archive**: `docs/plans/` contains execution plans. Move to `docs/designs/` after completion.
+- **Type Generation**: Types are generated from Zod schemas via `npm run generate-types`. Run before committing type changes.
+- **Import Pattern**: Use `import('../types.d.ts').TypeName` for type imports, not `types.js`.
 
 ### Type Safety (JSDoc + @ts-check)
 - **Zero-Transpile Types**: Add `// @ts-check` to enable TypeScript checking without a build step. JSDoc comments provide IntelliSense.
@@ -76,6 +78,11 @@ or missing imports immediately.
 - `src/ui/CLAUDE.md` - jQuery UI patterns, Settings bindings, 5th Perf tab.
 - `src/utils/CLAUDE.md` - Shared utils (stemmer, stopwords).
 - `tests/CLAUDE.md` - Vitest mocking constraints via `deps.js`, `tests/perf/` suite.
+
+### Type System
+- `src/store/schemas.js` - Zod schemas (single source of truth)
+- `src/types.d.ts` - Auto-generated TypeScript declarations (run `npm run generate-types`)
+- `src/types.js` - DEPRECATED: Manual JSDoc types (being phased out)
 
 ## ARCHITECTURAL PATTERNS
 - **Settings Injection**: Domain functions receive settings via extended context objects (`queryConfig`, `scoringConfig`) instead of calling `getDeps().getExtensionSettings()` directly. Enables pure unit tests.
