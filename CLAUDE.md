@@ -82,7 +82,6 @@ or missing imports immediately.
 ### Type System
 - `src/store/schemas.js` - Zod schemas (single source of truth)
 - `src/types.d.ts` - Auto-generated TypeScript declarations (run `npm run generate-types`)
-- `src/types.js` - DEPRECATED: Manual JSDoc types (being phased out)
 
 ## ARCHITECTURAL PATTERNS
 - **Settings Injection**: Domain functions receive settings via extended context objects (`queryConfig`, `scoringConfig`) instead of calling `getDeps().getExtensionSettings()` directly. Enables pure unit tests.
