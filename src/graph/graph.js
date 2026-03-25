@@ -5,6 +5,14 @@
  * All data stored in chatMetadata.openvault.graph as { nodes, edges }.
  */
 
+// @ts-check
+
+/** @typedef {import('../types.js').GraphData} GraphData */
+/** @typedef {import('../types.js').GraphNode} GraphNode */
+/** @typedef {import('../types.js').GraphEdge} GraphEdge */
+/** @typedef {import('../types.js').MergeEntityResult} MergeEntityResult */
+/** @typedef {import('../types.js').ConsolidateEdgesResult} ConsolidateEdgesResult */
+
 import { CONSOLIDATION, ENTITY_MERGE_THRESHOLD, extensionName } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getDocumentEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
@@ -54,8 +62,8 @@ function _resolveKey(graphData, rawName) {
  * - Lowercases the name
  * - Strips possessives (e.g., "Vova's" -> "Vova")
  * - Collapses whitespace
- * @param {string} name
- * @returns {string}
+ * @param {string} name - Entity name to normalize
+ * @returns {string} Normalized key
  */
 export function normalizeKey(name) {
     return name
@@ -69,7 +77,7 @@ export function normalizeKey(name) {
  * Expand main character keys with aliases discovered in the graph.
  * Prevents alter-ego nodes from forming false secondary communities.
  * @param {string[]} baseKeys - Normalized main character keys
- * @param {Object} graphNodes - Graph nodes keyed by normalized name
+ * @param {Object.<string, GraphNode>} graphNodes - Graph nodes keyed by normalized name
  * @returns {string[]} Expanded array including alias keys
  */
 export function expandMainCharacterKeys(baseKeys, graphNodes) {
@@ -90,14 +98,8 @@ export function expandMainCharacterKeys(baseKeys, graphNodes) {
 
 /**
  * Find graph node keys that are Cyrillic transliterations of known main character names.
- * Used to expand mainCharacterKeys for community detection hairball prevention.
- *
- * Scans all PERSON-type nodes with Cyrillic names, transliterates them to Latin,
- * and checks Levenshtein distance against each base key. Distance ≤ 2 is a match
- * (handles minor transliteration variants like Сузи→Suzi vs Suzy).
- *
  * @param {string[]} baseKeys - Normalized English main character keys
- * @param {Object} graphNodes - Graph nodes keyed by normalized name
+ * @param {Object.<string, GraphNode>} graphNodes - Graph nodes keyed by normalized name
  * @returns {string[]} Cyrillic node keys matching main characters
  */
 export function findCrossScriptCharacterKeys(baseKeys, graphNodes) {
@@ -127,12 +129,12 @@ export function findCrossScriptCharacterKeys(baseKeys, graphNodes) {
 /**
  * Upsert an entity node into the flat graph structure.
  * Merges descriptions and increments mentions on duplicates.
- * Descriptions are capped at a configurable number of segments.
- * @param {Object} graphData - The graph object { nodes, edges } (mutated in place)
+ * @param {GraphData} graphData - The graph object { nodes, edges } (mutated in place)
  * @param {string} name - Entity name (original casing preserved on first insert)
  * @param {string} type - PERSON | PLACE | ORGANIZATION | OBJECT | CONCEPT
  * @param {string} description - Entity description
- * @param {number} cap - Maximum number of description segments to retain (default: 3)
+ * @param {number} [cap=3] - Maximum number of description segments to retain
+ * @returns {void}
  */
 export function upsertEntity(graphData, name, type, description, cap = 3) {
     const key = normalizeKey(name);
@@ -163,14 +165,13 @@ export function upsertEntity(graphData, name, type, description, cap = 3) {
 
 /**
  * Upsert a relationship edge. Increments weight on duplicates.
- * On duplicate edges: increments weight AND appends description if different.
- * Silently skips if source or target node doesn't exist.
- * @param {Object} graphData - The graph object { nodes, edges } (mutated in place)
+ * @param {GraphData} graphData - The graph object { nodes, edges } (mutated in place)
  * @param {string} source - Source entity name (will be normalized)
  * @param {string} target - Target entity name (will be normalized)
  * @param {string} description - Relationship description
- * @param {number} cap - Maximum number of description segments to retain (default: 5)
- * @param {Object} settings - Optional settings for consolidation behavior
+ * @param {number} [cap=5] - Maximum number of description segments to retain
+ * @param {Object} [settings=null] - Optional settings for consolidation behavior
+ * @returns {void}
  */
 export function upsertRelationship(graphData, source, target, description, cap = 5, settings = null) {
     const srcKey = _resolveKey(graphData, source);
@@ -250,7 +251,7 @@ export function markEdgeForConsolidation(graphData, edgeKey) {
 
 /**
  * Create an empty flat graph structure.
- * @returns {{ nodes: Object, edges: Object }}
+ * @returns {GraphData} Empty graph with nodes and edges objects
  */
 export function createEmptyGraph() {
     return { nodes: {}, edges: {} };
@@ -270,14 +271,11 @@ function _initGraphState(data) {
 
 /**
  * Check if two token sets have sufficient overlap to consider merging.
- * Requires at least the specified ratio (default 0.5) of tokens to overlap.
- * Substring containment is treated as a separate positive signal.
- *
  * @param {Set<string>} tokensA - First set of tokens
  * @param {Set<string>} tokensB - Second set of tokens
- * @param {number} minOverlapRatio - Minimum overlap ratio (default: 0.5)
- * @param {string} [keyA] - Original key A for substring check
- * @param {string} [keyB] - Original key B for substring check
+ * @param {number} [minOverlapRatio=0.5] - Minimum overlap ratio
+ * @param {string} [keyA=''] - Original key A for substring check
+ * @param {string} [keyB=''] - Original key B for substring check
  * @returns {boolean}
  */
 export function hasSufficientTokenOverlap(tokensA, tokensB, minOverlapRatio = 0.5, keyA = '', keyB = '') {
@@ -357,17 +355,11 @@ export function hasSufficientTokenOverlap(tokensA, tokensB, minOverlapRatio = 0.
 }
 
 /**
- * Determine if two entities should merge based on cosine similarity,
- * entity type, and optional token overlap confirmation.
- *
- * PERSON entities: High similarity alone is sufficient (names are unique identifiers).
- * OBJECT/CONCEPT/PLACE/ORGANIZATION: Always require token overlap to prevent
- * false merges when embeddings are inflated by shared context.
- *
+ * Determine if two entities should merge based on cosine similarity and token overlap.
  * @param {number} cosine - Cosine similarity between embeddings
  * @param {number} threshold - entityMergeSimilarityThreshold from settings
  * @param {Set<string>} tokensA - Word tokens from entity A's key (pre-computed)
- * @param {string} keyA - Entity A's normalized key (for LCS/substring checks)
+ * @param {string} keyA - Entity A's normalized key
  * @param {string} keyB - Entity B's normalized key
  * @param {string} [type='OBJECT'] - Entity type (PERSON, OBJECT, CONCEPT, etc.)
  * @returns {boolean}
@@ -386,18 +378,13 @@ export function shouldMergeEntities(cosine, threshold, tokensA, keyA, keyB, type
 
 /**
  * Merge-or-insert an entity with semantic deduplication.
- * Fast path: exact normalizeKey match → upsert.
- * Slow path: embed name, compare against same-type nodes, merge if similar.
- * Fallback: if embeddings unavailable, insert as new node.
- *
- * @param {Object} graphData - The graph object { nodes, edges }
+ * @param {GraphData} graphData - The graph object { nodes, edges }
  * @param {string} name - Entity name
  * @param {string} type - Entity type
  * @param {string} description - Entity description
  * @param {number} cap - Description segment cap
  * @param {Object} _settings - Extension settings
- * @param {string[]} [mainCharacterNames=[]] - Known main character names for cross-script merge
- * @returns {Promise<{key: string, stChanges: import('../../types.js').StSyncChanges}>} The key of the node and ST sync changes
+ * @returns {Promise<MergeEntityResult>} The key of the node and ST sync changes
  */
 export async function mergeOrInsertEntity(graphData, name, type, description, cap, _settings) {
     const key = normalizeKey(name);
@@ -524,10 +511,9 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
 
 /**
  * Consolidate graph edges that have exceeded token budget.
- * Runs during community detection phase.
- * @param {Object} graphData - The graph object
+ * @param {GraphData} graphData - The graph object
  * @param {Object} _settings - Extension settings
- * @returns {Promise<{count: number, stChanges: import('../types.js').StSyncChanges}>} Consolidation result
+ * @returns {Promise<ConsolidateEdgesResult>} Consolidation result
  */
 export async function consolidateEdges(graphData, _settings) {
     if (!graphData._edgesNeedingConsolidation?.length) {
