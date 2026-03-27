@@ -196,6 +196,8 @@ npm run test:extract
 npm run test:ui
 ```
 
+- **Constants Mock Sync**: When adding new constants to `src/constants.js`, check if `tests/unit/settings-ui.test.js` (or any test that mocks constants) needs the new exports added to its mock. Missing entries cause import errors.
+
 ### Pre-Commit (Full Suite)
 
 ```bash

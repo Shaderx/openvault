@@ -21,6 +21,7 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **Pre-commit**: Biome lints/formats automatically. DO NOT format manually. `npm run test` uses Vitest + JSDOM.
 - **Plans Archive**: `docs/plans/` contains execution plans. Move to `docs/designs/` after completion.
 - **Type Generation**: Types are generated from Zod schemas via `npm run generate-types`. Run before committing type changes.
+- **No Magic Strings or Orphaned Constants**: All string literals used as identifiers (entity types, embedding sources, API endpoints) and numeric thresholds used as defaults MUST be defined in `src/constants.js` and imported at use sites. Exception: JSDoc type annotations are documentation, not runtime values. Frozen objects (`Object.freeze({...})`) for enumerated sets (e.g., `ENTITY_TYPES`, `EMBEDDING_SOURCES`, `ST_API_ENDPOINTS`).
 - **Import Pattern**: Use `import('../types.d.ts').TypeName` for type imports, not `types.js`.
 
 ### Type Safety (JSDoc + @ts-check)
@@ -64,6 +65,7 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - `tests/CLAUDE.md` - Vitest mocking constraints via `deps.js`, `tests/perf/` suite.
 
 ### Type System
+- `src/constants.js` - All constants: default settings, metadata keys, frozen enums (`ENTITY_TYPES`, `EMBEDDING_SOURCES`, `ST_API_ENDPOINTS`), internal thresholds, performance metrics, BM25 parameters
 - `src/store/schemas.js` - Zod schemas (single source of truth)
 - `src/types.d.ts` - Auto-generated TypeScript declarations (run `npm run generate-types`)
 
