@@ -30,6 +30,13 @@ describe('injection settings UI', () => {
                 OLLAMA: 'ollama',
                 ST_VECTOR: 'st_vector',
             },
+            ENTITY_TYPES: {
+                PERSON: 'PERSON',
+                PLACE: 'PLACE',
+                ORGANIZATION: 'ORGANIZATION',
+                OBJECT: 'OBJECT',
+                CONCEPT: 'CONCEPT',
+            },
         }));
 
         // Mock deps.js with getContext
