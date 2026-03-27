@@ -311,6 +311,8 @@ export const CONSOLIDATION = {
     TOKEN_THRESHOLD: 150, // Trigger consolidation when description exceeds this
     MAX_CONSOLIDATION_BATCH: 10, // Max edges to consolidate per community detection run
     CONSOLIDATED_DESCRIPTION_CAP: 2, // After consolidation, cap future additions to 2 segments
+    dedupSimilarityThreshold: 0.92, // Cosine similarity threshold for intra-batch dedup fallback
+    dedupJaccardThreshold: 0.6, // Token-overlap (Jaccard) threshold for intra-batch dedup fallback
 };
 
 // Maximum number of recent memories to consider as reflection candidates.

@@ -22,8 +22,11 @@
 import {
     CHARACTERS_KEY,
     COMMUNITY_STALENESS_THRESHOLD,
+    CONSOLIDATION,
     EDGE_DESCRIPTION_CAP,
+    EMBEDDING_SOURCES,
     ENTITY_DESCRIPTION_CAP,
+    ENTITY_TYPES,
     extensionName,
     MEMORIES_KEY,
 } from '../constants.js';
@@ -257,7 +260,7 @@ export function canonicalizeEventCharNames(events, contextNames, graphNodes) {
     // Build canonical name registry: context names + all PERSON graph node names
     const canonicalNames = [...contextNames];
     for (const [, node] of Object.entries(graphNodes || {})) {
-        if (node.type === 'PERSON' && !canonicalNames.includes(node.name)) {
+        if (node.type === ENTITY_TYPES.PERSON && !canonicalNames.includes(node.name)) {
             canonicalNames.push(node.name);
         }
     }
@@ -514,7 +517,7 @@ export function selectMemoriesForExtraction(data, settings) {
  * @param {number} cosineThreshold - Cosine similarity threshold for existing memory dedup
  * @param {number} jaccardThreshold - Jaccard token similarity threshold for intra-batch dedup
  */
-export async function filterSimilarEvents(newEvents, existingMemories, cosineThreshold = 0.92, jaccardThreshold = 0.6) {
+export async function filterSimilarEvents(newEvents, existingMemories, cosineThreshold = CONSOLIDATION.dedupSimilarityThreshold, jaccardThreshold = CONSOLIDATION.dedupJaccardThreshold) {
     const t0 = performance.now();
     // Phase 1: Filter against existing memories (cosine + Jaccard cross-check)
     let filtered = newEvents;
@@ -962,7 +965,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Stamp embedding model ID on first successful embedding generation
         if (events.length > 0 && !data.embedding_model_id && events.some((e) => hasEmbedding(e))) {
             data.embedding_model_id = settings.embeddingSource;
-            if (settings.embeddingSource === 'st_vector') {
+            if (settings.embeddingSource === EMBEDDING_SOURCES.ST_VECTOR) {
                 const { stampStVectorFingerprint } = await import('../embeddings/migration.js');
                 stampStVectorFingerprint(data);
             }
