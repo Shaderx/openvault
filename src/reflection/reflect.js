@@ -18,6 +18,8 @@ import {
     REFLECTION_CANDIDATE_LIMIT,
     REFLECTION_DEDUP_REJECT_THRESHOLD,
     REFLECTION_DEDUP_REPLACE_THRESHOLD,
+    REFLECTION_MIN_MEMORIES,
+    REFLECTION_SKIP_SIMILARITY,
 } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
@@ -37,8 +39,6 @@ import { cyrb53, getEmbedding, hasEmbedding } from '../utils/embedding-codec.js'
 import { logDebug } from '../utils/logging.js';
 import { sortMemoriesBySequence } from '../utils/text.js';
 
-const REFLECTION_THRESHOLD = 40;
-
 /**
  * Check if a character has accumulated enough importance to trigger reflection.
  * @param {Object} reflectionState - Per-character accumulators
@@ -46,7 +46,7 @@ const REFLECTION_THRESHOLD = 40;
  * @param {number} threshold - Importance threshold (default: 30)
  * @returns {boolean}
  */
-export function shouldReflect(reflectionState, characterName, threshold = REFLECTION_THRESHOLD) {
+export function shouldReflect(reflectionState, characterName, threshold = REFLECTION_MIN_MEMORIES) {
     const charState = reflectionState[characterName];
     if (!charState) return false;
     return charState.importance_sum >= threshold;
@@ -147,7 +147,7 @@ export function filterDuplicateReflections(
  * @param {number} threshold - Similarity threshold for skipping (default: 0.85)
  * @returns {{shouldSkip: boolean, reason: string|null}}
  */
-export function shouldSkipReflectionGeneration(recentMemories, existingReflections, threshold = 0.85) {
+export function shouldSkipReflectionGeneration(recentMemories, existingReflections, threshold = REFLECTION_SKIP_SIMILARITY) {
     if (!recentMemories.length || !existingReflections.length) {
         return { shouldSkip: false, reason: null };
     }
@@ -246,7 +246,7 @@ export async function generateReflections(characterName, allMemories, characterS
     const { shouldSkip, reason: skipReason } = shouldSkipReflectionGeneration(
         recentEvents.slice(0, 10), // Check top 10 most recent
         existingReflections,
-        0.85
+        REFLECTION_SKIP_SIMILARITY
     );
 
     if (shouldSkip) {
