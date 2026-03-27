@@ -5,11 +5,10 @@
  * Uses graph-anchored stem matching to detect known entities.
  */
 
+import { CORPUS_GROUNDED_BOOST_RATIO, NON_GROUNDED_BOOST_RATIO } from '../constants.js';
 import { getOptimalChunkSize } from '../embeddings.js';
 import { stemName, stemWord } from '../utils/stemmer.js';
 import { tokenize } from './math.js';
-import { CORPUS_GROUNDED_BOOST_RATIO, NON_GROUNDED_BOOST_RATIO } from '../constants.js';
-
 
 /**
  * Extract entities from recent messages using graph-anchored stem matching

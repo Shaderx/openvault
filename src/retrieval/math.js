@@ -21,7 +21,6 @@ import { yieldToMain } from '../utils/st-helpers.js';
 import { stemWord } from '../utils/stemmer.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
 
-
 /**
  * Tokenize text into lowercase words, filtering stop words
  * @param {string} text - Text to tokenize

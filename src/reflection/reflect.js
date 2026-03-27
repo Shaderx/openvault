@@ -147,7 +147,11 @@ export function filterDuplicateReflections(
  * @param {number} threshold - Similarity threshold for skipping (default: 0.85)
  * @returns {{shouldSkip: boolean, reason: string|null}}
  */
-export function shouldSkipReflectionGeneration(recentMemories, existingReflections, threshold = REFLECTION_SKIP_SIMILARITY) {
+export function shouldSkipReflectionGeneration(
+    recentMemories,
+    existingReflections,
+    threshold = REFLECTION_SKIP_SIMILARITY
+) {
     if (!recentMemories.length || !existingReflections.length) {
         return { shouldSkip: false, reason: null };
     }

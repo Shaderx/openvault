@@ -517,7 +517,12 @@ export function selectMemoriesForExtraction(data, settings) {
  * @param {number} cosineThreshold - Cosine similarity threshold for existing memory dedup
  * @param {number} jaccardThreshold - Jaccard token similarity threshold for intra-batch dedup
  */
-export async function filterSimilarEvents(newEvents, existingMemories, cosineThreshold = CONSOLIDATION.dedupSimilarityThreshold, jaccardThreshold = CONSOLIDATION.dedupJaccardThreshold) {
+export async function filterSimilarEvents(
+    newEvents,
+    existingMemories,
+    cosineThreshold = CONSOLIDATION.dedupSimilarityThreshold,
+    jaccardThreshold = CONSOLIDATION.dedupJaccardThreshold
+) {
     const t0 = performance.now();
     // Phase 1: Filter against existing memories (cosine + Jaccard cross-check)
     let filtered = newEvents;

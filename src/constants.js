@@ -44,11 +44,11 @@ export const POSITION_LABELS = Object.freeze([
 
 // ============== Entity Types ==============
 export const ENTITY_TYPES = Object.freeze({
-  PERSON: 'PERSON',
-  PLACE: 'PLACE',
-  ORGANIZATION: 'ORGANIZATION',
-  OBJECT: 'OBJECT',
-  CONCEPT: 'CONCEPT',
+    PERSON: 'PERSON',
+    PLACE: 'PLACE',
+    ORGANIZATION: 'ORGANIZATION',
+    OBJECT: 'OBJECT',
+    CONCEPT: 'CONCEPT',
 });
 
 // Default settings
@@ -136,9 +136,9 @@ export const embeddingModelPrefixes = {
 
 // ============== Embedding Sources ==============
 export const EMBEDDING_SOURCES = Object.freeze({
-  LOCAL: 'local',
-  OLLAMA: 'ollama',
-  ST_VECTOR: 'st_vector',
+    LOCAL: 'local',
+    OLLAMA: 'ollama',
+    ST_VECTOR: 'st_vector',
 });
 
 // Timeout constants
@@ -331,8 +331,8 @@ export const MAIN_CHARACTER_ATTENUATION = 0.05;
 
 // ============== ST API Endpoints ==============
 export const ST_API_ENDPOINTS = Object.freeze({
-  INSERT: '/api/vector/insert',
-  DELETE: '/api/vector/delete',
-  PURGE: '/api/vector/purge',
-  QUERY: '/api/vector/query',
+    INSERT: '/api/vector/insert',
+    DELETE: '/api/vector/delete',
+    PURGE: '/api/vector/purge',
+    QUERY: '/api/vector/query',
 });

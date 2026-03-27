@@ -13,7 +13,14 @@
 /** @typedef {import('../types').MergeEntityResult} MergeEntityResult */
 /** @typedef {import('../types').ConsolidateEdgesResult} ConsolidateEdgesResult */
 
-import { CONSOLIDATION, ENTITY_MERGE_THRESHOLD, ENTITY_TOKEN_OVERLAP_MIN_RATIO, ENTITY_TYPES, extensionName, GRAPH_JACCARD_DUPLICATE_THRESHOLD } from '../constants.js';
+import {
+    CONSOLIDATION,
+    ENTITY_MERGE_THRESHOLD,
+    ENTITY_TOKEN_OVERLAP_MIN_RATIO,
+    ENTITY_TYPES,
+    extensionName,
+    GRAPH_JACCARD_DUPLICATE_THRESHOLD,
+} from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getDocumentEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import { parseConsolidationResponse } from '../extraction/structured.js';
@@ -277,7 +284,13 @@ function _initGraphState(data) {
  * @param {string} [keyB=''] - Original key B for substring check
  * @returns {boolean}
  */
-export function hasSufficientTokenOverlap(tokensA, tokensB, minOverlapRatio = ENTITY_TOKEN_OVERLAP_MIN_RATIO, keyA = '', keyB = '') {
+export function hasSufficientTokenOverlap(
+    tokensA,
+    tokensB,
+    minOverlapRatio = ENTITY_TOKEN_OVERLAP_MIN_RATIO,
+    keyA = '',
+    keyB = ''
+) {
     // 1. NEW: Stem equality — immediate merge for morphological variants
     if (keyA && keyB) {
         const stemA = stemWord(keyA);
