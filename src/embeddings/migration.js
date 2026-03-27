@@ -1,4 +1,4 @@
-import { MEMORIES_KEY } from '../constants.js';
+import { EMBEDDING_SOURCES, MEMORIES_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getSTVectorRequestBody, getSTVectorSource, purgeSTCollection } from '../services/st-vector.js';
 import { getCurrentChatId, getOpenVaultData } from '../store/chat-data.js';
@@ -130,7 +130,7 @@ export async function invalidateStaleEmbeddings(data, currentModelId) {
         if (!hasAnyEmbedding) {
             // Brand new chat — just stamp
             data.embedding_model_id = currentModelId;
-            if (currentModelId === 'st_vector') {
+            if (currentModelId === EMBEDDING_SOURCES.ST_VECTOR) {
                 stampStVectorFingerprint(data);
             }
             return 0;
@@ -140,7 +140,7 @@ export async function invalidateStaleEmbeddings(data, currentModelId) {
 
     // Same OV source — but if ST Vector, also check ST-side fingerprint
     if (data.embedding_model_id === currentModelId) {
-        if (currentModelId === 'st_vector' && _hasStVectorMismatch(data)) {
+        if (currentModelId === EMBEDDING_SOURCES.ST_VECTOR && _hasStVectorMismatch(data)) {
             // ST source/model changed — purge old collection, clear sync flags, re-sync
             const oldSource = data.st_vector_source || 'unknown';
             const oldModel = data.st_vector_model || 'unknown';
@@ -196,7 +196,7 @@ export async function invalidateStaleEmbeddings(data, currentModelId) {
     count += syncCleared;
 
     // Purge old ST collection if switching away from st_vector
-    if (oldModel === 'st_vector') {
+    if (oldModel === EMBEDDING_SOURCES.ST_VECTOR) {
         try {
             await purgeSTCollection(getCurrentChatId() || 'default');
         } catch (e) {
@@ -205,7 +205,7 @@ export async function invalidateStaleEmbeddings(data, currentModelId) {
     }
 
     data.embedding_model_id = currentModelId;
-    if (currentModelId === 'st_vector') {
+    if (currentModelId === EMBEDDING_SOURCES.ST_VECTOR) {
         stampStVectorFingerprint(data);
     }
 
