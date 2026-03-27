@@ -13,7 +13,7 @@
 /** @typedef {import('../types').MergeEntityResult} MergeEntityResult */
 /** @typedef {import('../types').ConsolidateEdgesResult} ConsolidateEdgesResult */
 
-import { CONSOLIDATION, ENTITY_MERGE_THRESHOLD, extensionName } from '../constants.js';
+import { CONSOLIDATION, ENTITY_MERGE_THRESHOLD, ENTITY_TOKEN_OVERLAP_MIN_RATIO, ENTITY_TYPES, extensionName, GRAPH_JACCARD_DUPLICATE_THRESHOLD } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getDocumentEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import { parseConsolidationResponse } from '../extraction/structured.js';
@@ -107,7 +107,7 @@ export function findCrossScriptCharacterKeys(baseKeys, graphNodes) {
     const crossScriptKeys = [];
 
     for (const [nodeKey, node] of Object.entries(graphNodes)) {
-        if (node.type !== 'PERSON') continue;
+        if (node.type !== ENTITY_TYPES.PERSON) continue;
         if (baseKeys.includes(nodeKey)) continue;
         if (!CYRILLIC_RE.test(nodeKey)) continue;
 
@@ -195,9 +195,8 @@ export function upsertRelationship(graphData, source, target, description, cap =
         existing.weight += 1;
 
         // Jaccard guard: only append if description is sufficiently different (>60% new content)
-        const JACCARD_DUPLICATE_THRESHOLD = 0.6;
         const jaccard = jaccardSimilarity(existing.description, description);
-        if (jaccard < JACCARD_DUPLICATE_THRESHOLD && !existing.description.includes(description)) {
+        if (jaccard < GRAPH_JACCARD_DUPLICATE_THRESHOLD && !existing.description.includes(description)) {
             existing.description = existing.description + ' | ' + description;
         }
         // If jaccard >= threshold, this is a near-duplicate; drop the new description
@@ -278,7 +277,7 @@ function _initGraphState(data) {
  * @param {string} [keyB=''] - Original key B for substring check
  * @returns {boolean}
  */
-export function hasSufficientTokenOverlap(tokensA, tokensB, minOverlapRatio = 0.5, keyA = '', keyB = '') {
+export function hasSufficientTokenOverlap(tokensA, tokensB, minOverlapRatio = ENTITY_TOKEN_OVERLAP_MIN_RATIO, keyA = '', keyB = '') {
     // 1. NEW: Stem equality — immediate merge for morphological variants
     if (keyA && keyB) {
         const stemA = stemWord(keyA);
@@ -366,7 +365,7 @@ export function hasSufficientTokenOverlap(tokensA, tokensB, minOverlapRatio = 0.
  */
 export function shouldMergeEntities(cosine, threshold, tokensA, keyA, keyB, type = 'OBJECT') {
     // PERSON entities: names are unique identifiers, high similarity is sufficient
-    if (type === 'PERSON' && cosine >= threshold) return true;
+    if (type === ENTITY_TYPES.PERSON && cosine >= threshold) return true;
 
     // All other types: always require token overlap confirmation
     // This prevents false merges when embeddings are inflated by shared context
@@ -399,12 +398,12 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
     // Universal cross-script merge: if this is a PERSON entity, check all existing
     // PERSON nodes for transliteration matches to prevent cross-script duplicates
     // (e.g., "Мина" vs "Mina", "Сузи" vs "Suzy").
-    if (type === 'PERSON') {
+    if (type === ENTITY_TYPES.PERSON) {
         const CYRILLIC_RE = /\p{Script=Cyrillic}/u;
         const keyIsCyrillic = CYRILLIC_RE.test(key);
 
         for (const [existingKey, node] of Object.entries(graphData.nodes)) {
-            if (node.type !== 'PERSON') continue;
+            if (node.type !== ENTITY_TYPES.PERSON) continue;
 
             const existingIsCyrillic = CYRILLIC_RE.test(existingKey);
             if (keyIsCyrillic === existingIsCyrillic) continue; // same script, skip
@@ -463,7 +462,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
         // Cross-script PERSON merge guard: if both are PERSONs in different scripts,
         // they should only merge via transliteration match (handled earlier), not semantic similarity.
         // Prevents false merges like "Alice" -> "Мария" where descriptions are similar but names are different.
-        if (type === 'PERSON') {
+        if (type === ENTITY_TYPES.PERSON) {
             const CYRILLIC_RE = /\p{Script=Cyrillic}/u;
             const keyIsCyrillic = CYRILLIC_RE.test(key);
             const existingIsCyrillic = CYRILLIC_RE.test(existingKey);
