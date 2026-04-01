@@ -256,12 +256,59 @@ async function handleDeleteChatData() {
 }
 
 /**
- * Translate all non-English memory summaries to English using the extraction LLM.
+ * Un-hide all auto-hidden messages, delete all OpenVault data, then backfill from scratch.
  */
-async function handleTranslateMemories() {
-    const { MEMORIES_KEY } = await import('../constants.js');
+async function handleResetAndBackfill() {
+    if (
+        !confirm(
+            'This will:\n' +
+            '1. Un-hide all messages that OpenVault previously hid\n' +
+            '2. Delete all OpenVault data (memories, entities, graph)\n' +
+            '3. Re-extract the entire chat from scratch\n\n' +
+            'This uses LLM API calls. Continue?'
+        )
+    ) {
+        return;
+    }
+
+    const { extractAllMessages } = await import('../extraction/extract.js');
+    const { isWorkerRunning } = await import('../extraction/worker.js');
+    if (isWorkerRunning()) {
+        showToast('warning', 'Background extraction in progress. Please wait.', 'OpenVault');
+        return;
+    }
+
+    const deps = getDeps();
+    const context = deps.getContext();
+    const chat = context.chat || [];
+
+    let unhidden = 0;
+    for (const msg of chat) {
+        if (msg.is_system && msg.mes) {
+            msg.is_system = false;
+            unhidden++;
+        }
+    }
+
+    if (unhidden > 0) {
+        logInfo(`Reset: Un-hid ${unhidden} previously hidden messages`);
+    }
+
+    await deleteCurrentChatData();
+    await deps.saveChatConditional();
+    refreshAllUI();
+
+    showToast('info', `Un-hid ${unhidden} messages. Starting full backfill...`);
+    await extractAllMessages(updateEventListeners);
+}
+
+/**
+ * Force-generate reflections for all characters, bypassing the importance threshold.
+ */
+async function handleGenerateReflections() {
+    const { CHARACTERS_KEY, MEMORIES_KEY, extensionName } = await import('../constants.js');
     const { getOpenVaultData, saveOpenVaultData } = await import('../utils/data.js');
-    const { callLLM } = await import('../llm.js');
+    const { generateReflections } = await import('../reflection/reflect.js');
 
     const data = getOpenVaultData();
     if (!data) {
@@ -270,75 +317,42 @@ async function handleTranslateMemories() {
     }
 
     const memories = data[MEMORIES_KEY] || [];
-    if (memories.length === 0) {
-        showToast('info', 'No memories to translate');
+    const characterStates = data[CHARACTERS_KEY] || {};
+    const characterNames = Object.keys(characterStates);
+
+    if (memories.length < 3) {
+        showToast('info', 'Need at least 3 memories before reflections can be generated');
         return;
     }
 
-    // Detect non-English memories by checking for non-Latin character majority
-    const nonEnglish = memories.filter((m) => {
-        if (!m.summary) return false;
-        const letters = m.summary.match(/\p{L}/gu) || [];
-        const latin = letters.filter((c) => /[a-zA-Z]/.test(c)).length;
-        return latin < letters.length * 0.5;
-    });
-
-    if (nonEnglish.length === 0) {
-        showToast('info', 'All memories appear to already be in English');
+    if (characterNames.length === 0) {
+        showToast('info', 'No characters found — extract memories first');
         return;
     }
 
-    if (!confirm(`Translate ${nonEnglish.length} non-English memories to English using your extraction LLM? This will make API calls.`)) {
-        return;
-    }
+    showToast('info', `Generating reflections for ${characterNames.length} character(s)...`);
 
-    showToast('info', `Translating ${nonEnglish.length} memories...`);
-    const BATCH_SIZE = 10;
-    let translated = 0;
-
-    for (let i = 0; i < nonEnglish.length; i += BATCH_SIZE) {
-        const batch = nonEnglish.slice(i, i + BATCH_SIZE);
-        const summaries = batch.map((m, idx) => `[${idx}] ${m.summary}`).join('\n');
-
-        const messages = [
-            {
-                role: 'system',
-                content: 'You are a precise translator. Translate the following numbered text entries to English. Preserve the numbering format exactly. Do NOT add commentary. Return ONLY the translated lines.',
-            },
-            { role: 'user', content: summaries },
-        ];
-
+    let totalNew = 0;
+    for (const name of characterNames) {
         try {
-            const result = await callLLM(messages, {
-                profileSettingKey: 'extractionProfile',
-                maxTokens: 4000,
-                errorContext: 'Translation',
-                timeoutMs: 120000,
-            });
-
-            const lines = result.split('\n').filter((l) => l.trim());
-            for (const line of lines) {
-                const match = line.match(/^\[(\d+)]\s*(.+)/);
-                if (match) {
-                    const idx = parseInt(match[1], 10);
-                    if (idx >= 0 && idx < batch.length) {
-                        batch[idx].summary = match[2].trim();
-                        translated++;
-                    }
-                }
+            const reflections = await generateReflections(name, memories, characterStates);
+            if (reflections.length > 0) {
+                data[MEMORIES_KEY].push(...reflections);
+                totalNew += reflections.length;
             }
         } catch (err) {
-            logError('Translation batch failed', err);
-            showToast('error', `Translation failed at batch ${Math.floor(i / BATCH_SIZE) + 1}: ${err.message}`);
-            break;
+            logError(`Reflection generation failed for ${name}`, err);
         }
     }
 
-    if (translated > 0) {
+    if (totalNew > 0) {
         await saveOpenVaultData();
-        showToast('success', `Translated ${translated} / ${nonEnglish.length} memories to English`);
-        refreshAllUI();
+        showToast('success', `Generated ${totalNew} new reflection(s)`);
+    } else {
+        showToast('info', 'No new reflections generated (existing insights may already cover recent events)');
     }
+
+    refreshAllUI();
 }
 
 // Define keys that should be preserved during settings reset
@@ -719,11 +733,12 @@ function bindUIElements() {
     // Action buttons
     $('#openvault_backfill_embeddings_btn').on('click', backfillEmbeddings);
     $('#openvault_extract_all_btn').on('click', handleExtractAll);
-    $('#openvault_translate_memories_btn').on('click', handleTranslateMemories);
+    $('#openvault_generate_reflections_btn').on('click', handleGenerateReflections);
 
     // Danger zone buttons
     $('#openvault_reset_settings_btn').on('click', handleResetSettings);
     $('#openvault_delete_chat_btn').on('click', handleDeleteChatData);
+    $('#openvault_reset_backfill_btn').on('click', handleResetAndBackfill);
     $('#openvault_export_debug_btn').on('click', exportToClipboard);
 
     // Memory browser pagination
