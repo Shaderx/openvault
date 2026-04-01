@@ -10,9 +10,8 @@ export default defineConfig({
         globals: true,
         include: ['tests/**/*.test.js'],
         setupFiles: ['./tests/setup.js'],
-        // Watch mode optimizations
-        watch: !process.env.CI,
-        watchExclude: ['**/node_modules/**', '**/dist/**', '**/docs/**', '**/.git/**', '**/repomix-*.md'],
+        // Watch mode disabled
+        watch: false,
         // Fail fast during development (CI runs all)
         bail: process.env.CI ? 0 : 3,
         // Reporter: verbose locally, dot in CI

@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * OpenVault Scoring Math
  *
@@ -5,23 +7,26 @@
  * Extracted for testability and reuse in both main thread and worker.
  */
 
-import { VECTOR_PASS_LIMIT } from '../constants.js';
+/** @typedef {import('../types').Memory} Memory */
+/** @typedef {import('../types').ScoredMemory} ScoredMemory */
+/** @typedef {import('../types').BM25Context} BM25Context */
+/** @typedef {import('../types').ForgetfulnessConstants} ForgetfulnessConstants */
+/** @typedef {import('../types').ScoringSettings} ScoringSettings */
+/** @typedef {import('../types').IDFCache} IDFCache */
+
+import { BM25_B, BM25_K1, VECTOR_PASS_LIMIT } from '../constants.js';
 import { record } from '../perf/store.js';
 import { getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { yieldToMain } from '../utils/st-helpers.js';
 import { stemWord } from '../utils/stemmer.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
 
-// BM25 parameters
-const BM25_K1 = 1.2;
-const BM25_B = 0.75;
-
 /**
  * Tokenize text into lowercase words, filtering stop words
  * @param {string} text - Text to tokenize
  * @returns {string[]} Array of tokens
  */
-export function tokenize(text) {
+export function tokenize(/** @type {string} */ text) {
     if (!text) return [];
     // \p{L} matches any Unicode letter (supports Cyrillic, Latin, CJK, etc.)
     // Using 'gu' flag for Unicode-aware matching
@@ -35,10 +40,10 @@ export function tokenize(text) {
  * Check if a memory contains an exact multi-word phrase (case-insensitive).
  * Normalizes whitespace and strips punctuation for matching.
  * @param {string} phrase - Multi-word phrase to find (must contain space)
- * @param {Object} memory - Memory object with summary field
+ * @param {Memory} memory - Memory object with summary field
  * @returns {boolean} True if exact phrase found in memory
  */
-export function hasExactPhrase(phrase, memory) {
+export function hasExactPhrase(/** @type {string} */ phrase, /** @type {Memory} */ memory) {
     if (!phrase || !memory?.summary) return false;
 
     // Only handle multi-word phrases
@@ -61,11 +66,11 @@ export function hasExactPhrase(phrase, memory) {
 
 /**
  * Calculate IDF scores and average document length for a corpus
- * @param {Object[]} memories - Memories to analyze
- * @param {Map} tokenizedMemories - Map of memory index to tokens
- * @returns {{idfMap: Map<string, number>, avgDL: number}}
+ * @param {Memory[]} memories - Memories to analyze
+ * @param {Map<number, string[]>} tokenizedMemories - Map of memory index to tokens
+ * @returns {BM25Context} IDF map and average document length
  */
-export function calculateIDF(memories, tokenizedMemories) {
+export function calculateIDF(/** @type {Memory[]} */ memories, /** @type {Map<number, string[]>} */ tokenizedMemories) {
     const N = memories.length;
     const df = new Map(); // Document frequency for each term
     let totalDL = 0;
@@ -95,11 +100,15 @@ export function calculateIDF(memories, tokenizedMemories) {
  * Reduces repeated tokens proportional to their IDF to prevent corpus-common
  * entity tokens (e.g. main character name) from inflating scores.
  * @param {string[]} queryTokens - Original query tokens (may have repeats)
- * @param {Map} idfMap - Precomputed IDF scores
+ * @param {Map<string, number>} idfMap - Precomputed IDF scores
  * @param {number} totalDocs - Total number of documents (memories)
  * @returns {string[]} Adjusted query tokens with TF scaled by IDF
  */
-function adjustQueryTokensByIDF(queryTokens, idfMap, totalDocs) {
+function adjustQueryTokensByIDF(
+    /** @type {string[]} */ queryTokens,
+    /** @type {Map<string, number>} */ idfMap,
+    /** @type {number} */ totalDocs
+) {
     if (!queryTokens || queryTokens.length === 0 || !idfMap) return queryTokens;
 
     const maxIDF = Math.log(totalDocs + 1); // IDF when df=0 (corpus-unique)
@@ -128,11 +137,16 @@ function adjustQueryTokensByIDF(queryTokens, idfMap, totalDocs) {
  * Calculate BM25 score for a document against a query
  * @param {string[]} queryTokens - Tokenized query
  * @param {string[]} docTokens - Tokenized document
- * @param {Map} idfMap - Precomputed IDF scores
+ * @param {Map<string, number>} idfMap - Precomputed IDF scores
  * @param {number} avgDL - Average document length
  * @returns {number} BM25 score
  */
-function bm25Score(queryTokens, docTokens, idfMap, avgDL) {
+function bm25Score(
+    /** @type {string[]} */ queryTokens,
+    /** @type {string[]} */ docTokens,
+    /** @type {Map<string, number>} */ idfMap,
+    /** @type {number} */ avgDL
+) {
     const docLen = docTokens.length;
     if (docLen === 0 || queryTokens.length === 0 || avgDL === 0) return 0;
 
@@ -216,15 +230,22 @@ export function rankToProxyScore(rank, totalResults) {
 
 /**
  * Calculate memory score based on forgetfulness curve, vector similarity, and BM25
- * @param {Object} memory - Memory object with message_ids, importance, embedding
- * @param {Float32Array|null} contextEmbedding - Context embedding for similarity
+ * @param {Memory} memory - Memory object with message_ids, importance, embedding
+ * @param {Float32Array|number[]|null} contextEmbedding - Context embedding for similarity
  * @param {number} chatLength - Current chat length
- * @param {Object} constants - Scoring constants (BASE_LAMBDA, IMPORTANCE_5_FLOOR)
- * @param {Object} settings - Scoring settings (vectorSimilarityThreshold, alpha, combinedBoostWeight)
+ * @param {ForgetfulnessConstants} constants - Scoring constants
+ * @param {ScoringSettings} settings - Scoring settings
  * @param {number} [bm25Score] - Precomputed BM25 score
- * @returns {{total: number, base: number, baseAfterFloor: number, recencyPenalty: number, vectorBonus: number, vectorSimilarity: number, bm25Bonus: number, bm25Score: number, distance: number, importance: number}} Score breakdown
+ * @returns {ScoredMemory['breakdown']} Score breakdown object
  */
-export function calculateScore(memory, contextEmbedding, chatLength, constants, settings, bm25Score = 0) {
+export function calculateScore(
+    /** @type {Memory} */ memory,
+    /** @type {Float32Array|number[]|null} */ contextEmbedding,
+    /** @type {number} */ chatLength,
+    /** @type {ForgetfulnessConstants} */ constants,
+    /** @type {ScoringSettings} */ settings,
+    /** @type {number} */ bm25Score = 0
+) {
     // === Forgetfulness Curve ===
     // Use message distance (narrative time) instead of timestamp
     const messageIds = memory.message_ids || [0];
@@ -327,27 +348,27 @@ export function calculateScore(memory, contextEmbedding, chatLength, constants, 
 
 /**
  * Score and sort memories using forgetfulness curve + vector similarity + BM25
- * @param {Object[]} memories - Memories to score
- * @param {Float32Array|null} contextEmbedding - Context embedding
+ * @param {Memory[]} memories - Memories to score
+ * @param {Float32Array|number[]|null} contextEmbedding - Context embedding
  * @param {number} chatLength - Current chat length
- * @param {Object} constants - Scoring constants
- * @param {Object} settings - Scoring settings
+ * @param {ForgetfulnessConstants} constants - Scoring constants
+ * @param {ScoringSettings} settings - Scoring settings
  * @param {string|string[]} [queryTokens] - Query text or pre-tokenized array for BM25 scoring
  * @param {string[]} [characterNames] - Main character names to filter from query tokens (dynamic stopwords)
- * @param {Object[]} [hiddenMemories] - Hidden memories for IDF corpus expansion
- * @param {Object|null} [idfCache] - Pre-computed IDF cache from chatMetadata.openvault.idf_cache
- * @returns {Promise<Array<{memory: Object, score: number, breakdown: Object}>>} Scored and sorted memories
+ * @param {Memory[]} [hiddenMemories] - Hidden memories for IDF corpus expansion
+ * @param {IDFCache|null} [idfCache] - Pre-computed IDF cache from chatMetadata.openvault.idf_cache
+ * @returns {Promise<ScoredMemory[]>} Scored and sorted memories
  */
 export async function scoreMemories(
-    memories,
-    contextEmbedding,
-    chatLength,
-    constants,
-    settings,
-    queryTokens,
-    characterNames = [],
-    hiddenMemories = [],
-    idfCache = null
+    /** @type {Memory[]} */ memories,
+    /** @type {Float32Array|number[]|null} */ contextEmbedding,
+    /** @type {number} */ chatLength,
+    /** @type {ForgetfulnessConstants} */ constants,
+    /** @type {ScoringSettings} */ settings,
+    /** @type {string|string[]} */ queryTokens,
+    /** @type {string[]} */ characterNames = [],
+    /** @type {Memory[]} */ hiddenMemories = [],
+    /** @type {IDFCache|null} */ idfCache = null
 ) {
     const start = performance.now();
 

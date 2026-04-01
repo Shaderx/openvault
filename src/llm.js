@@ -5,6 +5,8 @@
  * Prompts must be arrays of message objects with System/User roles.
  */
 
+// @ts-check
+
 import { extensionName } from './constants.js';
 import { getDeps } from './deps.js';
 import {
@@ -19,11 +21,16 @@ import { showToast } from './utils/dom.js';
 import { logDebug, logError, logRequest } from './utils/logging.js';
 import { withTimeout } from './utils/st-helpers.js';
 
+/** @typedef {import('./types.d.ts').LLMConfig} LLMConfig */
+/** @typedef {import('./types.d.ts').LLMCallOptions} LLMCallOptions */
+/** @typedef {import('./types.d.ts').LLMMessages} LLMMessages */
+
 /**
  * Race a promise against an AbortSignal.
- * @param {Promise} promise - The promise to race
+ * @template T
+ * @param {Promise<T>} promise - The promise to race
  * @param {AbortSignal} signal - The signal to watch
- * @returns {Promise} Resolves/rejects with the first to settle
+ * @returns {Promise<T>} Resolves/rejects with the first to settle
  */
 function raceAbort(promise, signal) {
     if (!signal) return promise;
@@ -90,10 +97,9 @@ export const LLM_CONFIGS = {
 
 /**
  * Call LLM with messages array
- * @param {Array<{role: string, content: string}>} messages - Array of message objects
- * @param {Object} config - Request configuration from LLM_CONFIGS
- * @param {Object} options - Optional parameters
- * @param {boolean} options.structured - Enable structured output with jsonSchema
+ * @param {LLMMessages} messages - Array of message objects
+ * @param {LLMConfig} config - Request configuration from LLM_CONFIGS
+ * @param {LLMCallOptions} [options] - Optional parameters
  * @returns {Promise<string>} The LLM response content
  * @throws {Error} If the LLM call fails or no profile is available
  */
@@ -106,7 +112,7 @@ export async function callLLM(messages, config, options = {}) {
     const settings = extension_settings[extensionName];
 
     // Get profile ID - use specified profile or fall back to currently selected
-    let profileId = settings[profileSettingKey];
+    let profileId = options.profileId ?? settings[profileSettingKey];
 
     if (!profileId) {
         profileId = extension_settings?.connectionManager?.selectedProfile;
@@ -171,7 +177,7 @@ export async function callLLM(messages, config, options = {}) {
         if (mainError.name === 'AbortError') throw mainError;
 
         // Attempt backup profile if configured and different from main
-        const backupProfileId = settings.backupProfile;
+        const backupProfileId = options.backupProfileId ?? settings.backupProfile;
         if (backupProfileId && backupProfileId !== profileId) {
             const profiles = extension_settings?.connectionManager?.profiles || [];
             const backupName = profiles.find((p) => p.id === backupProfileId)?.name || backupProfileId;

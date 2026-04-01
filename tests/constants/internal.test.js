@@ -45,7 +45,7 @@ describe('Internal Constants', () => {
         expect(IMPORTANCE_5_FLOOR).toBe(5);
     });
 
-    it('exports ENTITY_MERGE_THRESHOLD as 0.80', () => {
-        expect(ENTITY_MERGE_THRESHOLD).toBe(0.8);
+    it('exports ENTITY_MERGE_THRESHOLD as 0.90', () => {
+        expect(ENTITY_MERGE_THRESHOLD).toBe(0.9);
     });
 });

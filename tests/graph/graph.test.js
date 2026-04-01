@@ -3,19 +3,28 @@ import { defaultSettings, extensionName } from '../../src/constants.js';
 import { getDocumentEmbedding } from '../../src/embeddings.js';
 import {
     consolidateEdges,
-    consolidateGraph,
     createEmptyGraph,
     expandMainCharacterKeys,
     findCrossScriptCharacterKeys,
-    initGraphState,
     markEdgeForConsolidation,
     mergeOrInsertEntity,
     normalizeKey,
-    redirectEdges,
     shouldMergeEntities,
     upsertEntity,
     upsertRelationship,
 } from '../../src/graph/graph.js';
+
+describe('dead code removal', () => {
+    it('consolidateGraph is no longer exported', async () => {
+        const exports = await import('../../src/graph/graph.js');
+        expect(exports.consolidateGraph).toBeUndefined();
+    });
+
+    it('redirectEdges is no longer exported', async () => {
+        const exports = await import('../../src/graph/graph.js');
+        expect(exports.redirectEdges).toBeUndefined();
+    });
+});
 
 // Mock embeddings module
 vi.mock('../../src/embeddings.js', () => ({
@@ -79,6 +88,7 @@ vi.mock('../../src/utils/embedding-codec.js', () => ({
             delete obj.embedding_b64;
         }
     }),
+    cyrb53: vi.fn((str) => str.length),
 }));
 
 describe('upsertEntity', () => {
@@ -323,32 +333,6 @@ describe('createEmptyGraph', () => {
     });
 });
 
-describe('initGraphState', () => {
-    it('initializes graph, communities, reflection_state, and graph_message_count on openvault data', () => {
-        const data = { memories: [], character_states: {} };
-        initGraphState(data);
-        expect(data.graph).toEqual({ nodes: {}, edges: {} });
-        expect(data.communities).toEqual({});
-        expect(data.reflection_state).toEqual({});
-        expect(data.graph_message_count).toBe(0);
-    });
-
-    it('does not overwrite existing graph data', () => {
-        const data = {
-            memories: [],
-            graph: { nodes: { castle: { name: 'Castle' } }, edges: {} },
-            communities: { C0: { title: 'Test' } },
-            reflection_state: { 'King Aldric': { importance_sum: 15 } },
-            graph_message_count: 42,
-        };
-        initGraphState(data);
-        expect(data.graph.nodes.castle.name).toBe('Castle');
-        expect(data.communities.C0.title).toBe('Test');
-        expect(data.reflection_state['King Aldric'].importance_sum).toBe(15);
-        expect(data.graph_message_count).toBe(42);
-    });
-});
-
 describe('mergeOrInsertEntity', () => {
     let graphData;
     const mockSettings = { entityMergeSimilarityThreshold: 0.8 };
@@ -363,8 +347,10 @@ describe('mergeOrInsertEntity', () => {
         getDocumentEmbedding.mockResolvedValue(null);
 
         upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
-        const key = await mergeOrInsertEntity(graphData, 'castle', 'PLACE', 'Updated', 3, mockSettings);
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'castle', 'PLACE', 'Updated', 3, mockSettings);
         expect(key).toBe('castle');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.castle.mentions).toBe(2);
         expect(Object.keys(graphData.nodes)).toHaveLength(1);
     });
@@ -376,22 +362,34 @@ describe('mergeOrInsertEntity', () => {
         upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
         graphData.nodes.castle.embedding = [1, 0, 0];
 
-        const key = await mergeOrInsertEntity(graphData, 'Dragon', 'PERSON', 'A beast', 3, mockSettings);
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'Dragon', 'PERSON', 'A beast', 3, mockSettings);
         expect(key).toBe('dragon');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(Object.keys(graphData.nodes)).toHaveLength(2);
     });
 
-    it('merges into existing node when semantic similarity exceeds threshold', async () => {
+    it('merges into existing node when semantic similarity exceeds threshold (PERSON)', async () => {
         const { getDocumentEmbedding } = await import('../../src/embeddings.js');
         // Return very similar embedding for "Vova's Apartment"
         getDocumentEmbedding.mockResolvedValue([0.9, 0.1, 0]);
 
-        upsertEntity(graphData, "Vova's House", 'PLACE', 'Home');
-        graphData.nodes['vova house'].embedding = [0.9, 0.1, 0];
+        upsertEntity(graphData, 'Dragon', 'PERSON', 'A creature');
+        graphData.nodes.dragon.embedding = [0.9, 0.1, 0];
 
-        const key = await mergeOrInsertEntity(graphData, "Vova's Apartment", 'PLACE', 'Flat', 3, mockSettings);
-        expect(key).toBe('vova house');
-        expect(graphData.nodes['vova house'].mentions).toBe(2);
+        const { key, stChanges } = await mergeOrInsertEntity(
+            graphData,
+            'Draco',
+            'PERSON',
+            'Another name',
+            3,
+            mockSettings
+        );
+        // PERSON can merge on high similarity alone (names are unique identifiers)
+        expect(key).toBe('dragon');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
+        expect(graphData.nodes.dragon.mentions).toBe(2);
         expect(Object.keys(graphData.nodes)).toHaveLength(1);
     });
 
@@ -402,9 +400,18 @@ describe('mergeOrInsertEntity', () => {
         upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
         graphData.nodes.castle.embedding = [1, 0, 0];
 
-        const key = await mergeOrInsertEntity(graphData, 'Castle', 'PERSON', 'A person named Castle', 3, mockSettings);
+        const { key, stChanges } = await mergeOrInsertEntity(
+            graphData,
+            'Castle',
+            'PERSON',
+            'A person named Castle',
+            3,
+            mockSettings
+        );
         // Fast-path key match fires first regardless of type
         expect(key).toBe('castle');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.castle.type).toBe('PLACE'); // Original type preserved
     });
 
@@ -413,8 +420,17 @@ describe('mergeOrInsertEntity', () => {
         getDocumentEmbedding.mockResolvedValue(null);
 
         upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
-        const key = await mergeOrInsertEntity(graphData, 'Fortress', 'PLACE', 'A stronghold', 3, mockSettings);
+        const { key, stChanges } = await mergeOrInsertEntity(
+            graphData,
+            'Fortress',
+            'PLACE',
+            'A stronghold',
+            3,
+            mockSettings
+        );
         expect(key).toBe('fortress');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(Object.keys(graphData.nodes)).toHaveLength(2);
     });
 
@@ -452,12 +468,14 @@ describe('mergeOrInsertEntity', () => {
         };
 
         // Act: insert Cyrillic variant — universal cross-script merge
-        const key = await mergeOrInsertEntity(graphData, 'Сузи', 'PERSON', 'Главная героиня', 3, {
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'Сузи', 'PERSON', 'Главная героиня', 3, {
             entityMergeSimilarityThreshold: 0.95,
         });
 
         // Assert: merged into existing English node
         expect(key).toBe('suzy');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.suzy.description).toContain('Главная героиня');
         expect(graphData.nodes.suzy.aliases).toContain('Сузи');
         expect(graphData.nodes.сузи).toBeUndefined();
@@ -474,23 +492,27 @@ describe('mergeOrInsertEntity', () => {
         };
 
         // Insert a Cyrillic OBJECT — should NOT merge into Suzy even if name matches
-        const key = await mergeOrInsertEntity(graphData, 'Сузи', 'OBJECT', 'Some object named Сузи', 3, {
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'Сузи', 'OBJECT', 'Some object named Сузи', 3, {
             entityMergeSimilarityThreshold: 0.95,
         });
 
         // Should create a new node, not merge
         expect(key).toBe('сузи');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.сузи).toBeDefined();
     });
 
     it('creates new node when no existing PERSON nodes match cross-script', async () => {
         // No existing PERSON nodes in graph, so no cross-script match possible
-        const key = await mergeOrInsertEntity(graphData, 'Сузи', 'PERSON', 'Some person', 3, {
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'Сузи', 'PERSON', 'Some person', 3, {
             entityMergeSimilarityThreshold: 0.95,
         });
 
         // Creates new node since no existing PERSON nodes to match against
         expect(key).toBe('сузи');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.сузи).toBeDefined();
     });
 
@@ -504,12 +526,14 @@ describe('mergeOrInsertEntity', () => {
         };
 
         // Act: insert Cyrillic "Мина" — no mainCharacterNames needed
-        const key = await mergeOrInsertEntity(graphData, 'Мина', 'PERSON', 'Подруга', 3, {
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'Мина', 'PERSON', 'Подруга', 3, {
             entityMergeSimilarityThreshold: 0.95,
         });
 
         // Assert: merged into existing Latin node
         expect(key).toBe('mina');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.mina.aliases).toContain('Мина');
         expect(graphData.nodes.мина).toBeUndefined();
         expect(graphData._mergeRedirects?.мина).toBe('mina');
@@ -525,12 +549,14 @@ describe('mergeOrInsertEntity', () => {
         };
 
         // Act: insert Latin "Mina"
-        const key = await mergeOrInsertEntity(graphData, 'Mina', 'PERSON', 'A friend', 3, {
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'Mina', 'PERSON', 'A friend', 3, {
             entityMergeSimilarityThreshold: 0.95,
         });
 
         // Assert: merged into existing Cyrillic node (first-inserted wins)
         expect(key).toBe('мина');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.мина.aliases).toContain('Mina');
         expect(graphData.nodes.mina).toBeUndefined();
         expect(graphData._mergeRedirects?.mina).toBe('мина');
@@ -547,12 +573,14 @@ describe('mergeOrInsertEntity', () => {
         };
 
         // Act: try to insert Cyrillic "Мама" (Mama) - distance 2 from "kaya"
-        const key = await mergeOrInsertEntity(graphData, 'Мама', 'PERSON', 'Mother', 3, {
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'Мама', 'PERSON', 'Mother', 3, {
             entityMergeSimilarityThreshold: 0.95,
         });
 
         // Assert: should NOT merge - distance 2 exceeds stricter threshold (1) for short names
         expect(key).toBe('мама');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.мама).toBeDefined();
         expect(graphData.nodes.kaya.aliases).toBeUndefined();
     });
@@ -566,12 +594,14 @@ describe('mergeOrInsertEntity', () => {
             mentions: 5,
         };
 
-        const key = await mergeOrInsertEntity(graphData, 'Мина', 'PERSON', 'Подруга', 3, {
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'Мина', 'PERSON', 'Подруга', 3, {
             entityMergeSimilarityThreshold: 0.95,
         });
 
         // Distance 0 should always match
         expect(key).toBe('mina');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.mina.aliases).toContain('Мина');
     });
 
@@ -584,64 +614,102 @@ describe('mergeOrInsertEntity', () => {
             mentions: 10,
         };
 
-        const key = await mergeOrInsertEntity(graphData, 'Элизабет', 'PERSON', 'Королева', 3, {
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'Элизабет', 'PERSON', 'Королева', 3, {
             entityMergeSimilarityThreshold: 0.95,
         });
 
         // Distance 1 should match for longer names (threshold ≤2)
         expect(key).toBe('elizabeth');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
         expect(graphData.nodes.elizabeth.aliases).toContain('Элизабет');
     });
-});
 
-describe('redirectEdges', () => {
-    let graphData;
+    it('does NOT merge cross-script PERSON entities via semantic similarity alone', async () => {
+        // Regression test: "Alice" (Latin) and "Боб" (Cyrillic Bob) should NOT merge
+        // even if embeddings are nearly identical (similar descriptions).
+        // Cross-script PERSON merges should ONLY happen via transliteration match.
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
 
-    beforeEach(() => {
-        graphData = { nodes: {}, edges: {} };
-        upsertEntity(graphData, 'Alice', 'PERSON', 'A');
-        upsertEntity(graphData, 'Bob', 'PERSON', 'B');
-        upsertEntity(graphData, 'Castle', 'PLACE', 'C');
+        // Setup: existing Cyrillic PERSON with embedding
+        graphData.nodes.мария = {
+            name: 'Мария',
+            type: 'PERSON',
+            description: 'A character involved in roleplay dynamics',
+            mentions: 10,
+        };
+        graphData.nodes.мария.embedding_b64 = 'AAAAAPo/AAAAAA'; // mock embedding
+
+        // Mock embedding to return nearly identical vector (simulating similar descriptions)
+        getDocumentEmbedding.mockResolvedValue([1.0, 0.9, 0.8]);
+
+        // Act: insert Latin "Rose" - different name, different script, similar description
+        const { key, stChanges } = await mergeOrInsertEntity(
+            graphData,
+            'Rose',
+            'PERSON',
+            'A character involved in similar roleplay dynamics',
+            3,
+            mockSettings
+        );
+
+        // Assert: should NOT merge - different scripts without transliteration match
+        expect(key).toBe('rose');
+        expect(graphData.nodes.rose).toBeDefined();
+        expect(graphData.nodes.мария.aliases).toBeUndefined(); // Rose not added as alias
+        expect(stChanges.toSync).toHaveLength(1); // New node created
     });
 
-    it('redirects edges from old key to new key', () => {
-        upsertRelationship(graphData, 'Bob', 'Castle', 'Lives in');
-        redirectEdges(graphData, 'bob', 'alice');
-        expect(graphData.edges.alice__castle).toBeDefined();
-        expect(graphData.edges.alice__castle.description).toBe('Lives in');
-        expect(graphData.edges.bob__castle).toBeUndefined();
+    it('returns stChanges.toSync with new node when creating a new entity', async () => {
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+        getDocumentEmbedding.mockResolvedValue([0.5, 0.5, 0.5]);
+
+        const { key, stChanges } = await mergeOrInsertEntity(
+            graphData,
+            'Dragon',
+            'PERSON',
+            'A fire beast',
+            3,
+            mockSettings
+        );
+        expect(key).toBe('dragon');
+        expect(stChanges.toSync).toHaveLength(1);
+        expect(stChanges.toSync[0].text).toBe('[OV_ID:dragon] A fire beast');
+        expect(stChanges.toSync[0].item).toBe(graphData.nodes.dragon);
+        expect(stChanges.toSync[0].hash).toBeDefined();
+        expect(stChanges.toDelete).toHaveLength(0);
     });
 
-    it('merges edge descriptions when redirect creates a duplicate', () => {
-        upsertRelationship(graphData, 'Alice', 'Castle', 'Rules from');
-        upsertRelationship(graphData, 'Bob', 'Castle', 'Visits often');
-        redirectEdges(graphData, 'bob', 'alice');
-        expect(graphData.edges.alice__castle.description).toContain('Rules from');
-        expect(graphData.edges.alice__castle.description).toContain('Visits often');
-        expect(graphData.edges.bob__castle).toBeUndefined();
+    it('returns empty stChanges on fast path (exact key match)', async () => {
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+        getDocumentEmbedding.mockResolvedValue(null);
+
+        upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
+        const { key, stChanges } = await mergeOrInsertEntity(graphData, 'castle', 'PLACE', 'Updated', 3, mockSettings);
+        expect(key).toBe('castle');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
     });
 
-    it('handles edges where old key is the target', () => {
-        upsertRelationship(graphData, 'Castle', 'Bob', 'Contains');
-        redirectEdges(graphData, 'bob', 'alice');
-        expect(graphData.edges.castle__alice).toBeDefined();
-        expect(graphData.edges.castle__bob).toBeUndefined();
-    });
+    it('returns empty stChanges on semantic merge path (existing node updated)', async () => {
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+        getDocumentEmbedding.mockResolvedValue([0.9, 0.1, 0]);
 
-    it('does nothing when no edges reference old key', () => {
-        upsertRelationship(graphData, 'Alice', 'Castle', 'Rules from');
-        const edgesBefore = { ...graphData.edges };
-        redirectEdges(graphData, 'bob', 'alice');
-        expect(graphData.edges).toEqual(edgesBefore);
-    });
+        upsertEntity(graphData, 'Dragon', 'PERSON', 'A creature');
+        graphData.nodes.dragon.embedding = [0.9, 0.1, 0];
 
-    it('removes self-loops after redirection', () => {
-        upsertEntity(graphData, 'Charlie', 'PERSON', 'C');
-        upsertRelationship(graphData, 'Charlie', 'Bob', 'Knows');
-        redirectEdges(graphData, 'bob', 'charlie');
-        // Edge would become charlie__charlie (self-loop), should be removed
-        expect(graphData.edges.charlie__charlie).toBeUndefined();
-        expect(graphData.edges.charlie__bob).toBeUndefined();
+        const { key, stChanges } = await mergeOrInsertEntity(
+            graphData,
+            'Draco',
+            'PERSON',
+            'Another name',
+            3,
+            mockSettings
+        );
+        // PERSON can merge on high similarity alone
+        expect(key).toBe('dragon');
+        expect(stChanges.toSync).toHaveLength(0);
+        expect(stChanges.toDelete).toHaveLength(0);
     });
 });
 
@@ -649,12 +717,12 @@ describe('edge creation with semantic merge', () => {
     it('creates edges using resolved keys after mergeOrInsertEntity', async () => {
         const { getDocumentEmbedding } = await import('../../src/embeddings.js');
 
-        // Setup: "vova apartment" already exists with embedding
+        // Setup: "dragon" already exists with embedding (PERSON type)
         const graphData = createEmptyGraph();
-        graphData.nodes['vova apartment'] = {
-            name: "Vova's Apartment",
-            type: 'PLACE',
-            description: 'An apartment',
+        graphData.nodes.dragon = {
+            name: 'Dragon',
+            type: 'PERSON',
+            description: 'A character',
             mentions: 5,
             embedding: [1, 0, 0],
         };
@@ -665,23 +733,30 @@ describe('edge creation with semantic merge', () => {
             mentions: 10,
         };
 
-        // Mock: "Vova's Room" embeds to something very similar to "Vova's Apartment"
+        // Mock: "Draco" embeds to something very similar to "dragon"
         getDocumentEmbedding.mockResolvedValue([0.99, 0.1, 0]);
 
         const settings = { entityMergeSimilarityThreshold: 0.8 };
 
-        // mergeOrInsertEntity should merge "Vova's Room" into "vova apartment"
-        const resolvedKey = await mergeOrInsertEntity(graphData, "Vova's Room", 'PLACE', 'A room', 3, settings);
-        expect(resolvedKey).toBe('vova apartment');
+        // mergeOrInsertEntity should merge "Draco" into "dragon" (PERSON type)
+        const { key: resolvedKey } = await mergeOrInsertEntity(
+            graphData,
+            'Draco',
+            'PERSON',
+            'A character alias',
+            3,
+            settings
+        );
+        expect(resolvedKey).toBe('dragon');
 
-        // Now create a relationship using the ORIGINAL name "Vova's Room"
+        // Now create a relationship using the ORIGINAL name "Draco"
         // This should work because we use the resolved key
-        upsertRelationship(graphData, 'Suzy', "Vova's Room", 'Lives in', 5);
+        upsertRelationship(graphData, 'Suzy', 'Draco', 'Friends with', 5);
 
-        // Edge should exist (suzy -> vova apartment), NOT be silently dropped
-        const edgeKey = 'suzy__vova apartment';
+        // Edge should exist (suzy -> dragon), NOT be silently dropped
+        const edgeKey = 'suzy__dragon';
         expect(graphData.edges[edgeKey]).toBeDefined();
-        expect(graphData.edges[edgeKey].description).toBe('Lives in');
+        expect(graphData.edges[edgeKey].description).toBe('Friends with');
     });
 });
 
@@ -712,89 +787,6 @@ describe('_mergeRedirects serialization', () => {
         // For now, just verify it doesn't break anything
         expect(serialized.nodes).toBeDefined();
         expect(serialized.edges).toBeDefined();
-    });
-});
-
-describe('consolidateGraph', () => {
-    it('merges nodes with identical embeddings of the same type', async () => {
-        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
-        getDocumentEmbedding.mockResolvedValue([1, 0, 0]);
-
-        const graphData = { nodes: {}, edges: {} };
-        upsertEntity(graphData, "Vova's House", 'PLACE', 'Home');
-        upsertEntity(graphData, "Vova's Apartment", 'PLACE', 'Flat');
-
-        // Simulate identical embeddings
-        graphData.nodes['vova house'].embedding = [1, 0, 0];
-        graphData.nodes['vova apartment'].embedding = [1, 0, 0];
-
-        const settings = { entityMergeSimilarityThreshold: 0.8, entityDescriptionCap: 3 };
-        const result = await consolidateGraph(graphData, settings);
-
-        // One should be merged into the other
-        expect(Object.keys(graphData.nodes).length).toBeLessThan(2);
-        expect(result.mergedCount).toBeGreaterThan(0);
-    });
-
-    it('does not merge nodes of different types', async () => {
-        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
-        getDocumentEmbedding.mockResolvedValue([1, 0, 0]);
-
-        const graphData = { nodes: {}, edges: {} };
-        upsertEntity(graphData, 'Castle', 'PLACE', 'A fortress');
-        upsertEntity(graphData, 'Castle Guard', 'PERSON', 'A knight');
-
-        graphData.nodes.castle.embedding = [1, 0, 0];
-        graphData.nodes['castle guard'].embedding = [1, 0, 0];
-
-        const settings = { entityMergeSimilarityThreshold: 0.8, entityDescriptionCap: 3 };
-        await consolidateGraph(graphData, settings);
-
-        expect(Object.keys(graphData.nodes)).toHaveLength(2);
-    });
-
-    it('redirects edges after merging nodes', async () => {
-        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
-        getDocumentEmbedding.mockResolvedValue([1, 0, 0]);
-
-        const graphData = { nodes: {}, edges: {} };
-        upsertEntity(graphData, 'Alice', 'PERSON', 'A person');
-        upsertEntity(graphData, 'House A', 'PLACE', 'A house');
-        upsertEntity(graphData, 'House B', 'PLACE', 'Another house');
-
-        graphData.nodes.alice.embedding = [0, 1, 0];
-        graphData.nodes['house a'].embedding = [1, 0, 0];
-        graphData.nodes['house b'].embedding = [1, 0, 0];
-
-        upsertRelationship(graphData, 'Alice', 'House B', 'Visits');
-
-        const settings = { entityMergeSimilarityThreshold: 0.8, entityDescriptionCap: 3 };
-        await consolidateGraph(graphData, settings);
-
-        // House B merged into House A, edge redirected
-        const edgeKeys = Object.keys(graphData.edges);
-        expect(edgeKeys.some((k) => k.includes('house a'))).toBe(true);
-        expect(edgeKeys.some((k) => k.includes('house b'))).toBe(false);
-    });
-
-    it('persists alias during consolidation merge', async () => {
-        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
-        getDocumentEmbedding.mockResolvedValue([1, 0, 0]);
-
-        const graphData = { nodes: {}, edges: {} };
-        upsertEntity(graphData, "Vova's House", 'PLACE', 'Home');
-        upsertEntity(graphData, "Vova's Apartment", 'PLACE', 'Flat');
-        graphData.nodes['vova house'].embedding = [1, 0, 0];
-        graphData.nodes['vova apartment'].embedding = [1, 0, 0];
-        // Give "vova house" more mentions so it survives
-        graphData.nodes['vova house'].mentions = 5;
-
-        await consolidateGraph(graphData, { entityMergeSimilarityThreshold: 0.8, entityDescriptionCap: 3 });
-
-        // The surviving node should have the removed node's name as alias
-        const survivor = graphData.nodes['vova house'];
-        expect(survivor).toBeDefined();
-        expect(survivor.aliases).toContain("Vova's Apartment");
     });
 });
 
@@ -916,13 +908,17 @@ describe('consolidateEdges', () => {
 
         const mockSettings = { consolidationTokenThreshold: 500 };
 
-        const result = await consolidateEdges(graph, mockSettings);
-        expect(result).toBe(1);
+        const { count, stChanges } = await consolidateEdges(graph, mockSettings);
+        expect(count).toBe(1);
         expect(graph.edges.alice__bob.description).toBe('From strangers to battle allies');
         expect(graph._edgesNeedingConsolidation).toHaveLength(0);
+        // stChanges contains the consolidated edge for ST sync
+        expect(stChanges.toSync).toHaveLength(1);
+        expect(stChanges.toSync[0].text).toBe('[OV_ID:edge_alice_bob] From strangers to battle allies');
+        expect(stChanges.toSync[0].item).toBe(graph.edges.alice__bob);
     });
 
-    it('returns 0 when no edges need consolidation', async () => {
+    it('returns 0 count and empty stChanges when no edges need consolidation', async () => {
         const graph = {
             nodes: {
                 alice: { name: 'Alice', type: 'PERSON', description: 'test', mentions: 1 },
@@ -940,8 +936,9 @@ describe('consolidateEdges', () => {
             _edgesNeedingConsolidation: [],
         };
 
-        const result = await consolidateEdges(graph, {});
-        expect(result).toBe(0);
+        const { count, stChanges } = await consolidateEdges(graph, {});
+        expect(count).toBe(0);
+        expect(stChanges.toSync).toHaveLength(0);
     });
 
     it('respects MAX_CONSOLIDATION_BATCH limit', async () => {
@@ -973,66 +970,71 @@ describe('consolidateEdges', () => {
             graph._edgesNeedingConsolidation.push(`${src}__${tgt}`);
         }
 
-        const result = await consolidateEdges(graph, {});
+        const { count, stChanges } = await consolidateEdges(graph, {});
         // Should only process 10 (MAX_CONSOLIDATION_BATCH), 5 should remain
-        expect(result).toBe(10);
+        expect(count).toBe(10);
         expect(graph._edgesNeedingConsolidation).toHaveLength(5);
+        expect(stChanges.toSync).toHaveLength(10);
     });
 });
 
 describe('shouldMergeEntities', () => {
-    it('returns true when cosine is above threshold (token overlap skipped)', () => {
-        // cosine=0.96, threshold=0.94 → above threshold → merge directly
-        const tokensA = new Set(['king', 'aldric']);
-        expect(shouldMergeEntities(0.96, 0.94, tokensA, 'king aldric', 'completely different')).toBe(true);
+    describe('PERSON type', () => {
+        it('merges on high similarity alone (names are unique identifiers)', () => {
+            const tokensA = new Set(['alex']);
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'alex', 'alexander', 'PERSON')).toBe(true);
+        });
+
+        it('merges at exact threshold', () => {
+            const tokensA = new Set(['john']);
+            expect(shouldMergeEntities(0.9, 0.9, tokensA, 'john', 'jonathan', 'PERSON')).toBe(true);
+        });
+
+        it('requires token overlap in grey zone', () => {
+            const tokensA = new Set(['mary']);
+            // cosine=0.85, threshold=0.9, grey zone = 0.8-0.9, no overlap → false
+            expect(shouldMergeEntities(0.85, 0.9, tokensA, 'mary', 'jane', 'PERSON')).toBe(false);
+        });
+
+        it('merges in grey zone with token overlap', () => {
+            const tokensA = new Set(['bob']);
+            // cosine=0.85, grey zone, substring containment ('bob' in 'bob smith')
+            expect(shouldMergeEntities(0.85, 0.9, tokensA, 'bob', 'bob smith', 'PERSON')).toBe(true);
+        });
     });
 
-    it('returns true when cosine is exactly at threshold', () => {
-        const tokensA = new Set(['king']);
-        expect(shouldMergeEntities(0.94, 0.94, tokensA, 'king', 'queen')).toBe(true);
+    describe('OBJECT/CONCEPT types', () => {
+        it('requires token overlap even at high similarity', () => {
+            const tokensA = new Set(['sword']);
+            // cosine=0.95, but OBJECT type requires token overlap, no overlap → false
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'sword', 'blade', 'OBJECT')).toBe(false);
+        });
+
+        it('merges when substring containment exists', () => {
+            const tokensA = new Set(['red', 'sword']);
+            // cosine=0.95, OBJECT type, 'sword' contained in 'red sword' → true
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'red sword', 'sword', 'OBJECT')).toBe(true);
+        });
+
+        it('rejects when cosine is below grey zone', () => {
+            const tokensA = new Set(['item']);
+            // cosine=0.75, threshold=0.9, below 0.8 floor → false
+            expect(shouldMergeEntities(0.75, 0.9, tokensA, 'item', 'item', 'OBJECT')).toBe(false);
+        });
+
+        it('defaults to OBJECT type when not specified', () => {
+            const tokensA = new Set(['apple']);
+            // No type specified, defaults to OBJECT, requires overlap
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'apple', 'orange')).toBe(false);
+        });
     });
 
-    it('returns true in grey zone when token overlap passes', () => {
-        // cosine=0.90, threshold=0.94, greyZoneFloor=0.84 → grey zone
-        // tokensA='king aldric castle', keyB='king aldric tower' → 2/3=0.67 overlap → pass
-        const tokensA = new Set(['king', 'aldric', 'castle']);
-        expect(shouldMergeEntities(0.9, 0.94, tokensA, 'king aldric castle', 'king aldric tower')).toBe(true);
-    });
-
-    it('returns false in grey zone when token overlap fails', () => {
-        // cosine=0.90, threshold=0.94, greyZoneFloor=0.84 → grey zone
-        // tokensA='alpha', keyB='omega' → no overlap → fail
-        const tokensA = new Set(['alpha']);
-        expect(shouldMergeEntities(0.9, 0.94, tokensA, 'alpha', 'omega')).toBe(false);
-    });
-
-    it('returns false when cosine is below grey zone', () => {
-        // cosine=0.80, threshold=0.94, greyZoneFloor=0.84 → below grey zone
-        const tokensA = new Set(['king', 'aldric']);
-        expect(shouldMergeEntities(0.8, 0.94, tokensA, 'king aldric', 'king aldric')).toBe(false);
-    });
-
-    it('does not construct tokensB when cosine is above threshold', () => {
-        // Even with completely non-overlapping keys, cosine >= threshold means merge
-        const tokensA = new Set(['абсолютно']);
-        expect(shouldMergeEntities(0.95, 0.94, tokensA, 'абсолютно', 'совершенно другое')).toBe(true);
-    });
-
-    it('does not construct tokensB when cosine is below grey zone', () => {
-        // cosine=0.70, threshold=0.94 → below 0.84 floor → skip
-        const tokensA = new Set(['king']);
-        expect(shouldMergeEntities(0.7, 0.94, tokensA, 'king', 'king')).toBe(false);
-    });
-
-    it('respects custom threshold values', () => {
-        // threshold=0.80, greyZoneFloor=0.70
-        const tokensA = new Set(['castle']);
-        // cosine=0.82 → above 0.80 threshold → true
-        expect(shouldMergeEntities(0.82, 0.8, tokensA, 'castle', 'fortress')).toBe(true);
-        // cosine=0.75 → grey zone (0.70-0.80) → depends on token overlap
-        expect(shouldMergeEntities(0.75, 0.8, tokensA, 'castle', 'fortress')).toBe(false); // no overlap
-        // cosine=0.65 → below 0.70 floor → false
-        expect(shouldMergeEntities(0.65, 0.8, tokensA, 'castle', 'castle')).toBe(false);
+    describe('CONCEPT type', () => {
+        it('requires token overlap like OBJECT', () => {
+            const tokensA = new Set(['honor']);
+            // CONCEPT type requires token overlap
+            expect(shouldMergeEntities(0.95, 0.9, tokensA, 'honor', 'glory', 'CONCEPT')).toBe(false);
+        });
     });
 });
 

@@ -24,6 +24,12 @@ export const saveChatConditional = async () => true;
 export const setExtensionPrompt = () => true;
 export const extension_prompt_toggles = {};
 
+// CSRF token support
+export const getRequestHeaders = () => ({
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': 'test-csrf-token',
+});
+
 // Script-wide globals
 export const eventSource = {
     on: () => {},

@@ -17,20 +17,152 @@ import {
     UI_DEFAULT_HINTS,
 } from '../constants.js';
 import { getDeps } from '../deps.js';
-import { getEmbeddingStatus, getStrategy, isEmbeddingsEnabled, preloadCurrentModel, setEmbeddingStatusCallback } from '../embeddings.js';
+import {
+    getEmbeddingStatus,
+    getStrategy,
+    isEmbeddingsEnabled,
+    preloadCurrentModel,
+    setEmbeddingStatusCallback,
+    testOllamaConnection,
+} from '../embeddings.js';
 import { updateEventListeners } from '../events.js';
+import { executeEmergencyCut } from '../extraction/extract.js';
 import { formatForClipboard, getAll as getPerfData } from '../perf/store.js';
 import { getSettings, setSetting } from '../settings.js';
 import { clearErrorLog, getErrorLog, logError, logInfo, logWarn } from '../utils/logging.js';
 import { exportToClipboard } from './export-debug.js';
 import { validateRPM } from './helpers.js';
 import { initBrowser, nextPage, prevPage, refreshAllUI, resetAndRender } from './render.js';
-import { updateEmbeddingStatusDisplay } from './status.js';
+import { setStatus, updateEmbeddingStatusDisplay } from './status.js';
+
+// =============================================================================
+// Emergency Cut Modal Helpers
+// =============================================================================
+
+let emergencyCutModalAppended = false;
+let emergencyCutAbortController = null;
 
 /**
- * Test Ollama connection
+ * Show the Emergency Cut progress modal.
+ * Appends to body to avoid stacking context issues with ST's extension panel.
  */
-async function testOllamaConnection() {
+export function showEmergencyCutModal() {
+    const $modal = $('#openvault_emergency_cut_modal');
+    if (!emergencyCutModalAppended) {
+        $modal.appendTo('body');
+        emergencyCutModalAppended = true;
+    }
+    $modal.removeClass('hidden');
+
+    // Keyboard trap with modal accessibility
+    $(document).on('keydown.emergencyCut', (e) => {
+        // Escape - always check first (handles focus loss on overlay click)
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            const $cancelBtn = $('#openvault_emergency_cancel');
+            if (!$cancelBtn.prop('disabled')) {
+                $cancelBtn.click();
+            }
+            return;
+        }
+
+        // Allow Tab/Enter inside modal
+        if ($(e.target).closest('#openvault_emergency_cut_modal').length) {
+            return;
+        }
+
+        // Block ST hotkeys outside
+        e.preventDefault();
+        e.stopPropagation();
+    });
+
+    // Bind cancel button click to abort controller
+    $('#openvault_emergency_cancel')
+        .off('click')
+        .on('click', () => {
+            if (emergencyCutAbortController) {
+                emergencyCutAbortController.abort();
+            }
+        });
+}
+
+/**
+ * Hide the Emergency Cut progress modal.
+ */
+export function hideEmergencyCutModal() {
+    $('#openvault_emergency_cut_modal').addClass('hidden');
+    $(document).off('keydown.emergencyCut');
+    $('#openvault_emergency_cancel').off('click');
+}
+
+/**
+ * Update progress display during Emergency Cut.
+ * @param {number} batchNum - Current batch number (1-indexed)
+ * @param {number} totalBatches - Total number of batches
+ * @param {number} eventsCreated - Number of memories created so far
+ */
+export function updateEmergencyCutProgress(batchNum, totalBatches, eventsCreated) {
+    const progress = Math.round((batchNum / totalBatches) * 100);
+    $('#openvault_emergency_fill').css('width', `${progress}%`);
+    $('#openvault_emergency_label').text(`Batch ${batchNum}/${totalBatches} - ${eventsCreated} memories created`);
+}
+
+/**
+ * Disable the cancel button when entering Phase 2 (uncancellable).
+ */
+export function disableEmergencyCutCancel() {
+    $('#openvault_emergency_cancel').prop('disabled', true).text('Synthesizing...');
+    $('#openvault_emergency_phase').text('Running final synthesis...');
+}
+
+/**
+ * Handle Emergency Cut button click — thin UI wrapper around domain function.
+ */
+async function handleEmergencyCutClick() {
+    emergencyCutAbortController = new AbortController();
+
+    await executeEmergencyCut({
+        onWarning: (msg) => showToast('warning', msg),
+        onConfirmPrompt: (msg) => confirm(msg),
+        onStart: () => {
+            $('#send_textarea').prop('disabled', true);
+            showEmergencyCutModal();
+        },
+        onProgress: (batch, total, events) => updateEmergencyCutProgress(batch, total, events),
+        onPhase2Start: () => disableEmergencyCutCancel(),
+        onComplete: ({ messagesProcessed, eventsCreated, hiddenCount }) => {
+            if (messagesProcessed > 0) {
+                showToast(
+                    'success',
+                    `Emergency Cut complete. ${messagesProcessed} messages processed, ` +
+                        `${eventsCreated} memories created. Chat history hidden.`
+                );
+            } else {
+                showToast('success', `Emergency Cut complete. ${hiddenCount} messages hidden from context.`);
+            }
+            $('#send_textarea').prop('disabled', false);
+            hideEmergencyCutModal();
+            emergencyCutAbortController = null;
+            refreshAllUI();
+        },
+        onError: (err, isCancel) => {
+            const message = isCancel
+                ? 'Emergency Cut cancelled. No messages were hidden.'
+                : `Emergency Cut failed: ${err.message}. No messages were hidden.`;
+            showToast(isCancel ? 'info' : 'error', message);
+            logError('Emergency Cut failed', err);
+            $('#send_textarea').prop('disabled', false);
+            hideEmergencyCutModal();
+            emergencyCutAbortController = null;
+        },
+        abortSignal: emergencyCutAbortController.signal,
+    });
+}
+
+/**
+ * Handle Ollama test button click — thin UI wrapper around domain function.
+ */
+async function handleOllamaTestClick() {
     const $btn = $('#openvault_test_ollama_btn');
     const url = $('#openvault_ollama_url').val().trim();
 
@@ -44,24 +176,15 @@ async function testOllamaConnection() {
     $btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Testing...');
 
     try {
-        const response = await fetch(`${url}/api/tags`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (response.ok) {
-            $btn.removeClass('error').addClass('success');
-            $btn.html('<i class="fa-solid fa-check"></i> Connected');
-        } else {
-            throw new Error(`HTTP ${response.status}`);
-        }
+        await testOllamaConnection(url);
+        $btn.removeClass('error').addClass('success');
+        $btn.html('<i class="fa-solid fa-check"></i> Connected');
     } catch (err) {
         $btn.removeClass('success').addClass('error');
         $btn.html('<i class="fa-solid fa-xmark"></i> Failed');
         logError('Ollama test failed', err);
     }
 
-    // Reset button after 3 seconds
     setTimeout(() => {
         $btn.removeClass('success error');
         $btn.html('<i class="fa-solid fa-plug"></i> Test');
@@ -69,7 +192,7 @@ async function testOllamaConnection() {
 }
 
 import { PREFILL_PRESETS } from '../prompts/index.js';
-import { deleteCurrentChatData, getOpenVaultData } from '../utils/data.js';
+import { deleteCurrentChatData, getOpenVaultData } from '../store/chat-data.js';
 import { showToast } from '../utils/dom.js';
 
 // =============================================================================
@@ -235,12 +358,50 @@ function syncPrefillSelector() {
 
 async function handleExtractAll() {
     const { extractAllMessages } = await import('../extraction/extract.js');
-    const { isWorkerRunning } = await import('../extraction/worker.js');
-    if (isWorkerRunning()) {
-        showToast('warning', 'Background extraction in progress. Please wait.', 'OpenVault');
-        return;
-    }
-    await extractAllMessages(updateEventListeners);
+    await extractAllMessages({
+        onComplete: updateEventListeners,
+        onStart: (batchCount) => {
+            setStatus('extracting');
+            toastr?.info(`Backfill: 0/${batchCount} batches (0%)`, 'OpenVault - Extracting', {
+                timeOut: 0,
+                extendedTimeOut: 0,
+                tapToDismiss: false,
+                toastClass: 'toast openvault-backfill-toast',
+            });
+        },
+        onProgress: (batchNum, totalBatches, _eventsCreated, retryText) => {
+            const progress = Math.round((batchNum / totalBatches) * 100);
+            $('.openvault-backfill-toast .toast-message').text(
+                `Backfill: ${batchNum}/${totalBatches} batches (${Math.min(progress, 100)}%) - Processing...${retryText}`
+            );
+        },
+        onBatchRetryWait: (batchNum, totalBatches, backoffSeconds, retryCount) => {
+            $('.openvault-backfill-toast .toast-message').text(
+                `Backfill: ${batchNum}/${totalBatches} batches - Waiting ${backoffSeconds}s before retry ${retryCount}...`
+            );
+        },
+        onPhase2Start: () => {
+            $('.openvault-backfill-toast .toast-message').text(
+                'Backfill: 100% - Synthesizing world state and reflections. This may take a minute...'
+            );
+        },
+        onFinish: ({ messagesProcessed, eventsCreated }) => {
+            $('.openvault-backfill-toast').remove();
+            showToast('success', `Extracted ${eventsCreated} events from ${messagesProcessed} messages`);
+            refreshAllUI();
+            setStatus('ready');
+        },
+        onAbort: () => {
+            $('.openvault-backfill-toast').remove();
+            showToast('warning', 'Backfill aborted: chat changed', 'OpenVault');
+            setStatus('ready');
+        },
+        onError: (error) => {
+            $('.openvault-backfill-toast').remove();
+            showToast('warning', error.message, 'OpenVault');
+            setStatus('ready');
+        },
+    });
 }
 
 async function handleDeleteChatData() {
@@ -668,7 +829,8 @@ function bindUIElements() {
         // Invalidate stale embeddings if model changed
         const data = getOpenVaultData();
         if (data) {
-            const { invalidateStaleEmbeddings, saveOpenVaultData } = await import('../utils/data.js');
+            const { invalidateStaleEmbeddings } = await import('../embeddings/migration.js');
+            const { saveOpenVaultData } = await import('../store/chat-data.js');
             const wiped = await invalidateStaleEmbeddings(data, value);
             if (wiped > 0) {
                 await saveOpenVaultData();
@@ -735,6 +897,9 @@ function bindUIElements() {
     $('#openvault_extract_all_btn').on('click', handleExtractAll);
     $('#openvault_generate_reflections_btn').on('click', handleGenerateReflections);
 
+    // Emergency Cut button
+    $('#openvault_emergency_cut_btn').on('click', handleEmergencyCutClick);
+
     // Danger zone buttons
     $('#openvault_reset_settings_btn').on('click', handleResetSettings);
     $('#openvault_delete_chat_btn').on('click', handleDeleteChatData);
@@ -762,7 +927,7 @@ function bindUIElements() {
     });
 
     // Test Ollama connection button
-    $('#openvault_test_ollama_btn').on('click', testOllamaConnection);
+    $('#openvault_test_ollama_btn').on('click', handleOllamaTestClick);
 
     // Perf tab clipboard copy button
     $('#openvault_copy_perf_btn').on('click', () => {
@@ -1007,14 +1172,14 @@ export async function updateBudgetIndicators() {
     }
 
     const { getTokenSum } = await import('../utils/tokens.js');
-    const { getExtractedMessageIds, getUnextractedMessageIds } = await import('../extraction/scheduler.js');
+    const { getExtractionBudgetProgress } = await import('../extraction/scheduler.js');
 
-    // Extraction indicator
-    const extractionBudget = settings.extractionTokenBudget;
-    const extractedIds = getExtractedMessageIds(data);
-    const unextractedIds = getUnextractedMessageIds(chat, extractedIds);
-    const unextractedTokens = getTokenSum(chat, unextractedIds);
-    const extractionPct = Math.min((unextractedTokens / extractionBudget) * 100, 100);
+    // Extraction indicator - use domain function
+    const { unextractedTokens, extractionPct, extractionBudget } = getExtractionBudgetProgress(
+        chat,
+        data,
+        settings.extractionTokenBudget
+    );
 
     $('#openvault_extraction_budget_fill').css('width', `${extractionPct}%`);
     $('#openvault_extraction_budget_text').text(

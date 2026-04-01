@@ -25,8 +25,7 @@ import {
     resolveExtractionPrefill,
     resolveOutputLanguage,
 } from '../prompts/index.js';
-import { getCurrentChatId, isStVectorSource, syncItemsToST } from '../utils/data.js';
-import { cyrb53, hasEmbedding, isStSynced, markStSynced, setEmbedding } from '../utils/embedding-codec.js';
+import { cyrb53, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 
@@ -202,7 +201,7 @@ function sameMembers(a, b) {
  * @param {number} currentMessageCount - Current graph message count for staleness detection
  * @param {number} stalenessThreshold - Message count threshold for forced re-summarization
  * @param {boolean} isSingleCommunity - Whether Louvain produced only one community
- * @returns {Promise<{ communities: Object, global_world_state: Object|null }>} Updated communities and optional global state
+ * @returns {Promise<{ communities: Object, global_world_state: Object|null, stChanges: Object }>} Updated communities, optional global state, and ST sync changes
  */
 export async function updateCommunitySummaries(
     _graphData,
@@ -292,19 +291,12 @@ export async function updateCommunitySummaries(
 
     await Promise.all(promises);
 
-    // Sync community summaries to ST Vector Storage
-    if (isStVectorSource()) {
-        const chatId = getCurrentChatId();
-        const items = [];
-        for (const [id, community] of Object.entries(updatedCommunities)) {
-            if (community.summary && !isStSynced(community)) {
-                const text = `[OV_ID:${id}] ${community.summary}`;
-                items.push({ hash: cyrb53(text), text, index: 0 });
-                markStSynced(community);
-            }
-        }
-        if (items.length > 0) {
-            await syncItemsToST(items, chatId);
+    // Build change set for ST sync (orchestrator handles network I/O)
+    const stChanges = { toSync: [] };
+    for (const [id, community] of Object.entries(updatedCommunities)) {
+        if (community.summary) {
+            const text = `[OV_ID:${id}] ${community.summary}`;
+            stChanges.toSync.push({ hash: cyrb53(text), text, item: community });
         }
     }
 
@@ -321,6 +313,7 @@ export async function updateCommunitySummaries(
     return {
         communities: updatedCommunities,
         global_world_state: globalState,
+        stChanges,
     };
 }
 

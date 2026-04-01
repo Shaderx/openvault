@@ -310,15 +310,15 @@ describe('ui/helpers', () => {
     describe('calculateExtractionStats', () => {
         it('calculates stats correctly', () => {
             const chat = [
-                { is_system: false },
-                { is_system: false },
-                { is_system: true },
-                { is_system: false },
-                { is_system: false },
+                { mes: 'msg0', send_date: '1000000', is_system: false },
+                { mes: 'msg1', send_date: '1000001', is_system: false },
+                { mes: 'sys', send_date: '1000002', is_system: true },
+                { mes: 'msg3', send_date: '1000003', is_system: false },
+                { mes: 'msg4', send_date: '1000004', is_system: false },
             ];
-            const extractedIds = new Set([0, 1]);
+            const processedFps = new Set(['1000000', '1000001']);
 
-            const result = calculateExtractionStats(chat, extractedIds, 2);
+            const result = calculateExtractionStats(chat, processedFps, 2);
 
             expect(result.totalMessages).toBe(5);
             expect(result.hiddenMessages).toBe(1);
@@ -329,10 +329,14 @@ describe('ui/helpers', () => {
         });
 
         it('calculates batch progress correctly', () => {
-            const chat = new Array(20).fill({ is_system: false });
-            const extractedIds = new Set([0, 1, 2]); // Only first 3 extracted
+            const chat = Array.from({ length: 20 }, (_, i) => ({
+                mes: `msg${i}`,
+                send_date: String(1000000 + i),
+                is_system: false,
+            }));
+            const processedFps = new Set(['1000000', '1000001', '1000002']); // Only first 3 extracted
 
-            const result = calculateExtractionStats(chat, extractedIds, 5);
+            const result = calculateExtractionStats(chat, processedFps, 5);
 
             // 20 - 3 = 17 unextracted
             // 17 % 5 = 2 in current batch
@@ -351,10 +355,14 @@ describe('ui/helpers', () => {
         });
 
         it('shows ready when full batch waiting', () => {
-            const chat = new Array(30).fill({ is_system: false });
-            const extractedIds = new Set(); // None extracted
+            const chat = Array.from({ length: 30 }, (_, i) => ({
+                mes: `msg${i}`,
+                send_date: String(1000000 + i),
+                is_system: false,
+            }));
+            const processedFps = new Set(); // None extracted
 
-            const result = calculateExtractionStats(chat, extractedIds, 10);
+            const result = calculateExtractionStats(chat, processedFps, 10);
 
             // 30 unextracted, 30 % 10 = 0, but unextracted > 0 so ready
             expect(result.unextractedCount).toBe(30);
@@ -363,10 +371,14 @@ describe('ui/helpers', () => {
         });
 
         it('excludes buffer from extractable messages', () => {
-            const chat = new Array(20).fill({ is_system: false });
-            const extractedIds = new Set([0, 1, 2, 3, 4]); // 5 extracted
+            const chat = Array.from({ length: 20 }, (_, i) => ({
+                mes: `msg${i}`,
+                send_date: String(1000000 + i),
+                is_system: false,
+            }));
+            const processedFps = new Set(['1000000', '1000001', '1000002', '1000003', '1000004']); // 5 extracted
 
-            const result = calculateExtractionStats(chat, extractedIds, 10, 5);
+            const result = calculateExtractionStats(chat, processedFps, 10, 5);
 
             // 20 total - 5 buffer = 15 extractable
             // 15 extractable - 5 extracted = 10 unextracted
@@ -376,15 +388,33 @@ describe('ui/helpers', () => {
         });
 
         it('handles buffer larger than unextracted messages', () => {
-            const chat = new Array(10).fill({ is_system: false });
-            const extractedIds = new Set([0, 1, 2, 3, 4, 5, 6]); // 7 extracted
+            const chat = Array.from({ length: 10 }, (_, i) => ({
+                mes: `msg${i}`,
+                send_date: String(1000000 + i),
+                is_system: false,
+            }));
+            const processedFps = new Set(['1000000', '1000001', '1000002', '1000003', '1000004', '1000005', '1000006']); // 7 extracted
 
-            const result = calculateExtractionStats(chat, extractedIds, 5, 5);
+            const result = calculateExtractionStats(chat, processedFps, 5, 5);
 
             // 10 total - 5 buffer = 5 extractable
             // 5 extractable - 7 extracted = -2, clamped to 0
             expect(result.extractableMessages).toBe(5);
             expect(result.unextractedCount).toBe(0);
+        });
+
+        it('excludes dead fingerprints from extracted count', () => {
+            const chat = [
+                { mes: 'Hello', send_date: '1000000', is_system: false },
+                { mes: 'Hi', send_date: '1000001', is_system: false },
+            ];
+            // '9999999' is a dead fingerprint (message no longer exists)
+            const processedFps = new Set(['1000000', '9999999']);
+
+            const result = calculateExtractionStats(chat, processedFps, chat.length);
+
+            // extractedCount should be 1 (only chat[0] with send_date '1000000'), not 2
+            expect(result.extractedCount).toBe(1);
         });
     });
 

@@ -48,7 +48,6 @@ export function buildMockData(overrides = {}) {
     return {
         memories: [],
         character_states: {},
-        last_processed_message_id: -1,
         processed_message_ids: [],
         ...overrides,
     };

@@ -3,9 +3,7 @@
  *
  * Main retrieval logic for selecting and injecting memories into context.
  * Returns result objects; callers handle UI feedback (toasts, status).
- */
-
-/**
+ *
  * RetrievalContext - Consolidated retrieval parameters
  *
  * @typedef {Object} RetrievalContext
@@ -21,12 +19,19 @@
  * @property {Object[]} allAvailableMemories - All memories for expanded IDF corpus
  */
 
-import { CHARACTERS_KEY, extensionName, MEMORIES_KEY } from '../constants.js';
+import {
+    CHARACTERS_KEY,
+    COMBINED_BOOST_WEIGHT,
+    extensionName,
+    IMPORTANCE_5_FLOOR,
+    MEMORIES_KEY,
+    REFLECTION_DECAY_THRESHOLD,
+} from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import { cachedContent } from '../injection/macros.js';
 import { filterMemoriesByPOV, getActiveCharacters, getPOVContext } from '../pov.js';
-import { getOpenVaultData } from '../utils/data.js';
+import { getOpenVaultData } from '../store/chat-data.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled, safeSetExtensionPrompt } from '../utils/st-helpers.js';
 import { cacheRetrievalDebug } from './debug-cache.js';
@@ -105,6 +110,25 @@ export function buildRetrievalContext(opts = {}) {
 
     const data = getOpenVaultData();
 
+    // Build config objects for domain functions (dependency injection)
+    const queryConfig = {
+        entityWindowSize: settings.entityWindowSize,
+        embeddingWindowSize: settings.embeddingWindowSize,
+        recencyDecayFactor: settings.recencyDecayFactor,
+        topEntitiesCount: settings.topEntitiesCount,
+        entityBoostWeight: settings.entityBoostWeight,
+    };
+
+    const scoringConfig = {
+        forgetfulnessBaseLambda: settings.forgetfulnessBaseLambda,
+        forgetfulnessImportance5Floor: IMPORTANCE_5_FLOOR,
+        reflectionDecayThreshold: REFLECTION_DECAY_THRESHOLD,
+        vectorSimilarityThreshold: settings.vectorSimilarityThreshold,
+        alpha: settings.alpha,
+        combinedBoostWeight: COMBINED_BOOST_WEIGHT,
+        embeddingSource: settings.embeddingSource,
+    };
+
     return {
         recentContext,
         userMessages,
@@ -118,6 +142,8 @@ export function buildRetrievalContext(opts = {}) {
         graphEdges: data?.graph?.edges || {},
         allAvailableMemories: data?.[MEMORIES_KEY] || [], // Full memory list for IDF
         idfCache: data?.idf_cache || null, // Pre-computed IDF cache
+        queryConfig,
+        scoringConfig,
     };
 }
 
@@ -208,22 +234,22 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
         if (isEmbeddingsEnabled()) {
             worldQueryEmbedding = await getQueryEmbedding(userMessages || ctx.recentContext?.slice(-500));
         }
-        if (worldQueryEmbedding) {
-            const worldResult = retrieveWorldContext(
-                worldCommunities,
-                data.global_world_state || null,
-                userMessages || '',
-                worldQueryEmbedding,
-                ctx.worldContextBudget
-            );
-            worldText = worldResult.text || '';
-            // Cache world context result for debug export
-            if (worldResult?.text) {
-                cacheRetrievalDebug({
-                    injectedWorldContext: worldResult.text,
-                    isMacroIntent: worldResult.isMacroIntent,
-                });
-            }
+        // Always call retrieveWorldContext - it handles macro intent detection
+        // even when embeddings are null (e.g., for st_vector source)
+        const worldResult = retrieveWorldContext(
+            worldCommunities,
+            data.global_world_state || null,
+            userMessages || '',
+            worldQueryEmbedding, // May be null for st_vector
+            ctx.worldContextBudget
+        );
+        worldText = worldResult.text || '';
+        // Cache world context result for debug export
+        if (worldResult?.text) {
+            cacheRetrievalDebug({
+                injectedWorldContext: worldResult.text,
+                isMacroIntent: worldResult.isMacroIntent,
+            });
         }
     }
 

@@ -5,45 +5,64 @@
  * Determines which messages need extracting and whether batches are ready.
  */
 
-import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../constants.js';
+import { PROCESSED_MESSAGES_KEY } from '../constants.js';
+import { cyrb53 } from '../utils/embedding-codec.js';
 import { getMessageTokenCount, getTokenSum, snapToTurnBoundary } from '../utils/tokens.js';
 
 /**
- * Get set of message IDs that have been processed (extracted or attempted)
- * @param {Object} data - OpenVault data object
- * @returns {Set<number>} Set of processed message IDs
+ * Get a stable fingerprint for a message.
+ * Uses send_date (timestamp) when available, falls back to content hash.
+ * @param {object} msg - Message object
+ * @returns {string} Fingerprint string
  */
-export function getExtractedMessageIds(data) {
-    const extractedIds = new Set();
-    if (!data) return extractedIds;
-
-    // From memories (tracks which messages produced events)
-    for (const memory of data[MEMORIES_KEY] || []) {
-        for (const msgId of memory.message_ids || []) {
-            extractedIds.add(msgId);
-        }
-    }
-    // From processed message tracking (includes messages with no events)
-    for (const msgId of data[PROCESSED_MESSAGES_KEY] || []) {
-        extractedIds.add(msgId);
-    }
-    return extractedIds;
+export function getFingerprint(msg) {
+    if (msg.send_date) return String(msg.send_date);
+    // Fallback: content hash for imported chats without send_date
+    return `hash_${cyrb53((msg.name || '') + (msg.mes || ''))}`;
 }
 
 /**
- * Get array of message indices that have not been extracted yet
+ * Get set of message fingerprints that have been processed.
+ * Replaces getExtractedMessageIds (index-based tracking).
+ * @param {Object} data - OpenVault data object
+ * @returns {Set<string>} Set of processed fingerprint strings
+ */
+export function getProcessedFingerprints(data) {
+    return new Set(data[PROCESSED_MESSAGES_KEY] || []);
+}
+
+/**
+ * Get array of message indices that have not been extracted yet.
+ * Now uses fingerprint matching and filters out system messages.
  * @param {Object[]} chat - Chat messages array
- * @param {Set<number>} extractedIds - Set of already extracted message IDs
+ * @param {Set<string>} processedFps - Set of already processed fingerprint strings
  * @returns {number[]} Array of unextracted message indices
  */
-export function getUnextractedMessageIds(chat, extractedIds) {
+export function getUnextractedMessageIds(chat, processedFps) {
     const unextractedIds = [];
     for (let i = 0; i < chat.length; i++) {
-        if (!extractedIds.has(i)) {
+        const msg = chat[i];
+        if (msg.is_system) continue;
+        if (!processedFps.has(getFingerprint(msg))) {
             unextractedIds.push(i);
         }
     }
     return unextractedIds;
+}
+
+/**
+ * Get extraction budget progress data for UI display
+ * @param {Object[]} chat - Chat messages array
+ * @param {Object} data - OpenVault data object
+ * @param {number} tokenBudget - Token budget for extraction
+ * @returns {Object} Progress data: { unextractedTokens, extractionPct, extractionBudget }
+ */
+export function getExtractionBudgetProgress(chat, data, tokenBudget) {
+    const processedFps = getProcessedFingerprints(data);
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
+    const unextractedTokens = getTokenSum(chat, unextractedIds);
+    const extractionPct = Math.min((unextractedTokens / tokenBudget) * 100, 100);
+    return { unextractedTokens, extractionPct, extractionBudget: tokenBudget };
 }
 
 /**
@@ -54,8 +73,8 @@ export function getUnextractedMessageIds(chat, extractedIds) {
  * @returns {boolean} True if at least one complete batch is ready
  */
 export function isBatchReady(chat, data, tokenBudget) {
-    const extractedIds = getExtractedMessageIds(data);
-    const unextractedIds = getUnextractedMessageIds(chat, extractedIds);
+    const processedFps = getProcessedFingerprints(data);
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
     return getTokenSum(chat, unextractedIds) >= tokenBudget;
 }
 
@@ -64,18 +83,20 @@ export function isBatchReady(chat, data, tokenBudget) {
  * @param {Object[]} chat - Chat messages array
  * @param {Object} data - OpenVault data object
  * @param {number} tokenBudget - Token budget for extraction
+ * @param {boolean} [isEmergencyCut=false] - If true, bypass token budget and extract all unextracted messages
  * @returns {number[]|null} Array of message IDs for next batch, or null if no complete batch ready
  */
-export function getNextBatch(chat, data, tokenBudget) {
-    const extractedIds = getExtractedMessageIds(data);
-    const unextractedIds = getUnextractedMessageIds(chat, extractedIds);
+export function getNextBatch(chat, data, tokenBudget, isEmergencyCut = false) {
+    const processedFps = getProcessedFingerprints(data);
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
 
     const totalTokens = getTokenSum(chat, unextractedIds);
-    if (totalTokens < tokenBudget) {
+    // Emergency Cut bypasses token budget - extract all unextracted messages
+    if (!isEmergencyCut && totalTokens < tokenBudget) {
         return null;
     }
 
-    // Accumulate oldest messages until token budget met
+    // Accumulate oldest messages until token budget met (or all messages if Emergency Cut)
     const accumulated = [];
     let currentSum = 0;
 
@@ -83,7 +104,7 @@ export function getNextBatch(chat, data, tokenBudget) {
         accumulated.push(id);
         currentSum += getMessageTokenCount(chat, id);
 
-        if (currentSum >= tokenBudget) {
+        if (!isEmergencyCut && currentSum >= tokenBudget) {
             break;
         }
     }
@@ -111,21 +132,30 @@ export function getNextBatch(chat, data, tokenBudget) {
 }
 
 /**
- * Get count of complete batches available for backfill
+ * Get count of complete batches available for backfill.
+ * Now returns fingerprint-based stats with proper dead fingerprint handling.
  * @param {Object[]} chat - Chat messages array
  * @param {Object} data - OpenVault data object
- * @param {number} tokenBudget - Token budget for extraction
- * @returns {{completeBatches: number, totalUnextracted: number, extractedCount: number}}
+ * @param {number} tokenBudget - Token budget for extraction (optional, for backward compatibility)
+ * @returns {{totalMessages: number, extractedCount: number, unextractedCount: number}}
  */
-export function getBackfillStats(chat, data, tokenBudget) {
-    const extractedIds = getExtractedMessageIds(data);
-    const unextractedIds = getUnextractedMessageIds(chat, extractedIds);
-    const totalTokens = getTokenSum(chat, unextractedIds);
+export function getBackfillStats(chat, data, _tokenBudget) {
+    const processedFps = getProcessedFingerprints(data);
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
+    const nonSystemCount = chat.filter((m) => !m.is_system).length;
+
+    // Count visible processed messages (fingerprints that exist in current chat)
+    let visibleExtracted = 0;
+    for (const msg of chat) {
+        if (!msg.is_system && processedFps.has(getFingerprint(msg))) {
+            visibleExtracted++;
+        }
+    }
 
     return {
-        completeBatches: totalTokens >= tokenBudget ? Math.floor(totalTokens / tokenBudget) : 0,
-        totalUnextracted: unextractedIds.length,
-        extractedCount: extractedIds.size,
+        totalMessages: nonSystemCount,
+        extractedCount: visibleExtracted,
+        unextractedCount: unextractedIds.length,
     };
 }
 
@@ -134,14 +164,17 @@ export function getBackfillStats(chat, data, tokenBudget) {
  * @param {Object[]} chat - Chat messages array
  * @param {Object} data - OpenVault data object
  * @param {number} tokenBudget - Token budget for extraction
+ * @param {boolean} [isEmergencyCut=false] - If true, bypass token budget and extract all unextracted messages
  * @returns {{messageIds: number[], batchCount: number}}
  */
-export function getBackfillMessageIds(chat, data, tokenBudget) {
-    const extractedIds = getExtractedMessageIds(data);
-    const allUnextracted = getUnextractedMessageIds(chat, extractedIds);
+export function getBackfillMessageIds(chat, data, tokenBudget, isEmergencyCut = false) {
+    const processedFps = getProcessedFingerprints(data);
+    const allUnextracted = getUnextractedMessageIds(chat, processedFps);
     const totalTokens = getTokenSum(chat, allUnextracted);
 
-    if (totalTokens < tokenBudget) {
+    // Emergency Cut bypasses token budget - extract all unextracted messages
+    if (!isEmergencyCut && totalTokens < tokenBudget) {
+        console.log(`[Emergency Cut Debug] getBackfillMessageIds: returning empty (token budget not met)`);
         return { messageIds: [], batchCount: 0 };
     }
 
@@ -160,12 +193,17 @@ export function getBackfillMessageIds(chat, data, tokenBudget) {
         }
     }
 
-    // Trim incomplete last batch
-    if (currentSum > 0 && currentSum < tokenBudget) {
+    // Trim incomplete last batch (skip for Emergency Cut - extract all messages)
+    if (!isEmergencyCut && currentSum > 0 && currentSum < tokenBudget) {
         while (messageIds.length > 0 && currentSum > 0) {
             const removed = messageIds.pop();
             currentSum -= getMessageTokenCount(chat, removed);
         }
+    }
+
+    // For Emergency Cut, if we have messages but no complete batches, report as 1 batch
+    if (isEmergencyCut && messageIds.length > 0 && batchCount === 0) {
+        batchCount = 1;
     }
 
     return { messageIds, batchCount };

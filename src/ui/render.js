@@ -12,7 +12,7 @@ import {
     deleteMemory as deleteMemoryAction,
     getOpenVaultData,
     updateMemory as updateMemoryAction,
-} from '../utils/data.js';
+} from '../store/chat-data.js';
 import { escapeHtml, showToast } from '../utils/dom.js';
 import { hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
 import {

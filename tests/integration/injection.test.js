@@ -67,7 +67,7 @@ describe('updateInjection with position settings', () => {
         }));
 
         // Mock data utility to return no memories (clear injection scenario)
-        vi.doMock('../../src/utils/data.js', () => ({
+        vi.doMock('../../src/store/chat-data.js', () => ({
             getOpenVaultData: () => ({
                 characters: {},
                 communities: {},

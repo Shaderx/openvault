@@ -1,11 +1,4 @@
-/**
- * OpenVault Embeddings
- *
- * Local vector embeddings via Transformers.js or Ollama for semantic similarity search.
- * Supports multiple embedding models with lazy loading.
- */
-
-import { extensionName } from './constants.js';
+import { EMBEDDING_SOURCES, extensionName } from './constants.js';
 import { getDeps } from './deps.js';
 import { record } from './perf/store.js';
 import { getSessionSignal } from './state.js';
@@ -21,6 +14,11 @@ import { logDebug, logError, logInfo } from './utils/logging.js';
 // =============================================================================
 
 /**
+ * OpenVault Embeddings
+ *
+ * Local vector embeddings via Transformers.js or Ollama for semantic similarity search.
+ * Supports multiple embedding models with lazy loading.
+ *
  * Base class for embedding strategies.
  * Subclasses must implement all required methods.
  */
@@ -392,15 +390,11 @@ class TransformersStrategy extends EmbeddingStrategy {
         }
     }
 
-    async getQueryEmbedding(text, { signal } = {}) {
-        const settings = getDeps().getExtensionSettings()[extensionName];
-        const prefix = settings.embeddingQueryPrefix;
+    async getQueryEmbedding(text, { signal, prefix = '' } = {}) {
         return this.#embed(text, prefix, { signal });
     }
 
-    async getDocumentEmbedding(text, { signal } = {}) {
-        const settings = getDeps().getExtensionSettings()[extensionName];
-        const prefix = settings.embeddingDocPrefix;
+    async getDocumentEmbedding(text, { signal, prefix = '' } = {}) {
         return this.#embed(text, prefix, { signal });
     }
 
@@ -445,7 +439,7 @@ class TransformersStrategy extends EmbeddingStrategy {
 
 class OllamaStrategy extends EmbeddingStrategy {
     getId() {
-        return 'ollama';
+        return EMBEDDING_SOURCES.OLLAMA;
     }
 
     #getSettings() {
@@ -469,8 +463,8 @@ class OllamaStrategy extends EmbeddingStrategy {
         return 'Ollama: Not configured';
     }
 
-    async getEmbedding(text, { signal } = {}) {
-        const { url, model } = this.#getSettings();
+    async getEmbedding(text, { signal, url, model } = {}) {
+        // #getSettings() no longer called here — url/model injected by wrapper
 
         if (!url || !model) {
             return null;
@@ -504,20 +498,39 @@ class OllamaStrategy extends EmbeddingStrategy {
         } catch (error) {
             if (error.name === 'AbortError') throw error;
             logError('Ollama embedding failed', error, {
-                modelName: this.#getSettings().model,
+                modelName: model,
                 textSnippet: text?.slice(0, 100),
             });
             return null;
         }
     }
 
-    async getQueryEmbedding(text, { signal } = {}) {
-        return this.getEmbedding(text, { signal });
+    async getQueryEmbedding(text, options = {}) {
+        return this.getEmbedding(text, options);
     }
 
-    async getDocumentEmbedding(text, { signal } = {}) {
-        return this.getEmbedding(text, { signal });
+    async getDocumentEmbedding(text, options = {}) {
+        return this.getEmbedding(text, options);
     }
+}
+
+/**
+ * Test Ollama connection by fetching model list
+ * @param {string} url - Ollama base URL (e.g., 'http://localhost:11434')
+ * @returns {Promise<boolean>} True if connection successful
+ * @throws {Error} If HTTP error or network error occurs
+ */
+export async function testOllamaConnection(url) {
+    const cleanUrl = url.replace(/\/+$/, '');
+    const response = await getDeps().fetch(`${cleanUrl}/api/tags`, {
+        method: 'GET',
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+
+    return true;
 }
 
 // =============================================================================
@@ -526,7 +539,7 @@ class OllamaStrategy extends EmbeddingStrategy {
 
 class StVectorStrategy extends EmbeddingStrategy {
     getId() {
-        return 'st_vector';
+        return EMBEDDING_SOURCES.ST_VECTOR;
     }
 
     isEnabled() {
@@ -552,29 +565,29 @@ class StVectorStrategy extends EmbeddingStrategy {
     }
 
     async insertItems(items, _options = {}) {
-        const { syncItemsToST } = await import('./utils/data.js');
-        const { getCurrentChatId } = await import('./utils/data.js');
+        const { syncItemsToST } = await import('./services/st-vector.js');
+        const { getCurrentChatId } = await import('./store/chat-data.js');
         const chatId = getCurrentChatId() || 'default';
         return syncItemsToST(items, chatId);
     }
 
     async searchItems(query, topK, threshold, _options = {}) {
-        const { querySTVector } = await import('./utils/data.js');
-        const { getCurrentChatId } = await import('./utils/data.js');
+        const { querySTVector } = await import('./services/st-vector.js');
+        const { getCurrentChatId } = await import('./store/chat-data.js');
         const chatId = getCurrentChatId() || 'default';
         return querySTVector(query, topK, threshold, chatId);
     }
 
     async deleteItems(hashes, _options = {}) {
-        const { deleteItemsFromST } = await import('./utils/data.js');
-        const { getCurrentChatId } = await import('./utils/data.js');
+        const { deleteItemsFromST } = await import('./services/st-vector.js');
+        const { getCurrentChatId } = await import('./store/chat-data.js');
         const chatId = getCurrentChatId() || 'default';
         return deleteItemsFromST(hashes, chatId);
     }
 
     async purgeCollection(_options = {}) {
-        const { purgeSTCollection } = await import('./utils/data.js');
-        const { getCurrentChatId } = await import('./utils/data.js');
+        const { purgeSTCollection } = await import('./services/st-vector.js');
+        const { getCurrentChatId } = await import('./store/chat-data.js');
         const chatId = getCurrentChatId() || 'default';
         return purgeSTCollection(chatId);
     }
@@ -588,8 +601,8 @@ const strategies = {
     'multilingual-e5-small': new TransformersStrategy(),
     'bge-small-en-v1.5': new TransformersStrategy(),
     'embeddinggemma-300m': new TransformersStrategy(),
-    ollama: new OllamaStrategy(),
-    st_vector: new StVectorStrategy(),
+    [EMBEDDING_SOURCES.OLLAMA]: new OllamaStrategy(),
+    [EMBEDDING_SOURCES.ST_VECTOR]: new StVectorStrategy(),
 };
 
 // Configure model-specific transformers strategies
@@ -640,7 +653,7 @@ function getOptimalChunkSize() {
     }
 
     // For Ollama, use a safe default
-    if (source === 'ollama') {
+    if (source === EMBEDDING_SOURCES.OLLAMA) {
         return 800;
     }
 
@@ -733,7 +746,12 @@ export async function getQueryEmbedding(text, { signal } = {}) {
     const settings = getDeps().getExtensionSettings()[extensionName];
     const source = settings.embeddingSource;
     const strategy = getStrategy(source);
-    const result = await strategy.getQueryEmbedding(text, { signal });
+    const result = await strategy.getQueryEmbedding(text, {
+        signal,
+        prefix: settings.embeddingQueryPrefix,
+        url: settings.ollamaUrl,
+        model: settings.embeddingModel,
+    });
 
     if (embeddingCache.size >= MAX_CACHE_SIZE) {
         const firstKey = embeddingCache.keys().next().value;
@@ -766,7 +784,12 @@ export async function getDocumentEmbedding(summary, { signal } = {}) {
     const settings = getDeps().getExtensionSettings()[extensionName];
     const source = settings.embeddingSource;
     const strategy = getStrategy(source);
-    const result = await strategy.getDocumentEmbedding(summary, { signal });
+    const result = await strategy.getDocumentEmbedding(summary, {
+        signal,
+        prefix: settings.embeddingDocPrefix,
+        url: settings.ollamaUrl,
+        model: settings.embeddingModel,
+    });
 
     if (embeddingCache.size >= MAX_CACHE_SIZE) {
         const firstKey = embeddingCache.keys().next().value;
@@ -826,7 +849,12 @@ export async function generateEmbeddingsForMemories(memories, { signal } = {}) {
     const strategy = getStrategy(source);
 
     const embeddings = await processInBatches(validMemories, 5, async (m) => {
-        return strategy.getDocumentEmbedding(m.summary, { signal });
+        return strategy.getDocumentEmbedding(m.summary, {
+            signal,
+            prefix: settings.embeddingDocPrefix,
+            url: settings.ollamaUrl,
+            model: settings.embeddingModel,
+        });
     });
 
     let count = 0;
@@ -871,7 +899,12 @@ export async function enrichEventsWithEmbeddings(events, { signal } = {}) {
         if (settings?.debugMode) {
             logDebug(`Embedding doc: "${e.summary}"`);
         }
-        return strategy.getDocumentEmbedding(e.summary, { signal });
+        return strategy.getDocumentEmbedding(e.summary, {
+            signal,
+            prefix: settings.embeddingDocPrefix,
+            url: settings.ollamaUrl,
+            model: settings.embeddingModel,
+        });
     });
 
     let count = 0;
@@ -903,7 +936,7 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
     const { MEMORIES_KEY } = await import('./constants.js');
-    const { getOpenVaultData, saveOpenVaultData } = await import('./utils/data.js');
+    const { getOpenVaultData, saveOpenVaultData } = await import('./store/chat-data.js');
     const { setStatus } = await import('./ui/status.js');
     const { showToast } = await import('./utils/dom.js');
 
@@ -975,7 +1008,7 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
 
         if (synced > 0) {
             // Stamp ST fingerprint so mismatch detection works on next load
-            const { stampStVectorFingerprint } = await import('./utils/data.js');
+            const { stampStVectorFingerprint } = await import('./embeddings/migration.js');
             stampStVectorFingerprint(data);
 
             await saveOpenVaultData();
@@ -1009,7 +1042,12 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
             const strategy = getStrategy(source);
 
             const nodeEmbeddings = await processInBatches(nodes, 5, async (n) => {
-                return strategy.getDocumentEmbedding(`${n.type}: ${n.name} - ${n.description}`, { signal });
+                return strategy.getDocumentEmbedding(`${n.type}: ${n.name} - ${n.description}`, {
+                    signal,
+                    prefix: settings.embeddingDocPrefix,
+                    url: settings.ollamaUrl,
+                    model: settings.embeddingModel,
+                });
             });
             for (let i = 0; i < nodes.length; i++) {
                 if (nodeEmbeddings[i]) {

@@ -4,22 +4,25 @@
  * Handles all SillyTavern event subscriptions and processing.
  */
 
-import { extensionName, MEMORIES_KEY, RETRIEVAL_TIMEOUT_MS } from './constants.js';
+import { extensionName, MEMORIES_KEY, METADATA_KEY, RETRIEVAL_TIMEOUT_MS } from './constants.js';
 import { getDeps } from './deps.js';
 import './settings.js'; // Side-effect import to initialize settings with lodash.merge
 import { loadFromChat as loadPerfFromChat, record } from './perf/store.js';
 import {
     clearGenerationLock,
     isChatLoadingCooldown,
+    isSessionDisabled,
     operationState,
     resetOperationStatesIfSafe,
     resetSessionController,
     setChatLoadingCooldown,
     setGenerationLock,
+    setSessionDisabled,
 } from './state.js';
+import { getOpenVaultData } from './store/chat-data.js';
+import { runSchemaMigrations } from './store/migrations/index.js';
 import { refreshAllUI, resetMemoryBrowserPage } from './ui/render.js';
 import { setStatus } from './ui/status.js';
-import { getOpenVaultData } from './utils/data.js';
 import { showToast } from './utils/dom.js';
 import { logDebug, logError } from './utils/logging.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, withTimeout } from './utils/st-helpers.js';
@@ -37,7 +40,7 @@ import { isExtensionEnabled, safeSetExtensionPrompt, withTimeout } from './utils
 export async function autoHideOldMessages() {
     const t0 = performance.now();
     try {
-        const { getExtractedMessageIds } = await import('./extraction/scheduler.js');
+        const { getProcessedFingerprints, getFingerprint } = await import('./extraction/scheduler.js');
         const { getMessageTokenCount, getTokenSum, snapToTurnBoundary } = await import('./utils/tokens.js');
 
         const deps = getDeps();
@@ -49,7 +52,7 @@ export async function autoHideOldMessages() {
         const visibleChatBudget = settings.visibleChatBudget;
 
         const data = getOpenVaultData();
-        const extractedMessageIds = getExtractedMessageIds(data);
+        const processedFps = getProcessedFingerprints(data);
 
         // Get visible (non-system) message indices
         const visibleIndices = [];
@@ -72,7 +75,7 @@ export async function autoHideOldMessages() {
             if (accumulated >= excess) break;
 
             // Only hide already-extracted messages; skip unextracted
-            if (!extractedMessageIds.has(idx)) continue;
+            if (!processedFps.has(getFingerprint(chat[idx]))) continue;
 
             toHide.push(idx);
             accumulated += getMessageTokenCount(chat, idx);
@@ -111,6 +114,12 @@ export async function autoHideOldMessages() {
 export async function onBeforeGeneration(type, _options, dryRun = false) {
     // Skip if disabled, manual mode, or dry run
     if (!isExtensionEnabled() || dryRun) {
+        return;
+    }
+
+    // Skip if session disabled (migration failure)
+    if (isSessionDisabled()) {
+        logDebug('Skipping retrieval - session disabled due to migration failure');
         return;
     }
 
@@ -219,16 +228,47 @@ export async function onChatChanged() {
 
     logDebug('Chat changed, clearing injection, cache and setting load cooldown');
 
-    // Cleanup corrupted character states
     const data = getOpenVaultData();
     const context = getDeps().getContext();
+
+    // Check session kill-switch
+    if (isSessionDisabled()) {
+        logDebug('OpenVault disabled for this session due to migration failure');
+        return;
+    }
+
+    // Cleanup corrupted character states
     if (data && context) {
         const validCharNames = [context.name1, context.name2].filter(Boolean);
         cleanupCharacterStates(data, validCharNames);
     }
 
+    // Run schema migration if needed
+    if (data && (!data.schema_version || data.schema_version < 2)) {
+        const backup = structuredClone(data);
+
+        try {
+            const chat = context.chat || [];
+            if (runSchemaMigrations(data, chat)) {
+                showToast('info', 'OpenVault database optimized.', 'Data Migration');
+                const { saveOpenVaultData } = await import('./store/chat-data.js');
+                await saveOpenVaultData();
+            }
+        } catch (error) {
+            // Rollback
+            logError('Schema migration failed! Rolling back.', error);
+            context.chatMetadata[METADATA_KEY] = backup;
+
+            // Session kill-switch
+            setSessionDisabled(true);
+            showToast('error', 'Data migration failed. OpenVault disabled for this chat session.');
+            return;
+        }
+    }
+
     // Check for embedding model mismatch and wipe stale vectors
-    const { invalidateStaleEmbeddings, saveOpenVaultData } = await import('./utils/data.js');
+    const { invalidateStaleEmbeddings } = await import('./embeddings/migration.js');
+    const { saveOpenVaultData } = await import('./store/chat-data.js');
     const settings = getDeps().getExtensionSettings()[extensionName];
     if (data && settings?.embeddingSource) {
         const wiped = await invalidateStaleEmbeddings(data, settings.embeddingSource);
@@ -274,6 +314,12 @@ export async function onChatChanged() {
  */
 export async function onMessageReceived(messageId) {
     if (!isExtensionEnabled()) return;
+
+    // Skip if session disabled (migration failure)
+    if (isSessionDisabled()) {
+        logDebug('Skipping extraction - session disabled due to migration failure');
+        return;
+    }
 
     const { wakeUpBackgroundWorker } = await import('./extraction/worker.js');
 

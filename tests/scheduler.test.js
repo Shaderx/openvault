@@ -1,10 +1,26 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { PROCESSED_MESSAGES_KEY } from '../src/constants.js';
-import { getBackfillMessageIds, getBackfillStats, getNextBatch, isBatchReady } from '../src/extraction/scheduler.js';
+import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../src/constants.js';
+import {
+    getBackfillMessageIds,
+    getBackfillStats,
+    getFingerprint,
+    getNextBatch,
+    getProcessedFingerprints,
+    getUnextractedMessageIds,
+    isBatchReady,
+} from '../src/extraction/scheduler.js';
+
+// Timestamp counter for test messages
+let testTimestamp = 1000000;
 
 // Helper: build chat with messages
-function makeMessage(isUser, text) {
-    return { mes: text, is_user: isUser };
+function makeMessage(isUser, text, overrides = {}) {
+    return {
+        mes: text,
+        is_user: isUser,
+        send_date: String(testTimestamp++),
+        ...overrides,
+    };
 }
 
 // Helper: create chat with messages
@@ -15,6 +31,160 @@ function makeChat(messages) {
 beforeEach(async () => {
     const { clearTokenCache } = await import('../src/utils/tokens.js');
     clearTokenCache();
+    testTimestamp = 1000000; // Reset timestamp for each test
+});
+
+describe('getFingerprint', () => {
+    it('returns send_date as string when present', () => {
+        const msg = makeMessage(true, 'Hello', { send_date: '1710928374823' });
+        const result = getFingerprint(msg);
+        expect(result).toBe('1710928374823');
+    });
+
+    it('returns content hash when send_date is missing', () => {
+        const msg = makeMessage(true, 'Test message', { send_date: undefined, name: 'TestUser' });
+        const result = getFingerprint(msg);
+        expect(result).toMatch(/^hash_\d+$/);
+    });
+
+    it('returns consistent hash for same content', () => {
+        const msg1 = makeMessage(true, 'Hello', { send_date: undefined, name: 'User' });
+        testTimestamp = 1000000; // Reset for second message
+        const msg2 = makeMessage(true, 'Hello', { send_date: undefined, name: 'User' });
+        expect(getFingerprint(msg1)).toBe(getFingerprint(msg2));
+    });
+
+    it('returns different hashes for different content', () => {
+        const msg1 = makeMessage(true, 'Hello', { send_date: undefined, name: 'User1' });
+        const msg2 = makeMessage(true, 'Hello', { send_date: undefined, name: 'User2' });
+        expect(getFingerprint(msg1)).not.toBe(getFingerprint(msg2));
+    });
+});
+
+describe('scheduler with fingerprints', () => {
+    let chat;
+    let data;
+    let settings;
+
+    beforeEach(() => {
+        testTimestamp = 1000000;
+        chat = [
+            makeMessage(true, 'Short', { send_date: '1000000' }),
+            makeMessage(true, LONG_USER_MESSAGE, { send_date: '1000001' }),
+            makeMessage(true, LONG_USER_MESSAGE, { send_date: '1000002' }),
+            makeMessage(true, LONG_USER_MESSAGE, { send_date: '1000003' }),
+        ];
+        data = { [PROCESSED_MESSAGES_KEY]: [], [MEMORIES_KEY]: [] };
+        settings = { extractionTokenBudget: 100 };
+    });
+
+    describe('getProcessedFingerprints', () => {
+        it('returns empty set when no processed messages', () => {
+            const result = getProcessedFingerprints(data);
+            expect(result.size).toBe(0);
+        });
+
+        it('returns set of fingerprint strings', () => {
+            data[PROCESSED_MESSAGES_KEY] = ['1000000', '1000002'];
+            const result = getProcessedFingerprints(data);
+            expect(result.has('1000000')).toBe(true);
+            expect(result.has('1000002')).toBe(true);
+            expect(result.has('1000001')).toBe(false);
+        });
+    });
+
+    describe('getUnextractedMessageIds', () => {
+        it('returns all indices when no processed messages', () => {
+            const fps = getProcessedFingerprints(data);
+            const result = getUnextractedMessageIds(chat, fps);
+            expect(result).toEqual([0, 1, 2, 3]);
+        });
+
+        it('excludes processed messages by fingerprint', () => {
+            data[PROCESSED_MESSAGES_KEY] = [chat[0].send_date, chat[2].send_date];
+            const fps = getProcessedFingerprints(data);
+            const result = getUnextractedMessageIds(chat, fps);
+            expect(result).toEqual([1, 3]);
+        });
+
+        it('excludes system messages', () => {
+            chat[1].is_system = true;
+            const fps = getProcessedFingerprints(data);
+            const result = getUnextractedMessageIds(chat, fps);
+            expect(result).toEqual([0, 2, 3]);
+        });
+
+        it('handles messages without send_date using hash', () => {
+            chat[0].send_date = undefined;
+            const fp = getFingerprint(chat[0]);
+            data[PROCESSED_MESSAGES_KEY] = [fp];
+            const fps = getProcessedFingerprints(data);
+            const result = getUnextractedMessageIds(chat, fps);
+            expect(result).toEqual([1, 2, 3]);
+        });
+    });
+
+    describe('isBatchReady', () => {
+        it('returns true when unextracted messages meet token budget', () => {
+            const result = isBatchReady(chat, data, settings.extractionTokenBudget);
+            expect(result).toBe(true);
+        });
+
+        it('returns false when processed messages reduce count below budget', () => {
+            // Process first 3 messages, leaving only chat[3] (~50-100 tokens)
+            // Use a higher budget (200) that remaining tokens won't meet
+            data[PROCESSED_MESSAGES_KEY] = [chat[0].send_date, chat[1].send_date, chat[2].send_date];
+            const result = isBatchReady(chat, data, 200);
+            expect(result).toBe(false);
+        });
+    });
+
+    describe('getNextBatch', () => {
+        it('returns null when remaining messages do not meet budget', () => {
+            data[PROCESSED_MESSAGES_KEY] = [chat[0].send_date, chat[1].send_date];
+            // Use a high budget that remaining 2 messages won't meet
+            const batch = getNextBatch(chat, data, 1000);
+            expect(batch).toBeNull();
+        });
+
+        it('returns null when no unextracted messages', () => {
+            data[PROCESSED_MESSAGES_KEY] = chat.map((m) => m.send_date);
+            const batch = getNextBatch(chat, data, settings.extractionTokenBudget);
+            expect(batch).toBeNull();
+        });
+    });
+
+    describe('getBackfillStats', () => {
+        it('calculates correct stats with no processed messages', () => {
+            const stats = getBackfillStats(chat, data);
+            expect(stats.totalMessages).toBe(4);
+            expect(stats.extractedCount).toBe(0);
+            expect(stats.unextractedCount).toBe(4);
+        });
+
+        it('calculates correct stats with some processed messages', () => {
+            data[PROCESSED_MESSAGES_KEY] = [chat[0].send_date, chat[1].send_date];
+            const stats = getBackfillStats(chat, data);
+            expect(stats.totalMessages).toBe(4);
+            expect(stats.extractedCount).toBe(2);
+            expect(stats.unextractedCount).toBe(2);
+        });
+
+        it('excludes system messages from total', () => {
+            chat[0].is_system = true;
+            const stats = getBackfillStats(chat, data);
+            expect(stats.totalMessages).toBe(3);
+        });
+
+        it('handles dead fingerprints (deleted messages)', () => {
+            // Simulate dead fingerprint from deleted message
+            data[PROCESSED_MESSAGES_KEY] = ['9999999', chat[0].send_date];
+            const stats = getBackfillStats(chat, data);
+            // extractedCount should be 1 (only chat[0] visible), not 2
+            expect(stats.extractedCount).toBe(1);
+            expect(stats.unextractedCount).toBe(3);
+        });
+    });
 });
 
 // Helper: create a chat with enough content for token-based tests
@@ -26,6 +196,17 @@ const LONG_BOT_MESSAGE =
     "The bot responds with an equally lengthy and detailed message. It provides comprehensive information in response to the user's query. The response includes multiple points, elaborates on various aspects, and ensures the user receives a thorough answer. The bot continues with more content, adding depth to the conversation. This detailed response helps maintain the token-based testing requirements.";
 
 describe('isBatchReady (token-based)', () => {
+    let savedTimestamp;
+
+    beforeEach(() => {
+        savedTimestamp = testTimestamp;
+        testTimestamp = 1000000;
+    });
+
+    afterEach(() => {
+        testTimestamp = savedTimestamp;
+    });
+
     it('returns true when unextracted tokens >= budget', () => {
         const chat = makeChat([
             [LONG_USER_MESSAGE, true],
@@ -56,7 +237,8 @@ describe('isBatchReady (token-based)', () => {
             [LONG_BOT_MESSAGE, false],
         ]);
         const data = {};
-        data[PROCESSED_MESSAGES_KEY] = [0, 1]; // First turn extracted
+        // Use fingerprints (send_date strings) instead of indices
+        data[PROCESSED_MESSAGES_KEY] = ['1000000', '1000001']; // First turn extracted
 
         // Remaining 2 messages should have enough tokens for a 100-token budget
         expect(isBatchReady(chat, data, 100)).toBe(true);
@@ -66,6 +248,17 @@ describe('isBatchReady (token-based)', () => {
 });
 
 describe('getNextBatch (token-based)', () => {
+    let savedTimestamp;
+
+    beforeEach(() => {
+        savedTimestamp = testTimestamp;
+        testTimestamp = 1000000;
+    });
+
+    afterEach(() => {
+        testTimestamp = savedTimestamp;
+    });
+
     it('accumulates messages until token budget met, then snaps to turn boundary', () => {
         const chat = makeChat([
             [LONG_USER_MESSAGE, true],
@@ -117,7 +310,8 @@ describe('getNextBatch (token-based)', () => {
             [LONG_BOT_MESSAGE, false],
         ]);
         const data = {};
-        data[PROCESSED_MESSAGES_KEY] = [0, 1]; // First turn extracted
+        // Use fingerprints (send_date strings) instead of indices
+        data[PROCESSED_MESSAGES_KEY] = ['1000000', '1000001']; // First turn extracted
 
         const batch = getNextBatch(chat, data, 50);
         // Should start from index 2
@@ -146,7 +340,18 @@ describe('getNextBatch (token-based)', () => {
 });
 
 describe('getBackfillStats (token-based)', () => {
-    it('counts complete batches by token budget', () => {
+    let savedTimestamp;
+
+    beforeEach(() => {
+        savedTimestamp = testTimestamp;
+        testTimestamp = 1000000;
+    });
+
+    afterEach(() => {
+        testTimestamp = savedTimestamp;
+    });
+
+    it('calculates correct stats with no processed messages', () => {
         const chat = makeChat([
             [LONG_USER_MESSAGE, true],
             [LONG_BOT_MESSAGE, false],
@@ -156,11 +361,10 @@ describe('getBackfillStats (token-based)', () => {
             [LONG_BOT_MESSAGE, false],
         ]);
 
-        const stats = getBackfillStats(chat, {}, 100);
-        expect(stats.totalUnextracted).toBe(6);
+        const stats = getBackfillStats(chat, {});
+        expect(stats.totalMessages).toBe(6);
         expect(stats.extractedCount).toBe(0);
-        // Should have at least 1 complete batch with 100-token budget
-        expect(stats.completeBatches).toBeGreaterThanOrEqual(1);
+        expect(stats.unextractedCount).toBe(6);
     });
 
     it('excludes already-extracted from count', () => {
@@ -171,11 +375,12 @@ describe('getBackfillStats (token-based)', () => {
             [LONG_BOT_MESSAGE, false],
         ]);
         const data = {};
-        data[PROCESSED_MESSAGES_KEY] = [0, 1];
+        // Use fingerprints (send_date strings) instead of indices
+        data[PROCESSED_MESSAGES_KEY] = ['1000000', '1000001'];
 
-        const stats = getBackfillStats(chat, data, 100);
+        const stats = getBackfillStats(chat, data);
         expect(stats.extractedCount).toBe(2);
-        expect(stats.totalUnextracted).toBe(2);
+        expect(stats.unextractedCount).toBe(2);
     });
 });
 

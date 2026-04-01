@@ -1,6 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetDeps } from '../../src/deps.js';
-import { safeParseJSON, sliceToTokenBudget, sortMemoriesBySequence, stripThinkingTags } from '../../src/utils/text.js';
+import {
+    extractJsonBlocks,
+    normalizeText,
+    safeParseJSON,
+    scrubConcatenation,
+    sliceToTokenBudget,
+    sortMemoriesBySequence,
+    stripMarkdownFences,
+    stripThinkingTags,
+} from '../../src/utils/text.js';
 
 describe('text', () => {
     afterEach(() => resetDeps());
@@ -108,103 +117,143 @@ describe('text', () => {
             const input = '[TOOL_CALL]function call here[/TOOL_CALL]{"result": true}';
             expect(stripThinkingTags(input)).toBe('{"result": true}');
         });
+
+        it('strips orphaned </ideal_output> closing tag (few-shot example wrapper)', () => {
+            // ideal_output appears AFTER the JSON, not before like thinking tags
+            const input = '{"events": [{"summary": "test"}]}\n</ideal_output>';
+            expect(stripThinkingTags(input)).toBe('{"events": [{"summary": "test"}]}');
+        });
+
+        it('strips </ideal_output> with trailing whitespace', () => {
+            const input = '{"events": []}\n</ideal_output>\n\n';
+            expect(stripThinkingTags(input)).toBe('{"events": []}');
+        });
     });
 
-    describe('safeParseJSON', () => {
+    describe('safeParseJSON (legacy compatibility)', () => {
         beforeEach(() => {
             setupTestContext({ settings: { debugMode: true } });
         });
 
         it('parses valid JSON', () => {
-            expect(safeParseJSON('{"key": "value"}')).toEqual({ key: 'value' });
+            const result = safeParseJSON('{"key": "value"}');
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ key: 'value' });
         });
 
         it('extracts JSON from markdown code block', () => {
-            expect(safeParseJSON('```json\n{"key": "value"}\n```')).toEqual({ key: 'value' });
+            const result = safeParseJSON('```json\n{"key": "value"}\n```');
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ key: 'value' });
         });
 
-        it('handles arrays with recovery wrapper', () => {
-            expect(safeParseJSON('[1, 2, 3]')).toEqual({
-                events: [1, 2, 3],
-                entities: [],
-                relationships: [],
-                reasoning: null,
-            });
+        it('handles arrays directly (no domain wrapping)', () => {
+            const result = safeParseJSON('[1, 2, 3]');
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual([1, 2, 3]);
         });
 
         it('repairs malformed JSON with trailing comma', () => {
-            expect(safeParseJSON('{"key": "value",}')).toEqual({ key: 'value' });
+            const result = safeParseJSON('{"key": "value",}');
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ key: 'value' });
         });
 
         it('repairs JSON with unquoted keys', () => {
-            expect(safeParseJSON('{key: "value"}')).toEqual({ key: 'value' });
+            const result = safeParseJSON('{key: "value"}');
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ key: 'value' });
         });
 
         it('repairs JSON with single quotes', () => {
-            expect(safeParseJSON("{'key': 'value'}")).toEqual({ key: 'value' });
+            const result = safeParseJSON("{'key': 'value'}");
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ key: 'value' });
         });
 
-        it('returns null on completely invalid input', () => {
-            expect(safeParseJSON('not json at all')).toBeNull();
+        // Note: jsonrepair converts "not json at all" to "not json at all" (valid string)
+        it('handles simple text as valid JSON string', () => {
+            const result = safeParseJSON('not json at all');
+            expect(result.success).toBe(true);
+            expect(result.data).toBe('not json at all');
         });
 
         it('handles nested objects', () => {
-            expect(safeParseJSON('{"outer": {"inner": "value"}}')).toEqual({ outer: { inner: 'value' } });
+            const result = safeParseJSON('{"outer": {"inner": "value"}}');
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ outer: { inner: 'value' } });
         });
 
         it('parses JSON after stripping think tags', () => {
-            expect(safeParseJSON('<think>analyzing...</think>{"selected": [1, 2]}')).toEqual({ selected: [1, 2] });
+            const result = safeParseJSON('<think>analyzing...</think>{"selected": [1, 2]}');
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ selected: [1, 2] });
         });
 
         it('handles thinking tags with markdown code block', () => {
-            expect(safeParseJSON('<think>hmm</think>```json\n{"value": 42}\n```')).toEqual({ value: 42 });
+            const result = safeParseJSON('<think>hmm</think>```json\n{"value": 42}\n```');
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ value: 42 });
         });
 
         it('extracts JSON from conversational response', () => {
             const input = 'Here is the result:\n\n{"selected": [1, 2, 3]}\n\nHope this helps!';
-            expect(safeParseJSON(input)).toEqual({ selected: [1, 2, 3] });
+            const result = safeParseJSON(input);
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ selected: [1, 2, 3] });
         });
 
         it('extracts last JSON object when multiple present', () => {
             const input = '{"noise": "before"} some text {"result": "value"}';
-            expect(safeParseJSON(input)).toEqual({ result: 'value' });
+            const result = safeParseJSON(input);
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ result: 'value' });
         });
 
         it('returns last block when tool_call noise is larger than payload', () => {
             const input =
                 '<tool_call>{"name": "extract_events", "arguments": {"query": "test"}}</tool_call>{"events": []}';
-            expect(safeParseJSON(input)).toEqual({ events: [] });
+            const result = safeParseJSON(input);
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ events: [] });
         });
 
         it('returns last block when tool_call noise is smaller than payload', () => {
             const input =
                 '<tool_call>{"name": "x"}</tool_call>{"events": [{"summary": "Alice fought Bob", "importance": 3, "characters_involved": ["Alice", "Bob"]}]}';
             const result = safeParseJSON(input);
-            expect(result.events).toHaveLength(1);
-            expect(result.events[0].summary).toBe('Alice fought Bob');
+            expect(result.success).toBe(true);
+            expect(result.data.events).toHaveLength(1);
+            expect(result.data.events[0].summary).toBe('Alice fought Bob');
         });
 
         it('returns single block unchanged (common case)', () => {
             const input = '{"events": [{"summary": "test"}]}';
-            expect(safeParseJSON(input)).toEqual({ events: [{ summary: 'test' }] });
+            const result = safeParseJSON(input);
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ events: [{ summary: 'test' }] });
         });
 
         it('fixes string concatenation hallucination', () => {
             const input = '{"events": [{"summary": "Alice walked " + "to the garden"}]}';
             const result = safeParseJSON(input);
-            expect(result.events[0].summary).toBe('Alice walked to the garden');
+            expect(result.success).toBe(true);
+            expect(result.data.events[0].summary).toBe('Alice walked to the garden');
         });
 
         it('fixes multiple concatenations in one input', () => {
             const input = '{"a": "hello " + "world", "b": "foo " + "bar"}';
             const result = safeParseJSON(input);
-            expect(result.a).toBe('hello world');
-            expect(result.b).toBe('foo bar');
+            expect(result.success).toBe(true);
+            expect(result.data.a).toBe('hello world');
+            expect(result.data.b).toBe('foo bar');
         });
 
         it('does not break normal JSON without concatenation', () => {
             const input = '{"summary": "no plus signs here"}';
-            expect(safeParseJSON(input)).toEqual({ summary: 'no plus signs here' });
+            const result = safeParseJSON(input);
+            expect(result.success).toBe(true);
+            expect(result.data).toEqual({ summary: 'no plus signs here' });
         });
 
         // === TASK 3: Multi-line concatenation tests ===
@@ -212,26 +261,30 @@ describe('text', () => {
         it('fixes string concatenation across multiple newlines with + on separate line', () => {
             const input = '{"events": [{"summary": "Alice walked "\n+\n"to the garden"}]}';
             const result = safeParseJSON(input);
-            expect(result.events[0].summary).toBe('Alice walked to the garden');
+            expect(result.success).toBe(true);
+            expect(result.data.events[0].summary).toBe('Alice walked to the garden');
         });
 
         it('fixes string concatenation with + stranded between multiple blank lines', () => {
             const input = '{"text": "start"\n\n+\n\n"end"}';
             const result = safeParseJSON(input);
-            expect(result.text).toBe('startend');
+            expect(result.success).toBe(true);
+            expect(result.data.text).toBe('startend');
         });
 
         it('fixes concatenation with CRLF line endings', () => {
             const input = '{"text": "hello"\r\n+\r\n"world"}';
             const result = safeParseJSON(input);
-            expect(result.text).toBe('helloworld');
+            expect(result.success).toBe(true);
+            expect(result.data.text).toBe('helloworld');
         });
 
         it('handles mixed concatenation patterns in same input', () => {
             const input = '{"a": "simple " + "case", "b": "multi"\n+\n"line"}';
             const result = safeParseJSON(input);
-            expect(result.a).toBe('simple case');
-            expect(result.b).toBe('multiline');
+            expect(result.success).toBe(true);
+            expect(result.data.a).toBe('simple case');
+            expect(result.data.b).toBe('multiline');
         });
     });
 
@@ -336,6 +389,406 @@ describe('text', () => {
             const { getMemoryPosition } = await import('../../src/utils/text.js');
             const memory = { sequence };
             expect(getMemoryPosition(memory)).toBe(expected);
+        });
+    });
+
+    describe('normalizeText', () => {
+        it('returns unchanged valid text', () => {
+            expect(normalizeText('{"key": "value"}')).toBe('{"key": "value"}');
+        });
+
+        it('replaces smart double quotes with standard quotes', () => {
+            expect(normalizeText('{"key": "value"}')).toBe('{"key": "value"}');
+        });
+
+        it('replaces smart single quotes with standard single quotes', () => {
+            expect(normalizeText("{'key': 'value'}")).toBe("{'key': 'value'}");
+        });
+
+        it('strips Unicode line separator (U+2028)', () => {
+            expect(normalizeText('{"key": "value\u2028more"}')).toBe('{"key": "valuemore"}');
+        });
+
+        it('strips Unicode paragraph separator (U+2029)', () => {
+            expect(normalizeText('{"key": "value\u2029more"}')).toBe('{"key": "valuemore"}');
+        });
+
+        it('preserves valid escape sequences (\\n, \\r, \\t)', () => {
+            expect(normalizeText('{"key": "line1\\nline2"}')).toBe('{"key": "line1\\nline2"}');
+        });
+
+        it('strips unescaped control characters (\\x00-\\x1F) except \\n \\r \\t', () => {
+            expect(normalizeText('{"key": "value\x00\x01\x02"}')).toBe('{"key": "value"}');
+        });
+
+        it('handles empty string', () => {
+            expect(normalizeText('')).toBe('');
+        });
+    });
+
+    describe('stripMarkdownFences', () => {
+        it('strips complete ```json fence', () => {
+            expect(stripMarkdownFences('```json\n{"key": "value"}\n```')).toBe('{"key": "value"}');
+        });
+
+        it('strips complete ``` fence without language', () => {
+            expect(stripMarkdownFences('```\n{"key": "value"}\n```')).toBe('{"key": "value"}');
+        });
+
+        it('strips unclosed opening fence', () => {
+            expect(stripMarkdownFences('```json\n{"key": "value"}')).toBe('{"key": "value"}');
+        });
+
+        it('strips orphan closing fence', () => {
+            expect(stripMarkdownFences('{"key": "value"}\n```')).toBe('{"key": "value"}');
+        });
+
+        it('handles fence with uppercase JSON', () => {
+            expect(stripMarkdownFences('```JSON\n{"key": "value"}\n```')).toBe('{"key": "value"}');
+        });
+
+        it('handles fence with leading/trailing whitespace', () => {
+            expect(stripMarkdownFences('  ```json  \n  {"key": "value"}  \n  ```  ')).toBe('{"key": "value"}');
+        });
+
+        it('returns unchanged text without fences', () => {
+            expect(stripMarkdownFences('{"key": "value"}')).toBe('{"key": "value"}');
+        });
+
+        it('handles tilde fences (~~~)', () => {
+            expect(stripMarkdownFences('~~~json\n{"key": "value"}\n~~~')).toBe('{"key": "value"}');
+        });
+
+        it('handles empty string', () => {
+            expect(stripMarkdownFences('')).toBe('');
+        });
+    });
+
+    describe('extractJsonBlocks', () => {
+        it('extracts single object block', () => {
+            const blocks = extractJsonBlocks('{"key": "value"}');
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].text).toBe('{"key": "value"}');
+            expect(blocks[0].isObject).toBe(true);
+        });
+
+        it('extracts single array block', () => {
+            const blocks = extractJsonBlocks('[1, 2, 3]');
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].text).toBe('[1, 2, 3]');
+            expect(blocks[0].isObject).toBe(false);
+        });
+
+        it('extracts multiple blocks', () => {
+            const blocks = extractJsonBlocks('{"a": 1} text {"b": 2}');
+            expect(blocks).toHaveLength(2);
+            expect(blocks[0].text).toBe('{"a": 1}');
+            expect(blocks[1].text).toBe('{"b": 2}');
+        });
+
+        it('handles nested brackets', () => {
+            const blocks = extractJsonBlocks('{"outer": {"inner": [1, 2, 3]}}');
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].text).toBe('{"outer": {"inner": [1, 2, 3]}}');
+        });
+
+        it('ignores brackets inside double-quoted strings', () => {
+            const blocks = extractJsonBlocks('{"key": "value with {brackets}"}');
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].text).toBe('{"key": "value with {brackets}"}');
+        });
+
+        it('ignores brackets inside single-quoted strings', () => {
+            const blocks = extractJsonBlocks("{'key': 'value with {brackets}'}");
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].text).toBe("{'key': 'value with {brackets}'}");
+        });
+
+        it('ignores brackets inside backtick template literals', () => {
+            // Some LLMs hallucinate template literals instead of standard quotes
+            const blocks = extractJsonBlocks('{"summary": `They walked into the {dark} room`}');
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].text).toBe('{"summary": `They walked into the {dark} room`}');
+        });
+
+        it('handles escaped quotes correctly', () => {
+            const blocks = extractJsonBlocks('{"key": "value \\"with\\" quotes"}');
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].text).toBe('{"key": "value \\"with\\" quotes"}');
+        });
+
+        it('handles escaped backslash before quote (\\\\")', () => {
+            // \\" means escaped backslash followed by quote (string terminator)
+            const blocks = extractJsonBlocks('{"key": "path\\\\", "next": "value"}');
+            expect(blocks).toHaveLength(1);
+            expect(blocks[0].text).toBe('{"key": "path\\\\", "next": "value"}');
+        });
+
+        it('returns empty array for no blocks', () => {
+            expect(extractJsonBlocks('no json here')).toEqual([]);
+        });
+
+        it('handles empty string', () => {
+            expect(extractJsonBlocks('')).toEqual([]);
+        });
+
+        it('tracks start and end positions', () => {
+            const blocks = extractJsonBlocks('prefix {"key": "value"} suffix');
+            expect(blocks[0].start).toBe(7);
+            expect(blocks[0].end).toBe(22);
+        });
+    });
+
+    describe('scrubConcatenation', () => {
+        it('fixes simple string concatenation', () => {
+            expect(scrubConcatenation('{"a": "hello" + "world"}')).toBe('{"a": "helloworld"}');
+        });
+
+        it('fixes concatenation with spaces', () => {
+            expect(scrubConcatenation('{"a": "hello" + "world"}')).toBe('{"a": "helloworld"}');
+        });
+
+        it('fixes concatenation across newlines', () => {
+            expect(scrubConcatenation('{"a": "hello"\n+\n"world"}')).toBe('{"a": "helloworld"}');
+        });
+
+        it('fixes concatenation with CRLF', () => {
+            expect(scrubConcatenation('{"a": "hello"\r\n+\r\n"world"}')).toBe('{"a": "helloworld"}');
+        });
+
+        it('fixes dangling plus before punctuation', () => {
+            expect(scrubConcatenation('{"a": "text" + , "b": 1}')).toBe('{"a": "text", "b": 1}');
+        });
+
+        it('fixes dangling plus at EOF', () => {
+            expect(scrubConcatenation('{"a": "text" +')).toBe('{"a": "text"');
+        });
+
+        it('fixes full-width plus (＋)', () => {
+            expect(scrubConcatenation('{"a": "hello"＋"world"}')).toBe('{"a": "helloworld"}');
+        });
+
+        it('preserves plus signs inside strings', () => {
+            expect(scrubConcatenation('{"math": "1 + 2 = 3"}')).toBe('{"math": "1 + 2 = 3"}');
+        });
+
+        it('handles multiple concatenations', () => {
+            expect(scrubConcatenation('{"a": "x" + "y", "b": "p" + "q"}')).toBe('{"a": "xy", "b": "pq"}');
+        });
+
+        it('handles empty string', () => {
+            expect(scrubConcatenation('')).toBe('');
+        });
+
+        it('does not match variable interpolations', () => {
+            // Variable interpolations should NOT be fixed - they're a different error
+            expect(scrubConcatenation('{"a": "hello" + var + "world"}')).toBe('{"a": "hello" + var + "world"}');
+        });
+    });
+
+    describe('safeParseJSON (refactored)', () => {
+        // === Tier 0: Input Validation ===
+        describe('Tier 0: Input Validation', () => {
+            it('returns success for already-parsed object', () => {
+                const result = safeParseJSON({ key: 'value' });
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+
+            it('returns success for already-parsed array', () => {
+                const result = safeParseJSON([1, 2, 3]);
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual([1, 2, 3]);
+            });
+
+            it('returns failure for null', () => {
+                const result = safeParseJSON(null);
+                expect(result.success).toBe(false);
+                expect(result.error).toBeInstanceOf(Error);
+            });
+
+            it('returns failure for undefined', () => {
+                const result = safeParseJSON(undefined);
+                expect(result.success).toBe(false);
+            });
+
+            it('returns failure for empty string', () => {
+                const result = safeParseJSON('');
+                expect(result.success).toBe(false);
+            });
+
+            it('returns failure for whitespace-only string', () => {
+                const result = safeParseJSON('   \n\t  ');
+                expect(result.success).toBe(false);
+            });
+
+            it('coerces number to string and parses', () => {
+                const result = safeParseJSON(42);
+                expect(result.success).toBe(true);
+                expect(result.data).toBe(42);
+            });
+
+            it('coerces boolean to string and parses', () => {
+                const result = safeParseJSON(true);
+                expect(result.success).toBe(true);
+                expect(result.data).toBe(true);
+            });
+        });
+
+        // === Tier 1: Native Parse ===
+        describe('Tier 1: Native Parse', () => {
+            it('parses valid JSON object', () => {
+                const result = safeParseJSON('{"key": "value"}');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+
+            it('parses valid JSON array', () => {
+                const result = safeParseJSON('[1, 2, 3]');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual([1, 2, 3]);
+            });
+
+            it('parses fenced JSON (markdown hoisted)', () => {
+                const result = safeParseJSON('```json\n{"key": "value"}\n```');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+        });
+
+        // === Tier 2: JsonRepair ===
+        describe('Tier 2: JsonRepair', () => {
+            it('repairs trailing commas', () => {
+                const result = safeParseJSON('{"key": "value",}');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+
+            it('repairs unquoted keys', () => {
+                const result = safeParseJSON('{key: "value"}');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+
+            it('repairs single quotes', () => {
+                const result = safeParseJSON("{'key': 'value'}");
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+        });
+
+        // === Tier 3: Normalize + Extract ===
+        describe('Tier 3: Normalize + Extract', () => {
+            it('normalizes smart quotes', () => {
+                const result = safeParseJSON('{"key": "value"}');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+
+            it('extracts last substantial block', () => {
+                const result = safeParseJSON(
+                    '{"tiny": 1}{"events": [{"summary": "A very long summary that makes this block larger than 50 chars"}]}'
+                );
+                expect(result.success).toBe(true);
+                expect(result.data.events).toBeDefined();
+            });
+
+            it('filters out tiny trailing blocks', () => {
+                const result = safeParseJSON(
+                    '{"events": [{"summary": "A very long summary that makes this block larger than 50 chars"}]}{"status": "done"}'
+                );
+                expect(result.success).toBe(true);
+                expect(result.data.events).toBeDefined();
+                expect(result.data.status).toBeUndefined();
+            });
+
+            it('keeps tiny block if only one exists', () => {
+                const result = safeParseJSON('{"tiny": 1}');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ tiny: 1 });
+            });
+        });
+
+        // === Tier 4: Aggressive Scrub ===
+        describe('Tier 4: Aggressive Scrub', () => {
+            it('fixes string concatenation', () => {
+                const result = safeParseJSON('{"key": "hello" + "world"}');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'helloworld' });
+            });
+        });
+
+        // === Error Context ===
+        describe('Error Context', () => {
+            it('includes tier in errorContext on null input', () => {
+                const result = safeParseJSON(null);
+                expect(result.success).toBe(false);
+                expect(result.errorContext.tier).toBe(0);
+            });
+
+            it('includes originalLength in errorContext on empty string', () => {
+                const result = safeParseJSON('');
+                expect(result.success).toBe(false);
+                expect(result.errorContext.originalLength).toBe(0);
+            });
+
+            it('repairs unclosed brackets via jsonrepair', () => {
+                // jsonrepair is very robust and can fix this
+                const result = safeParseJSON('{"key": "value"');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+        });
+
+        // === Thinking Tags ===
+        describe('Thinking Tags', () => {
+            it('strips thinking tags before parsing', () => {
+                const result = safeParseJSON('<thinking>reasoning here</thinking>{"key": "value"}');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+
+            it('strips multiple thinking tag variants', () => {
+                const result = safeParseJSON('[THINK]reasoning[/THINK]{"key": "value"}');
+                expect(result.success).toBe(true);
+                expect(result.data).toEqual({ key: 'value' });
+            });
+        });
+
+        // === Domain Decoupling ===
+        describe('Domain Decoupling', () => {
+            it('does NOT wrap bare arrays in events object', () => {
+                const result = safeParseJSON('[{"name": "Alice"}]');
+                expect(result.success).toBe(true);
+                expect(Array.isArray(result.data)).toBe(true);
+                expect(result.data[0].name).toBe('Alice');
+                // Should NOT have events wrapper
+                expect(result.data.events).toBeUndefined();
+            });
+        });
+
+        // === Options ===
+        describe('Options', () => {
+            it('respects minimumBlockSize option', () => {
+                const result = safeParseJSON('{"a": 1}{"b": 2}', { minimumBlockSize: 10 });
+                // Both blocks are < 10 chars, but one must be returned
+                expect(result.success).toBe(true);
+            });
+
+            it('calls onError callback on failure', () => {
+                const onError = vi.fn();
+                // Use null input which fails at Tier 0
+                const result = safeParseJSON(null, { onError });
+                expect(result.success).toBe(false);
+                expect(onError).toHaveBeenCalledWith(expect.objectContaining({ tier: 0 }));
+            });
+
+            it('does not call onError on success', () => {
+                const onError = vi.fn();
+                const result = safeParseJSON('{"key": "value"}', { onError });
+                expect(result.success).toBe(true);
+                expect(onError).not.toHaveBeenCalled();
+            });
         });
     });
 });

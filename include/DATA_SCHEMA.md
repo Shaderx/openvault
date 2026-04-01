@@ -7,18 +7,20 @@ Reference document for data structures and non-obvious algorithm logic.
 ```typescript
 {
   embedding_model_id: string,  // tracks which model generated stored embeddings
+  st_vector_source: string,    // ST Vector source used for last sync (e.g., 'openrouter', 'openai')
+  st_vector_model: string,     // ST Vector model used for last sync (for mismatch detection)
   memories: [{ // Both events and reflections
     id: string, type: "event"|"reflection", summary: string, importance: 1-5,
     tokens: string[], message_ids?: number[], source_ids?: string[], // source_ids for reflections
     level?: number, parent_ids?: string[], // Reflection hierarchy: level=1 (from events), level=2+ (from reflections)
-    characters_involved: string[], embedding_b64: string, archived: boolean, mentions?: number
+    characters_involved: string[], embedding_b64: string, _st_synced?: boolean, archived: boolean, mentions?: number
   }],
   graph: {
-    nodes: { [normKey]: { name, type, description, mentions, embedding_b64: string, aliases? } },
+    nodes: { [normKey]: { name, type, description, mentions, embedding_b64: string, _st_synced?: boolean, aliases? } },
     edges: { "src__tgt": { source, target, description, weight, _descriptionTokens: number } },
     _edgesNeedingConsolidation: string[]  // Edge keys pending consolidation
   },
-  communities: { "C0": { title, summary, findings: string[], nodeKeys: string[], embedding_b64: string } },
+  communities: { "C0": { title, summary, findings: string[], nodeKeys: string[], embedding_b64: string, _st_synced?: boolean } },
   global_world_state: { summary: string, last_updated: number, community_count: number },
   character_states: { "Name": { current_emotion, emotion_intensity, known_events: string[] } },
   reflection_state: { "Name": { importance_sum: number } },
@@ -27,6 +29,14 @@ Reference document for data structures and non-obvious algorithm logic.
   perf: { [metricId]: { ms: number, size: string | null, ts: number } }
 }
 ```
+
+**Repository Methods (PR6)**: Data mutations use explicit methods from `store/chat-data.js`:
+- `addMemories(newMemories)` - Append to memories array
+- `markMessagesProcessed(fingerprints)` - Record processed message IDs
+- `incrementGraphMessageCount(count)` - Update graph message counter
+- `updateMemory(id, updates)` - Update memory fields
+- `deleteMemory(id)` - Remove memory by ID
+- `deleteCurrentChatData()` - Purge all data for current chat
 
 ## 2. RETRIEVAL MATH (Alpha-Blend)
 

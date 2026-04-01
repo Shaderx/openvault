@@ -18,7 +18,6 @@ export const extensionFolderPath = pathFromST
 export const METADATA_KEY = 'openvault';
 export const MEMORIES_KEY = 'memories';
 export const CHARACTERS_KEY = 'character_states';
-export const LAST_PROCESSED_KEY = 'last_processed_message_id';
 export const PROCESSED_MESSAGES_KEY = 'processed_message_ids';
 
 // =============================================================================
@@ -42,6 +41,15 @@ export const POSITION_LABELS = Object.freeze([
     { value: 4, label: 'In-chat', description: 'At specified message depth' },
     { value: -1, label: 'Custom', description: 'Use macro manually' },
 ]);
+
+// ============== Entity Types ==============
+export const ENTITY_TYPES = Object.freeze({
+    PERSON: 'PERSON',
+    PLACE: 'PLACE',
+    ORGANIZATION: 'ORGANIZATION',
+    OBJECT: 'OBJECT',
+    CONCEPT: 'CONCEPT',
+});
 
 // Default settings
 export const defaultSettings = {
@@ -126,6 +134,13 @@ export const embeddingModelPrefixes = {
     _default: { queryPrefix: 'query: ', docPrefix: 'passage: ' },
 };
 
+// ============== Embedding Sources ==============
+export const EMBEDDING_SOURCES = Object.freeze({
+    LOCAL: 'local',
+    OLLAMA: 'ollama',
+    ST_VECTOR: 'st_vector',
+});
+
 // Timeout constants
 export const RETRIEVAL_TIMEOUT_MS = 60000; // 60 seconds max for retrieval
 export const GENERATION_LOCK_TIMEOUT_MS = 120000; // 2 minutes safety timeout
@@ -197,8 +212,22 @@ export const COMBINED_BOOST_WEIGHT = 15;
 /** Forgetfulness curve: minimum score for importance-5 memories */
 export const IMPORTANCE_5_FLOOR = 5;
 
-/** Entity merge: semantic similarity threshold for clustering */
-export const ENTITY_MERGE_THRESHOLD = 0.8;
+/**
+ * Entity merge: semantic similarity threshold for clustering.
+ * PERSON entities: high cosine alone is sufficient (names are unique identifiers).
+ * OBJECT/CONCEPT/PLACE/ORGANIZATION: always require token overlap confirmation
+ * to prevent false merges when embeddings are inflated by shared context.
+ */
+export const ENTITY_MERGE_THRESHOLD = 0.9;
+
+export const GRAPH_JACCARD_DUPLICATE_THRESHOLD = 0.6;
+export const ENTITY_TOKEN_OVERLAP_MIN_RATIO = 0.5;
+export const REFLECTION_SKIP_SIMILARITY = 0.85;
+export const REFLECTION_MIN_MEMORIES = 40;
+export const BM25_K1 = 1.2;
+export const BM25_B = 0.75;
+export const CORPUS_GROUNDED_BOOST_RATIO = 0.6;
+export const NON_GROUNDED_BOOST_RATIO = 0.4;
 
 // UI hint defaults - derived from defaultSettings and QUERY_CONTEXT_DEFAULTS
 // Used to populate "(default: X)" hints in settings_panel.html
@@ -282,6 +311,8 @@ export const CONSOLIDATION = {
     TOKEN_THRESHOLD: 150, // Trigger consolidation when description exceeds this
     MAX_CONSOLIDATION_BATCH: 10, // Max edges to consolidate per community detection run
     CONSOLIDATED_DESCRIPTION_CAP: 2, // After consolidation, cap future additions to 2 segments
+    dedupSimilarityThreshold: 0.92, // Cosine similarity threshold for intra-batch dedup fallback
+    dedupJaccardThreshold: 0.6, // Token-overlap (Jaccard) threshold for intra-batch dedup fallback
 };
 
 // Maximum number of recent memories to consider as reflection candidates.
@@ -297,3 +328,11 @@ export const GLOBAL_SYNTHESIS_CHUNK_SIZE = 10;
 // preventing object orphaning in hub-and-spoke topologies (closed-room RPs)
 // while still breaking hairball gravity in open-world RPs.
 export const MAIN_CHARACTER_ATTENUATION = 0.05;
+
+// ============== ST API Endpoints ==============
+export const ST_API_ENDPOINTS = Object.freeze({
+    INSERT: '/api/vector/insert',
+    DELETE: '/api/vector/delete',
+    PURGE: '/api/vector/purge',
+    QUERY: '/api/vector/query',
+});

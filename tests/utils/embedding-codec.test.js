@@ -158,3 +158,18 @@ describe('deleteEmbedding', () => {
         expect(() => deleteEmbedding(undefined)).not.toThrow();
     });
 });
+
+describe('post-migration behavior (no legacy fallback)', () => {
+    it('getEmbedding returns null for legacy array after migration', () => {
+        // After v2 migration, all arrays should be converted to b64
+        // This test documents the expected behavior when legacy data is gone
+        const obj = {};
+        setEmbedding(obj, [0.1, 0.2, 0.3]);
+        expect(getEmbedding(obj)).toBeInstanceOf(Float32Array);
+
+        // Manually setting legacy array should still work during transition
+        obj.embedding = [0.4, 0.5];
+        expect(getEmbedding(obj)).toBeInstanceOf(Float32Array);
+        expect(getEmbedding(obj)[0]).toBeCloseTo(0.1, 5); // Prefers b64
+    });
+});

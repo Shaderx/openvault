@@ -2,6 +2,10 @@
  * Community summarization and global synthesis prompt builders.
  */
 
+/** @typedef {import('../../types.d.ts').CommunitySummaryParams} CommunitySummaryParams */
+/** @typedef {import('../../types.d.ts').GlobalSynthesisParams} GlobalSynthesisParams */
+/** @typedef {import('../../types.d.ts').LLMMessages} LLMMessages */
+
 import {
     assembleSystemPrompt,
     assembleUserConstraints,
@@ -13,6 +17,15 @@ import { COMMUNITIES_ROLE, GLOBAL_SYNTHESIS_ROLE } from './role.js';
 import { COMMUNITY_RULES, GLOBAL_SYNTHESIS_RULES } from './rules.js';
 import { COMMUNITY_SCHEMA, GLOBAL_SYNTHESIS_SCHEMA } from './schema.js';
 
+/**
+ * Build the community summarization prompt.
+ * @param {string[]} nodeLines - Formatted node descriptions
+ * @param {string[]} edgeLines - Formatted edge descriptions
+ * @param {string} preamble - System prompt preamble
+ * @param {'auto'|'en'|'ru'} outputLanguage - Output language (default: 'auto')
+ * @param {string} prefill - Assistant prefill text (required)
+ * @returns {LLMMessages} Array of {role, content} message objects
+ */
 export function buildCommunitySummaryPrompt(nodeLines, edgeLines, preamble, outputLanguage = 'auto', prefill) {
     if (!prefill) {
         throw new Error('buildCommunitySummaryPrompt: prefill is required');
@@ -46,6 +59,14 @@ ${constraints}`;
     return buildMessages(systemPrompt, userPrompt, prefill, preamble);
 }
 
+/**
+ * Build the global world state synthesis prompt.
+ * @param {import('../../types.d.ts').CommunitySummary[]} communities - Community summaries to synthesize
+ * @param {string} preamble - System prompt preamble
+ * @param {'auto'|'en'|'ru'} outputLanguage - Output language (default: 'auto')
+ * @param {string} prefill - Assistant prefill text (required)
+ * @returns {LLMMessages} Array of {role, content} message objects
+ */
 export function buildGlobalSynthesisPrompt(communities, preamble, outputLanguage = 'auto', prefill) {
     if (!prefill) {
         throw new Error('buildGlobalSynthesisPrompt: prefill is required');

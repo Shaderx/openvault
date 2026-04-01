@@ -25,6 +25,18 @@ describe('injection settings UI', () => {
                 IN_CHAT: 4,
                 CUSTOM: -1,
             },
+            EMBEDDING_SOURCES: {
+                LOCAL: 'local',
+                OLLAMA: 'ollama',
+                ST_VECTOR: 'st_vector',
+            },
+            ENTITY_TYPES: {
+                PERSON: 'PERSON',
+                PLACE: 'PLACE',
+                ORGANIZATION: 'ORGANIZATION',
+                OBJECT: 'OBJECT',
+                CONCEPT: 'CONCEPT',
+            },
         }));
 
         // Mock deps.js with getContext

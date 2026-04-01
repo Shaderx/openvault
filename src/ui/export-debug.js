@@ -9,7 +9,7 @@ import { getDeps } from '../deps.js';
 import { isEmbeddingsEnabled } from '../embeddings.js';
 import { getAll as getPerfMetrics } from '../perf/store.js';
 import { getCachedScoringDetails, getLastRetrievalDebug } from '../retrieval/debug-cache.js';
-import { getOpenVaultData } from '../utils/data.js';
+import { getOpenVaultData } from '../store/chat-data.js';
 import { showToast } from '../utils/dom.js';
 import { deleteEmbedding } from '../utils/embedding-codec.js';
 

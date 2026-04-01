@@ -66,5 +66,22 @@
                 "useButtonType": "off"
             }
         }
+    },
+    "overrides": [
+        {
+            "includes": ["src/types.d.ts"],
+            "linter": {
+                "rules": {
+                    "suspicious": {
+                        "noExplicitAny": "off"
+                    }
+                }
+            }
+        }
+    ],
+    "html": {
+        "parser": {
+            "interpolation": true
+        }
     }
 }

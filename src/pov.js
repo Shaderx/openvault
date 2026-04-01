@@ -7,7 +7,7 @@
 import { CHARACTERS_KEY, MEMORIES_KEY } from './constants.js';
 import { getDeps } from './deps.js';
 import { normalizeKey } from './graph/graph.js';
-import { getOpenVaultData } from './utils/data.js';
+import { getOpenVaultData } from './store/chat-data.js';
 import { logDebug } from './utils/logging.js';
 
 /**

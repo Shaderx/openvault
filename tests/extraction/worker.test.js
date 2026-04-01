@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetDeps } from '../../src/deps.js';
+import { setWorkerRunning } from '../../src/state.js';
 
 describe('worker abort handling', () => {
     beforeEach(async () => {
         vi.resetModules();
+        setWorkerRunning(false);
         await registerCdnOverrides();
     });
 
     afterEach(() => {
+        setWorkerRunning(false);
         resetDeps();
         vi.restoreAllMocks();
     });
@@ -28,7 +31,8 @@ describe('worker abort handling', () => {
             settings: { enabled: true, extractionTokenBudget: 9999 },
         });
 
-        const { wakeUpBackgroundWorker, isWorkerRunning } = await import('../../src/extraction/worker.js');
+        const { wakeUpBackgroundWorker } = await import('../../src/extraction/worker.js');
+        const { isWorkerRunning } = await import('../../src/state.js');
 
         wakeUpBackgroundWorker();
         // Wait for async loop to settle

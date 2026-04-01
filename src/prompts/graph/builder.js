@@ -2,6 +2,12 @@
  * Graph extraction and edge consolidation prompt builders.
  */
 
+/** @typedef {import('../../types.d.ts').GraphPromptParams} GraphPromptParams */
+/** @typedef {import('../../types.d.ts').EdgeConsolidationParams} EdgeConsolidationParams */
+/** @typedef {import('../../types.d.ts').LLMMessages} LLMMessages */
+/** @typedef {import('../../types.d.ts').GraphEdge} GraphEdge */
+/** @typedef {import('../../types.d.ts').PromptContext} PromptContext */
+
 import {
     assembleSystemPrompt,
     assembleUserConstraints,
@@ -14,11 +20,16 @@ import { EDGE_CONSOLIDATION_ROLE, GRAPH_ROLE } from './role.js';
 import { EDGE_CONSOLIDATION_RULES, GRAPH_RULES } from './rules.js';
 import { EDGE_CONSOLIDATION_SCHEMA, GRAPH_SCHEMA } from './schema.js';
 
+/**
+ * Build the graph extraction prompt (Stage B).
+ * @param {GraphPromptParams} params - Prompt builder parameters
+ * @returns {LLMMessages} Array of {role, content} message objects
+ */
 export function buildGraphExtractionPrompt({
     messages,
     names,
     extractedEvents = [],
-    context = {},
+    context = /** @type {PromptContext} */ ({}),
     preamble,
     prefill,
     outputLanguage = 'auto',
@@ -60,6 +71,14 @@ ${constraints}`;
     return buildMessages(systemPrompt, userPrompt, prefill, preamble);
 }
 
+/**
+ * Build the edge consolidation prompt.
+ * @param {GraphEdge} edgeData - Edge to consolidate
+ * @param {string} [preamble] - System prompt preamble
+ * @param {'auto'|'en'|'ru'} [outputLanguage='auto'] - Output language
+ * @param {string} [prefill] - Assistant prefill text (required at runtime, throws if missing)
+ * @returns {LLMMessages} Array of {role, content} message objects
+ */
 export function buildEdgeConsolidationPrompt(edgeData, preamble, outputLanguage = 'auto', prefill) {
     if (!prefill) {
         throw new Error('buildEdgeConsolidationPrompt: prefill is required');

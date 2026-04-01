@@ -6,7 +6,7 @@
 
 import { CHARACTERS_KEY, defaultSettings, extensionName, MEMORIES_KEY } from '../constants.js';
 import { getDeps } from '../deps.js';
-import { getOpenVaultData } from '../utils/data.js';
+import { getOpenVaultData } from '../store/chat-data.js';
 import { hasEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
 import { getStatusText } from './helpers.js';
@@ -105,7 +105,7 @@ export async function refreshStats() {
     }
 
     const { getTokenSum } = await import('../utils/tokens.js');
-    const { getExtractedMessageIds, getUnextractedMessageIds } = await import('../extraction/scheduler.js');
+    const { getProcessedFingerprints, getUnextractedMessageIds } = await import('../extraction/scheduler.js');
 
     const memories = data[MEMORIES_KEY] || [];
     const eventCount = memories.length;
@@ -130,7 +130,6 @@ export async function refreshStats() {
     $('#openvault_stat_reflections').text(reflectionCount);
     $('#openvault_stat_entities').text(nodes.length);
     $('#openvault_stat_communities').text(communities.length);
-    $('#openvault_stat_graph_nodes').text(nodes.length);
     $('#openvault_stat_graph_edges').text(edges.length);
 
     // Calculate batch progress (token-based)
@@ -139,8 +138,8 @@ export async function refreshStats() {
 
     const context = getDeps().getContext();
     const chat = context.chat || [];
-    const extractedIds = getExtractedMessageIds(data);
-    const unextractedIds = getUnextractedMessageIds(chat, extractedIds);
+    const processedFps = getProcessedFingerprints(data);
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
     const unextractedTokens = getTokenSum(chat, unextractedIds);
 
     // Calculate progress percentage

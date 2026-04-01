@@ -2,6 +2,10 @@
  * Event extraction prompt builder (Stage A).
  */
 
+/** @typedef {import('../../types.d.ts').BasePromptParams} BasePromptParams */
+/** @typedef {import('../../types.d.ts').LLMMessages} LLMMessages */
+/** @typedef {import('../../types.d.ts').PromptContext} PromptContext */
+
 import {
     assembleSystemPrompt,
     assembleUserConstraints,
@@ -17,12 +21,13 @@ import { EVENT_SCHEMA } from './schema.js';
 
 /**
  * Build the event extraction prompt (Stage 1).
- * @returns {Array<{role: string, content: string}>}
+ * @param {BasePromptParams} params - Prompt builder parameters
+ * @returns {LLMMessages} Array of {role, content} message objects
  */
 export function buildEventExtractionPrompt({
     messages,
     names,
-    context = {},
+    context = /** @type {PromptContext} */ ({}),
     preamble,
     prefill,
     outputLanguage = 'auto',

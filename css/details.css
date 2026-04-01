@@ -5,7 +5,6 @@
     border-left: 3px solid var(--SmartThemeQuoteColor, #4a90d9);
     border-radius: 4px;
     background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 40%, transparent);
-    overflow: hidden;
 }
 
 .openvault-details summary {

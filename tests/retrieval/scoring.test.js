@@ -56,6 +56,26 @@ describe('selectMemoriesWithSoftBalance', () => {
 });
 
 describe('selectRelevantMemories with soft balance', () => {
+    // Common config fixtures
+    const scoringConfig = {
+        forgetfulnessBaseLambda: 0.05,
+        forgetfulnessImportance5Floor: undefined,
+        reflectionDecayThreshold: undefined,
+        vectorSimilarityThreshold: 0.5,
+        alpha: 0.7,
+        combinedBoostWeight: 15,
+        embeddingSource: 'ollama', // Use ollama to avoid local embedding model in tests
+    };
+
+    const queryConfig = {
+        entityWindowSize: 10,
+        embeddingWindowSize: 5,
+        recencyDecayFactor: 0.09,
+        topEntitiesCount: 5,
+        entityBoostWeight: 5.0,
+        exactPhraseBoostWeight: 10.0,
+    };
+
     it('should use selectMemoriesWithSoftBalance instead of sliceToTokenBudget', async () => {
         const { selectRelevantMemories } = await import('../../src/retrieval/scoring.js');
 
@@ -68,6 +88,8 @@ describe('selectRelevantMemories with soft balance', () => {
             graphNodes: {},
             graphEdges: {},
             allAvailableMemories: [],
+            scoringConfig,
+            queryConfig,
         };
 
         // Mock dependencies - this test verifies structure, actual scoring is mocked
@@ -92,6 +114,8 @@ describe('selectRelevantMemories with soft balance', () => {
             graphNodes: {},
             graphEdges: {},
             allAvailableMemories: memories,
+            scoringConfig,
+            queryConfig,
         };
 
         const result = await selectRelevantMemories(memories, mockCtx);

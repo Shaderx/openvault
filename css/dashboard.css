@@ -205,3 +205,76 @@
 #openvault_settings.working .openvault-tab-btn[data-tab="dashboard"] i {
     animation: spin 1s linear infinite;
 }
+
+/* Emergency Cut Button Stack */
+.openvault-button-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.openvault-button-stack .menu_button {
+    width: 100%;
+}
+
+/* Emergency Cut Danger Button */
+#openvault_emergency_cut_btn {
+    border-color: var(--danger-border, #dc3545);
+    color: var(--danger-text, #dc3545);
+}
+
+#openvault_emergency_cut_btn:hover {
+    background: var(--danger-bg, rgba(220, 53, 69, 0.13));
+}
+
+/* Emergency Cut Modal */
+.openvault-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.openvault-modal.hidden {
+    display: none;
+}
+
+.openvault-modal-content {
+    background: var(--background-color, #1a1a1a);
+    padding: 20px;
+    border-radius: 8px;
+    min-width: 300px;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.openvault-modal-content h3 {
+    margin: 0 0 10px 0;
+    color: var(--SmartThemeBodyColor, #ccc);
+}
+
+.openvault-modal-content h3 i {
+    margin-right: 8px;
+    color: var(--danger-text, #dc3545);
+}
+
+.openvault-modal-hint {
+    font-size: 0.85em;
+    color: var(--SmartThemeEmColor, #666);
+    margin: 8px 0 15px 0;
+    font-style: italic;
+}
+
+#openvault_emergency_cancel {
+    margin-top: 15px;
+}
+
+#openvault_emergency_cancel:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

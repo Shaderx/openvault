@@ -13,7 +13,14 @@
  *   align with existing insights (>85%).
  */
 
-import { extensionName, REFLECTION_CANDIDATE_LIMIT } from '../constants.js';
+import {
+    extensionName,
+    REFLECTION_CANDIDATE_LIMIT,
+    REFLECTION_DEDUP_REJECT_THRESHOLD,
+    REFLECTION_DEDUP_REPLACE_THRESHOLD,
+    REFLECTION_MIN_MEMORIES,
+    REFLECTION_SKIP_SIMILARITY,
+} from '../constants.js';
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
 import { parseUnifiedReflectionResponse } from '../extraction/structured.js';
@@ -27,12 +34,10 @@ import {
     resolveOutputLanguage,
 } from '../prompts/index.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
-import { generateId, getCurrentChatId, isStVectorSource, syncItemsToST } from '../utils/data.js';
-import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
+import { generateId } from '../store/chat-data.js';
+import { cyrb53, getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
 import { sortMemoriesBySequence } from '../utils/text.js';
-
-const REFLECTION_THRESHOLD = 40;
 
 /**
  * Check if a character has accumulated enough importance to trigger reflection.
@@ -41,7 +46,7 @@ const REFLECTION_THRESHOLD = 40;
  * @param {number} threshold - Importance threshold (default: 30)
  * @returns {boolean}
  */
-export function shouldReflect(reflectionState, characterName, threshold = REFLECTION_THRESHOLD) {
+export function shouldReflect(reflectionState, characterName, threshold = REFLECTION_MIN_MEMORIES) {
     const charState = reflectionState[characterName];
     if (!charState) return false;
     return charState.importance_sum >= threshold;
@@ -142,7 +147,11 @@ export function filterDuplicateReflections(
  * @param {number} threshold - Similarity threshold for skipping (default: 0.85)
  * @returns {{shouldSkip: boolean, reason: string|null}}
  */
-export function shouldSkipReflectionGeneration(recentMemories, existingReflections, threshold = 0.85) {
+export function shouldSkipReflectionGeneration(
+    recentMemories,
+    existingReflections,
+    threshold = REFLECTION_SKIP_SIMILARITY
+) {
     if (!recentMemories.length || !existingReflections.length) {
         return { shouldSkip: false, reason: null };
     }
@@ -189,7 +198,7 @@ export function shouldSkipReflectionGeneration(recentMemories, existingReflectio
  * @param {string} characterName
  * @param {Array} allMemories - Full memory stream
  * @param {Object} characterStates - For POV filtering
- * @returns {Promise<Array>} New reflection memory objects
+ * @returns {Promise<{reflections: Array, stChanges: import('../types.d.ts').StSyncChanges}>} Reflections and ST sync changes
  */
 export async function generateReflections(characterName, allMemories, characterStates) {
     const t0 = performance.now();
@@ -226,7 +235,7 @@ export async function generateReflections(characterName, allMemories, characterS
 
     if (recentMemories.length < 3) {
         logDebug(`Reflection: ${characterName} has too few accessible memories (${recentMemories.length}), skipping`);
-        return [];
+        return { reflections: [], stChanges: { toSync: [] } };
     }
 
     // Get existing reflections for this character
@@ -241,13 +250,13 @@ export async function generateReflections(characterName, allMemories, characterS
     const { shouldSkip, reason: skipReason } = shouldSkipReflectionGeneration(
         recentEvents.slice(0, 10), // Check top 10 most recent
         existingReflections,
-        0.85
+        REFLECTION_SKIP_SIMILARITY
     );
 
     if (shouldSkip) {
         logDebug(`Reflection: ${skipReason} for ${characterName}`);
         // Note: Caller should reset importance_sum for this character
-        return [];
+        return { reflections: [], stChanges: { toSync: [] } };
     }
 
     // Single unified reflection call (replaces Step 1 + Step 2)
@@ -297,8 +306,8 @@ export async function generateReflections(characterName, allMemories, characterS
     await enrichEventsWithEmbeddings(newReflections);
 
     // Dedup: 3-tier filter (reject/replace/add) reflections based on similarity
-    const reflectionDedupThreshold = settings.reflectionDedupThreshold;
-    const replaceThreshold = reflectionDedupThreshold - 0.1; // 0.80 when default is 0.90
+    const reflectionDedupThreshold = REFLECTION_DEDUP_REJECT_THRESHOLD;
+    const replaceThreshold = REFLECTION_DEDUP_REPLACE_THRESHOLD;
     const { toAdd, toArchiveIds } = filterDuplicateReflections(
         newReflections,
         allMemories,
@@ -320,23 +329,12 @@ export async function generateReflections(characterName, allMemories, characterS
         `Reflection: Generated ${toAdd.length} reflections for ${characterName} (${newReflections.length - toAdd.length} filtered)`
     );
 
-    // Sync reflections to ST Vector Storage if enabled
-    if (isStVectorSource()) {
-        const chatId = getCurrentChatId();
-        const unsyncedReflections = toAdd.filter((r) => !isStSynced(r));
-        if (unsyncedReflections.length > 0) {
-            const items = unsyncedReflections.map((r) => ({
-                hash: cyrb53(`[OV_ID:${r.id}] ${r.summary}`),
-                text: `[OV_ID:${r.id}] ${r.summary}`,
-                index: 0,
-            }));
-            const success = await syncItemsToST(items, chatId);
-            if (success) {
-                for (const r of unsyncedReflections) markStSynced(r);
-            }
-        }
+    const stChanges = { toSync: [] };
+    for (const r of toAdd) {
+        const text = `[OV_ID:${r.id}] ${r.summary}`;
+        stChanges.toSync.push({ hash: cyrb53(text), text, item: r });
     }
 
     record('llm_reflection', performance.now() - t0);
-    return toAdd;
+    return { reflections: toAdd, stChanges };
 }

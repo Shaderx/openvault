@@ -196,6 +196,7 @@ vi.mock('../../src/utils/embedding-codec.js', () => ({
             delete obj.__mock_embedding;
         }
     }),
+    cyrb53: vi.fn((str) => str.length), // Simple hash stub for testing
 }));
 
 // Mock prompts
@@ -208,11 +209,15 @@ vi.mock('../../src/prompts.js', () => ({
     resolveOutputLanguage: vi.fn(() => 'auto'),
 }));
 
-// Mock structured
+// Mock structured - exports both parsers needed by this test file
 vi.mock('../../src/extraction/structured.js', () => ({
     parseCommunitySummaryResponse: vi.fn((content) => {
         const parsed = JSON.parse(content);
         return { title: parsed.title, summary: parsed.summary, findings: parsed.findings };
+    }),
+    parseGlobalSynthesisResponse: vi.fn((content) => {
+        const parsed = JSON.parse(content);
+        return { global_summary: parsed.global_summary };
     }),
 }));
 
@@ -260,6 +265,11 @@ describe('updateCommunitySummaries', () => {
         expect(hasEmbedding(result.communities.C0)).toBe(true);
         expect(getEmbedding(result.communities.C0)).toEqual([0.1, 0.2, 0.3]);
         expect(result.communities.C0.nodeKeys).toEqual(['king', 'castle']);
+        // stChanges contains the new community for ST sync
+        expect(result.stChanges).toBeDefined();
+        expect(result.stChanges.toSync.length).toBeGreaterThan(0);
+        expect(result.stChanges.toSync[0].text).toContain('[OV_ID:C0]');
+        expect(result.stChanges.toSync[0].item).toBe(result.communities.C0);
     });
 
     it('skips communities whose membership has not changed', async () => {
@@ -284,6 +294,9 @@ describe('updateCommunitySummaries', () => {
         const result = await updateCommunitySummaries({}, communityGroups, existingCommunities);
         expect(result.communities.C0.title).toBe('Old Title'); // Unchanged
         expect(mockCallLLM).not.toHaveBeenCalled(); // No LLM call needed
+        // Existing unchanged community is still in stChanges (idempotent sync)
+        expect(result.stChanges).toBeDefined();
+        expect(result.stChanges.toSync.length).toBeGreaterThan(0);
     });
 
     it('skips communities with fewer than 2 nodes', async () => {
@@ -298,6 +311,8 @@ describe('updateCommunitySummaries', () => {
         const result = await updateCommunitySummaries({}, communityGroups, {});
         expect(result.communities.C0).toBeUndefined();
         expect(mockCallLLM).not.toHaveBeenCalled();
+        expect(result.stChanges).toBeDefined();
+        expect(result.stChanges.toSync).toHaveLength(0);
     });
 
     it('handles LLM errors gracefully by keeping existing communities', async () => {
@@ -323,6 +338,9 @@ describe('updateCommunitySummaries', () => {
 
         const result = await updateCommunitySummaries({}, communityGroups, existingCommunities);
         expect(result.communities.C0.title).toBe('Existing Title'); // Kept existing
+        expect(result.stChanges).toBeDefined();
+        // Existing community has a summary so it's in stChanges
+        expect(result.stChanges.toSync.length).toBeGreaterThan(0);
     });
 
     it('consolidates edges before community summarization', async () => {
@@ -350,18 +368,6 @@ vi.mock('../../src/prompts/index.js', async () => {
             { role: 'system', content: 'You are a narrative synthesist.' },
             { role: 'user', content: `Communities: ${communities.map((c) => c.title).join(', ')}` },
         ]),
-    };
-});
-
-// Mock global synthesis response parser
-vi.mock('../../src/extraction/structured.js', async () => {
-    const actual = await vi.importActual('../../src/extraction/structured.js');
-    return {
-        ...actual,
-        parseGlobalSynthesisResponse: vi.fn((content) => {
-            const parsed = JSON.parse(content);
-            return { global_summary: parsed.global_summary };
-        }),
     };
 });
 
@@ -679,6 +685,9 @@ describe('updateCommunitySummaries with queue', () => {
         expect(result.communities.C2).toBeDefined();
         // 3 community summaries + 1 global synthesis call
         expect(mockCallLLM).toHaveBeenCalledTimes(4);
+        // Verify stChanges returned
+        expect(result.stChanges).toBeDefined();
+        expect(result.stChanges.toSync).toHaveLength(3);
     });
 });
 

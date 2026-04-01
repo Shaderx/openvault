@@ -8,16 +8,20 @@
 
 import { extensionName } from '../constants.js';
 import { getDeps } from '../deps.js';
-import { getSessionSignal, operationState } from '../state.js';
+import {
+    getSessionSignal,
+    getWakeGeneration,
+    incrementWakeGeneration,
+    isWorkerRunning,
+    operationState,
+    setWorkerRunning,
+} from '../state.js';
+import { getCurrentChatId, getOpenVaultData } from '../store/chat-data.js';
 import { setStatus } from '../ui/status.js';
-import { getCurrentChatId, getOpenVaultData } from '../utils/data.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled } from '../utils/st-helpers.js';
 import { extractMemories } from './extract.js';
 import { getNextBatch } from './scheduler.js';
-
-let isRunning = false;
-let wakeGeneration = 0;
 
 const BACKOFF_SCHEDULE_SECONDS = [1, 2, 3, 10, 20, 30, 30, 60, 60];
 const MAX_BACKOFF_TOTAL_MS = 15 * 60 * 1000;
@@ -29,33 +33,12 @@ const MAX_BACKOFF_TOTAL_MS = 15 * 60 * 1000;
  * so it resets backoff and re-checks for work.
  */
 export function wakeUpBackgroundWorker() {
-    wakeGeneration++;
-    if (isRunning) return;
-    isRunning = true;
+    incrementWakeGeneration();
+    if (isWorkerRunning()) return;
+    setWorkerRunning(true);
     runWorkerLoop().finally(() => {
-        isRunning = false;
+        setWorkerRunning(false);
     });
-}
-
-/**
- * Check if the background worker is currently processing.
- */
-export function isWorkerRunning() {
-    return isRunning;
-}
-
-/**
- * Get current wake generation (for testing).
- */
-export function getWakeGeneration() {
-    return wakeGeneration;
-}
-
-/**
- * Increment wake generation (for testing).
- */
-export function incrementWakeGeneration() {
-    wakeGeneration++;
 }
 
 /**
@@ -70,7 +53,7 @@ export async function interruptibleSleep(totalMs, generationAtStart) {
     while (elapsed < totalMs) {
         await new Promise((r) => setTimeout(r, Math.min(chunkMs, totalMs - elapsed)));
         elapsed += chunkMs;
-        if (wakeGeneration !== generationAtStart) return;
+        if (getWakeGeneration() !== generationAtStart) return;
     }
 }
 
@@ -81,7 +64,7 @@ async function runWorkerLoop() {
     const targetChatId = getCurrentChatId();
     let retryCount = 0;
     let cumulativeBackoffMs = 0;
-    let lastSeenGeneration = wakeGeneration;
+    let lastSeenGeneration = getWakeGeneration();
 
     try {
         while (true) {
@@ -104,10 +87,10 @@ async function runWorkerLoop() {
             }
 
             // Check for new wake signal (reset backoff)
-            if (wakeGeneration !== lastSeenGeneration) {
+            if (getWakeGeneration() !== lastSeenGeneration) {
                 retryCount = 0;
                 cumulativeBackoffMs = 0;
-                lastSeenGeneration = wakeGeneration;
+                lastSeenGeneration = getWakeGeneration();
             }
 
             // Get fresh state each iteration

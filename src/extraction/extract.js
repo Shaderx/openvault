@@ -1,3 +1,17 @@
+// @ts-check
+
+/** @typedef {import('../types').Memory} Memory */
+/** @typedef {import('../types').Entity} Entity */
+/** @typedef {import('../types').Relationship} Relationship */
+/** @typedef {import('../types').ExtractedEvent} ExtractedEvent */
+/** @typedef {import('../types').GraphExtraction} GraphExtraction */
+/** @typedef {import('../types').StSyncChanges} StSyncChanges */
+/** @typedef {import('../types').ExtractionOptions} ExtractionOptions */
+/** @typedef {import('../types').ExtractionContextParams} ExtractionContextParams */
+/** @typedef {import('../types').ExtractionLLMOptions} ExtractionLLMOptions */
+/** @typedef {import('../types').GenerateReflectionsResult} GenerateReflectionsResult */
+/** @typedef {import('../types').ConsolidateEdgesResult} ConsolidateEdgesResult */
+
 /**
  * OpenVault Extraction - Simplified Procedural Interface
  *
@@ -7,11 +21,63 @@
 
 import {
     CHARACTERS_KEY,
+    COMMUNITY_STALENESS_THRESHOLD,
+    CONSOLIDATION,
+    EDGE_DESCRIPTION_CAP,
+    EMBEDDING_SOURCES,
+    ENTITY_DESCRIPTION_CAP,
+    ENTITY_TYPES,
     extensionName,
-    LAST_PROCESSED_KEY,
     MEMORIES_KEY,
-    PROCESSED_MESSAGES_KEY,
 } from '../constants.js';
+import { getDeps } from '../deps.js';
+import { enrichEventsWithEmbeddings } from '../embeddings.js';
+import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
+import {
+    consolidateEdges,
+    expandMainCharacterKeys,
+    findCrossScriptCharacterKeys,
+    mergeOrInsertEntity,
+    normalizeKey,
+    upsertRelationship,
+} from '../graph/graph.js';
+import { callLLM, LLM_CONFIGS } from '../llm.js';
+import { record } from '../perf/store.js';
+import {
+    buildEventExtractionPrompt,
+    buildGraphExtractionPrompt,
+    resolveExtractionPreamble,
+    resolveExtractionPrefill,
+    resolveOutputLanguage,
+} from '../prompts/index.js';
+import { accumulateImportance, generateReflections, shouldReflect } from '../reflection/reflect.js';
+import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
+import { deleteItemsFromST, isStVectorSource, syncItemsToST } from '../services/st-vector.js';
+import { clearAllLocks, isWorkerRunning, operationState } from '../state.js';
+import {
+    addMemories,
+    getCurrentChatId,
+    getOpenVaultData,
+    incrementGraphMessageCount,
+    markMessagesProcessed,
+    saveOpenVaultData,
+} from '../store/chat-data.js';
+import { showToast } from '../utils/dom.js';
+import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
+import { logDebug, logError, logInfo } from '../utils/logging.js';
+import { createLadderQueue } from '../utils/queue.js';
+import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
+import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
+import { countTokens } from '../utils/tokens.js';
+import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
+import {
+    getBackfillMessageIds,
+    getBackfillStats,
+    getFingerprint,
+    getNextBatch,
+    getProcessedFingerprints,
+} from './scheduler.js';
+import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
 
 /**
  * Backoff schedule in seconds for failed extraction batches.
@@ -31,6 +97,7 @@ let lastApiCallTime = 0;
  * Accounts for elapsed time since the last call — only sleeps the remaining delta.
  * @param {Object} settings - Extension settings containing backfillMaxRPM
  * @param {string} [label='Rate limit'] - Log label
+ * @returns {Promise<void>}
  */
 async function rpmDelay(settings, label = 'Rate limit') {
     const rpm = settings.backfillMaxRPM;
@@ -46,49 +113,139 @@ async function rpmDelay(settings, label = 'Rate limit') {
     lastApiCallTime = Date.now();
 }
 
-import { getDeps } from '../deps.js';
-import { enrichEventsWithEmbeddings } from '../embeddings.js';
-import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
-import {
-    consolidateEdges,
-    expandMainCharacterKeys,
-    findCrossScriptCharacterKeys,
-    initGraphState,
-    mergeOrInsertEntity,
-    normalizeKey,
-    upsertRelationship,
-} from '../graph/graph.js';
-import { callLLM, LLM_CONFIGS } from '../llm.js';
-import { record } from '../perf/store.js';
-import {
-    buildEventExtractionPrompt,
-    buildGraphExtractionPrompt,
-    resolveExtractionPreamble,
-    resolveExtractionPrefill,
-    resolveOutputLanguage,
-} from '../prompts/index.js';
-import { accumulateImportance, generateReflections, shouldReflect } from '../reflection/reflect.js';
-import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
-import { clearAllLocks } from '../state.js';
-import { refreshAllUI } from '../ui/render.js';
-import { setStatus } from '../ui/status.js';
-import {
-    getCurrentChatId,
-    getOpenVaultData,
-    isStVectorSource,
-    saveOpenVaultData,
-    syncItemsToST,
-} from '../utils/data.js';
-import { showToast } from '../utils/dom.js';
-import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
-import { logDebug, logError, logInfo } from '../utils/logging.js';
-import { createLadderQueue } from '../utils/queue.js';
-import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
-import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
-import { countTokens, getMessageTokenCount } from '../utils/tokens.js';
-import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
-import { getBackfillMessageIds, getExtractedMessageIds, getNextBatch } from './scheduler.js';
-import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
+/**
+ * Apply ST Vector Storage sync changes from domain function return values.
+ * Handles both sync (insert) and delete operations in bulk.
+ * @param {StSyncChanges} stChanges
+ * @returns {Promise<void>}
+ */
+async function applySyncChanges(stChanges) {
+    if (!isStVectorSource()) return;
+    const chatId = getCurrentChatId();
+    if (stChanges.toSync?.length > 0) {
+        const items = stChanges.toSync.map((c) => ({ hash: c.hash, text: c.text, index: 0 }));
+        const success = await syncItemsToST(items, chatId);
+        if (success) {
+            for (const c of stChanges.toSync) markStSynced(c.item);
+        }
+    }
+    if (stChanges.toDelete?.length > 0) {
+        await deleteItemsFromST(
+            stChanges.toDelete.map((c) => c.hash),
+            chatId
+        );
+    }
+}
+
+// =============================================================================
+// Message Hiding (moved from ui/settings.js)
+// =============================================================================
+
+/**
+ * Hide all extracted messages from LLM context by setting is_system=true.
+ * Only hides messages that have been successfully processed (fingerprint in processed set).
+ * @returns {Promise<number>} Number of messages hidden
+ */
+export async function hideExtractedMessages() {
+    const context = getDeps().getContext();
+    const chat = context.chat || [];
+    const data = getOpenVaultData();
+    const processedFps = getProcessedFingerprints(data);
+
+    let hiddenCount = 0;
+    for (let i = 0; i < chat.length; i++) {
+        const msg = chat[i];
+        if (processedFps.has(getFingerprint(msg)) && !msg.is_system) {
+            msg.is_system = true;
+            hiddenCount++;
+        }
+    }
+
+    if (hiddenCount > 0) {
+        await getDeps().saveChatConditional();
+        logInfo(`Emergency Cut: hid ${hiddenCount} messages (all extracted)`);
+    }
+    return hiddenCount;
+}
+
+/**
+ * Execute an Emergency Cut — extract all unprocessed messages and hide them.
+ * Domain orchestrator with callback injection for UI updates.
+ * @param {Object} options
+ * @param {function(string): void} [options.onWarning] - Called for non-fatal warnings
+ * @param {function(string): boolean} [options.onConfirmPrompt] - Called for user confirmation; return false to cancel
+ * @param {function(): void} [options.onStart] - Called when extraction phase begins
+ * @param {function(number, number, number): void} [options.onProgress] - Called per batch (batchNum, totalBatches, eventsCreated)
+ * @param {function({messagesProcessed: number, eventsCreated: number, hiddenCount: number}): void} [options.onComplete] - Called on success
+ * @param {function(Error, boolean): void} [options.onError] - Called on failure (error, isCancel)
+ * @param {AbortSignal} [options.abortSignal] - For cancellation
+ * @returns {Promise<void>}
+ */
+export async function executeEmergencyCut(options = {}) {
+    const { onWarning, onConfirmPrompt, onStart, onProgress, onComplete, onError, abortSignal } = options;
+
+    if (isWorkerRunning()) {
+        onWarning?.('Background extraction in progress. Please wait a moment.');
+        return;
+    }
+
+    const context = getDeps().getContext();
+    const chat = context.chat || [];
+    const data = getOpenVaultData();
+    const stats = getBackfillStats(chat, data);
+
+    let shouldExtract = true;
+
+    if (stats.unextractedCount === 0) {
+        const processedFps = getProcessedFingerprints(data);
+        const hideableCount = chat.filter((m) => !m.is_system && processedFps.has(getFingerprint(m))).length;
+
+        if (hideableCount === 0) {
+            onWarning?.('No messages to hide');
+            return;
+        }
+
+        const msg =
+            `All messages are already extracted. Hide ${hideableCount} messages from the LLM to break the loop?\n\n` +
+            'The LLM will only see: preset, char card, lorebooks, and OpenVault memories.';
+        if (!onConfirmPrompt?.(msg)) return;
+        shouldExtract = false;
+    } else {
+        const msg =
+            `Extract and hide ${stats.unextractedCount} unprocessed messages?\n\n` +
+            'The LLM will only see: preset, char card, lorebooks, and OpenVault memories.';
+        if (!onConfirmPrompt?.(msg)) return;
+    }
+
+    if (!shouldExtract) {
+        const hiddenCount = await hideExtractedMessages();
+        onComplete?.({ messagesProcessed: 0, eventsCreated: 0, hiddenCount });
+        return;
+    }
+
+    onStart?.();
+    operationState.extractionInProgress = true;
+
+    try {
+        const result = await extractAllMessages({
+            isEmergencyCut: true,
+            progressCallback: onProgress,
+            abortSignal,
+        });
+
+        const hiddenCount = await hideExtractedMessages();
+
+        onComplete?.({
+            messagesProcessed: result.messagesProcessed,
+            eventsCreated: result.eventsCreated,
+            hiddenCount,
+        });
+    } catch (err) {
+        onError?.(err, err.name === 'AbortError');
+    } finally {
+        operationState.extractionInProgress = false;
+    }
+}
 
 /**
  * Canonicalize character names in extracted events by resolving cross-script
@@ -103,7 +260,7 @@ export function canonicalizeEventCharNames(events, contextNames, graphNodes) {
     // Build canonical name registry: context names + all PERSON graph node names
     const canonicalNames = [...contextNames];
     for (const [, node] of Object.entries(graphNodes || {})) {
-        if (node.type === 'PERSON' && !canonicalNames.includes(node.name)) {
+        if (node.type === ENTITY_TYPES.PERSON && !canonicalNames.includes(node.name)) {
             canonicalNames.push(node.name);
         }
     }
@@ -273,7 +430,7 @@ export function cleanupCharacterStates(data, validCharNames = []) {
  * Called after Phase 1 commit when memories are added.
  * IDF only changes when corpus changes (new memories extracted), not during retrieval.
  * @param {Object} data - OpenVault data object
- * @param {Object} graphNodes - Graph nodes keyed by normalized name
+ * @param {Object} _graphNodes - Graph nodes keyed by normalized name (unused, for API compatibility)
  */
 export function updateIDFCache(data, _graphNodes = {}) {
     const memories = data[MEMORIES_KEY] || [];
@@ -360,7 +517,12 @@ export function selectMemoriesForExtraction(data, settings) {
  * @param {number} cosineThreshold - Cosine similarity threshold for existing memory dedup
  * @param {number} jaccardThreshold - Jaccard token similarity threshold for intra-batch dedup
  */
-export async function filterSimilarEvents(newEvents, existingMemories, cosineThreshold = 0.92, jaccardThreshold = 0.6) {
+export async function filterSimilarEvents(
+    newEvents,
+    existingMemories,
+    cosineThreshold = CONSOLIDATION.dedupSimilarityThreshold,
+    jaccardThreshold = CONSOLIDATION.dedupJaccardThreshold
+) {
     const t0 = performance.now();
     // Phase 1: Filter against existing memories (cosine + Jaccard cross-check)
     let filtered = newEvents;
@@ -430,14 +592,287 @@ export async function filterSimilarEvents(newEvents, existingMemories, cosineThr
     return kept;
 }
 
+// =============================================================================
+// Pipeline Stage Functions (internal — called by orchestrators below)
+// =============================================================================
+
 /**
- * Extract events from chat messages
+ * Run reflection synthesis for a list of characters.
+ * Checks each character against the reflection threshold, generates reflections via LLM,
+ * pushes results to data.memories, and resets the importance accumulator.
  *
+ * @param {Object} data - OpenVault data object (mutated in-place)
+ * @param {string[]} characterNames - Characters to check for reflection trigger
+ * @param {Object} settings - Extension settings
+ * @param {Object} [options={}]
+ * @param {AbortSignal} [options.abortSignal=null] - Abort signal for cancellation
+ */
+async function synthesizeReflections(data, characterNames, settings, options = {}) {
+    const { abortSignal = null } = options;
+    const reflectionThreshold = settings.reflectionThreshold;
+    const ladderQueue = await createLadderQueue(settings.maxConcurrency);
+    const reflectionPromises = [];
+
+    for (const characterName of characterNames) {
+        if (abortSignal?.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+        }
+
+        if (shouldReflect(data.reflection_state, characterName, reflectionThreshold)) {
+            reflectionPromises.push(
+                ladderQueue
+                    .add(async () => {
+                        const { reflections, stChanges } = await generateReflections(
+                            characterName,
+                            data[MEMORIES_KEY] || [],
+                            data[CHARACTERS_KEY] || {}
+                        );
+                        if (reflections.length > 0) {
+                            addMemories(reflections);
+                        }
+                        // Reset accumulator after reflection
+                        data.reflection_state[characterName].importance_sum = 0;
+                        await applySyncChanges(stChanges);
+                    })
+                    .catch((error) => {
+                        if (error.name === 'AbortError') throw error;
+                        logError(`Reflection error for ${characterName}`, error);
+                    })
+            );
+        }
+    }
+
+    await Promise.all(reflectionPromises);
+}
+
+/**
+ * Run community detection, edge consolidation, and community summarization.
+ * Wrapped in try-catch — community errors are non-fatal and logged.
+ *
+ * @param {Object} data - OpenVault data object (mutated in-place)
+ * @param {Object} settings - Extension settings
+ * @param {string} characterName - Main character name (for main character key derivation)
+ * @param {string} userName - User name (for main character key derivation)
+ */
+async function synthesizeCommunities(data, settings, characterName, userName) {
+    try {
+        const baseKeys = [normalizeKey(characterName), normalizeKey(userName)];
+        const mainCharacterKeys = expandMainCharacterKeys(baseKeys, data.graph.nodes || {});
+        const crossScriptKeys = findCrossScriptCharacterKeys(baseKeys, data.graph.nodes || {});
+        mainCharacterKeys.push(...crossScriptKeys.filter((k) => !mainCharacterKeys.includes(k)));
+        const communityResult = detectCommunities(data.graph, mainCharacterKeys);
+        if (communityResult) {
+            // Consolidate bloated edges before summarization
+            if (data.graph._edgesNeedingConsolidation?.length > 0) {
+                const { count: consolidated, stChanges: edgeChanges } = await consolidateEdges(data.graph, settings);
+                if (consolidated > 0) {
+                    logDebug(`Consolidated ${consolidated} graph edges before community summarization`);
+                }
+                await applySyncChanges(edgeChanges);
+            }
+
+            const groups = buildCommunityGroups(data.graph, communityResult.communities);
+            const stalenessThreshold = COMMUNITY_STALENESS_THRESHOLD;
+            const isSingleCommunity = communityResult.count === 1;
+            const communityUpdateResult = await updateCommunitySummaries(
+                data.graph,
+                groups,
+                data.communities || {},
+                data.graph_message_count || 0,
+                stalenessThreshold,
+                isSingleCommunity
+            );
+            data.communities = communityUpdateResult.communities;
+            if (communityUpdateResult.global_world_state) {
+                data.global_world_state = communityUpdateResult.global_world_state;
+            }
+            await applySyncChanges(communityUpdateResult.stChanges);
+            logDebug(`Community detection: ${communityResult.count} communities found`);
+        }
+    } catch (error) {
+        logError('Community detection error', error);
+    }
+}
+
+/**
+ * Stage 1: Fetch events from LLM.
+ * @param {Object} contextParams - Context parameters
+ * @param {string} contextParams.messagesText
+ * @param {{char: string, user: string}} contextParams.names - Character names
+ * @param {string} contextParams.charDesc
+ * @param {string} contextParams.personaDesc
+ * @param {string} contextParams.preamble
+ * @param {string} contextParams.prefill
+ * @param {'auto'|'en'|'ru'} contextParams.outputLanguage
+ * @param {Array} existingMemories - Curated memory subset for prompt context
+ * @param {AbortSignal} [abortSignal] - Abort signal for mid-request cancellation
+ * @returns {Promise<{events: ExtractedEvent[]}>}
+ */
+async function fetchEventsFromLLM(contextParams, existingMemories, abortSignal) {
+    const prompt = buildEventExtractionPrompt({
+        messages: contextParams.messagesText,
+        names: contextParams.names,
+        context: {
+            memories: existingMemories,
+            charDesc: contextParams.charDesc,
+            personaDesc: contextParams.personaDesc,
+        },
+        preamble: contextParams.preamble,
+        prefill: contextParams.prefill,
+        outputLanguage: contextParams.outputLanguage,
+    });
+
+    const t0 = performance.now();
+    const eventJson = await callLLM(prompt, LLM_CONFIGS.extraction_events, {
+        structured: true,
+        signal: abortSignal,
+    });
+    record('llm_events', performance.now() - t0);
+    return parseEventExtractionResponse(eventJson);
+}
+
+/**
+ * Stage 2: Fetch graph entities and relationships from LLM.
+ * @param {Object} contextParams - Context parameters
+ * @param {string} contextParams.messagesText
+ * @param {{char: string, user: string}} contextParams.names - Character names
+ * @param {string} contextParams.charDesc
+ * @param {string} contextParams.personaDesc
+ * @param {string} contextParams.preamble
+ * @param {string} contextParams.prefill
+ * @param {'auto'|'en'|'ru'} contextParams.outputLanguage
+ * @param {string[]} formattedEvents - Pre-formatted event strings for the prompt
+ * @param {AbortSignal} [abortSignal] - Abort signal for mid-request cancellation
+ * @returns {Promise<GraphExtraction>}
+ */
+async function fetchGraphFromLLM(contextParams, formattedEvents, abortSignal) {
+    try {
+        const prompt = buildGraphExtractionPrompt({
+            messages: contextParams.messagesText,
+            names: contextParams.names,
+            extractedEvents: formattedEvents,
+            context: {
+                charDesc: contextParams.charDesc,
+                personaDesc: contextParams.personaDesc,
+            },
+            preamble: contextParams.preamble,
+            prefill: contextParams.prefill,
+            outputLanguage: contextParams.outputLanguage,
+        });
+
+        const t0 = performance.now();
+        const graphJson = await callLLM(prompt, LLM_CONFIGS.extraction_graph, {
+            structured: true,
+            signal: abortSignal,
+        });
+        record('llm_graph', performance.now() - t0);
+        return parseGraphExtractionResponse(graphJson);
+    } catch (error) {
+        // AbortError = session cancel (chat switch) — must propagate
+        if (error.name === 'AbortError') throw error;
+        logError('Graph extraction failed, continuing with events only', error);
+        return { entities: [], relationships: [] };
+    }
+}
+
+/**
+ * Stage 3: Stamp metadata on raw events, enrich with embeddings, and deduplicate.
+ *
+ * @param {Array} rawEvents - Events from LLM (no metadata yet)
+ * @param {number[]} messageIdsArray - Source message IDs for this batch
+ * @param {string} batchId - Unique batch identifier
+ * @param {Array} existingMemories - All existing memories (for dedup comparison)
+ * @param {Object} settings - Extension settings
+ * @returns {Promise<{events: Array}>}
+ */
+async function enrichAndDedupEvents(rawEvents, messageIdsArray, batchId, existingMemories, settings) {
+    const minMessageId = Math.min(...messageIdsArray);
+
+    let events = rawEvents.map((event, index) => ({
+        id: `event_${Date.now()}_${index}`,
+        type: 'event',
+        ...event,
+        tokens: tokenize(event.summary || ''),
+        message_ids: messageIdsArray,
+        sequence: minMessageId * 1000 + index,
+        created_at: Date.now(),
+        batch_id: batchId,
+        characters_involved: event.characters_involved || [],
+        witnesses: (event.witnesses?.length > 0 ? event.witnesses : event.characters_involved) || [],
+        location: event.location || null,
+        is_secret: event.is_secret || false,
+        importance: event.importance || 3,
+        emotional_impact: event.emotional_impact || {},
+        relationship_impact: event.relationship_impact || {},
+    }));
+
+    if (events.length > 0) {
+        await enrichEventsWithEmbeddings(events);
+
+        const dedupThreshold = settings.dedupSimilarityThreshold;
+        const jaccardThreshold = settings.dedupJaccardThreshold;
+        const preDedupCount = events.length;
+        events = await filterSimilarEvents(events, existingMemories, dedupThreshold, jaccardThreshold);
+
+        if (events.length < preDedupCount) {
+            logDebug(`Dedup: Filtered ${preDedupCount - events.length} similar events`);
+        }
+    }
+
+    return { events };
+}
+
+/**
+ * Stage 4: Process graph updates (entity upserts, relationship upserts).
+ * @param {Object} graphData - Graph data object (mutated in-place)
+ * @param {Entity[]} entities - Entities from graph extraction
+ * @param {Relationship[]} relationships - Relationships from graph extraction
+ * @param {Object} settings - Extension settings
+ * @returns {Promise<{graphSyncChanges: StSyncChanges}>}
+ */
+async function processGraphUpdates(graphData, entities, relationships, settings) {
+    const graphSyncChanges = { toSync: [], toDelete: [] };
+
+    if (entities?.length) {
+        const entityCap = ENTITY_DESCRIPTION_CAP;
+        const t0Merge = performance.now();
+        const existingNodeCount = Object.keys(graphData.nodes).length;
+        for (const entity of entities) {
+            if (entity.name === 'Unknown') continue;
+            const { stChanges: entityChanges } = await mergeOrInsertEntity(
+                graphData,
+                entity.name,
+                entity.type,
+                entity.description,
+                entityCap,
+                settings
+            );
+            graphSyncChanges.toSync.push(...entityChanges.toSync);
+            graphSyncChanges.toDelete.push(...entityChanges.toDelete);
+        }
+        record('entity_merge', performance.now() - t0Merge, `${entities.length}×${existingNodeCount} nodes`);
+    }
+
+    if (relationships?.length) {
+        const edgeCap = EDGE_DESCRIPTION_CAP;
+        for (const rel of relationships) {
+            if (rel.source === 'Unknown' || rel.target === 'Unknown') continue;
+            upsertRelationship(graphData, rel.source, rel.target, rel.description, edgeCap);
+        }
+    }
+
+    // Clean up runtime-only merge redirects (don't persist to storage)
+    delete graphData._mergeRedirects;
+    return { graphSyncChanges };
+}
+
+/**
+ * Extract memories from a batch of messages.
+ * Phase 1: Events + Graph extraction (critical, gates UI)
+ * Phase 2: Reflections + Communities (non-critical, deferred during backfill)
  * @param {number[]} [messageIds=null] - Optional specific message IDs for targeted extraction
  * @param {string} [targetChatId=null] - Optional chat ID to verify before saving
- * @param {Object} [options={}] - Optional configuration
- * @param {boolean} [options.silent=false] - Suppress toast notifications
- * @param {boolean} [options.isBackfill=false] - Skip Phase 2 LLM synthesis (for backfill mode)
+ * @param {ExtractionOptions} [options={}] - Extraction options
  * @returns {Promise<{status: string, events_created?: number, messages_processed?: number, reason?: string}>}
  */
 export async function extractMemories(messageIds = null, targetChatId = null, options = {}) {
@@ -463,27 +898,16 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
     // Stage 1: Message Selection
     let messagesToExtract = [];
 
-    if (messageIds && messageIds.length > 0) {
-        // Targeted mode: When specific IDs are provided (e.g., backfill)
-        messagesToExtract = messageIds.map((id) => ({ id, ...chat[id] })).filter((m) => m != null);
-    } else {
-        // Incremental mode: Extract last few unprocessed messages using token budget
-        const lastProcessedId = data[LAST_PROCESSED_KEY] || -1;
-        const tokenBudget = settings.extractionTokenBudget;
-        const candidates = chat
-            .map((m, idx) => ({ id: idx, ...m }))
-            .filter((m) => !m.is_system && m.id > lastProcessedId);
-
-        // Take from the end (newest), accumulate until budget
-        let accumulated = 0;
-        let startIdx = candidates.length;
-        for (let i = candidates.length - 1; i >= 0; i--) {
-            const tokens = getMessageTokenCount(chat, candidates[i].id);
-            if (accumulated + tokens > tokenBudget && startIdx < candidates.length) break;
-            accumulated += tokens;
-            startIdx = i;
+    if (!messageIds || messageIds.length === 0) {
+        // Defensive: use scheduler to get next batch if no IDs provided
+        const batch = getNextBatch(chat, data, settings?.extractionTokenBudget || 2000);
+        if (!batch) {
+            console.log('[extract] No messages to extract (scheduler returned empty batch)');
+            return { status: 'skipped', reason: 'no_new_messages' };
         }
-        messagesToExtract = candidates.slice(startIdx);
+        messagesToExtract = batch.map((id) => ({ id, ...chat[id] }));
+    } else {
+        messagesToExtract = messageIds.map((id) => ({ id, ...chat[id] })).filter((m) => m != null);
     }
 
     if (messagesToExtract.length === 0) {
@@ -492,12 +916,12 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
     const messages = messagesToExtract;
     const batchId = `batch_${deps.Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const _silent = options.silent || false;
+    const { abortSignal = null } = options;
 
     logDebug(`Extracting ${messages.length} messages`);
 
     try {
-        // Stage 2: Prompt Building
+        // Build context params once
         const characterName = context.name2;
         const userName = context.name1;
 
@@ -508,175 +932,71 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             })
             .join('\n\n');
 
-        const existingMemories = selectMemoriesForExtraction(data, settings);
         const characterDescription = context.characters?.[context.characterId]?.description || '';
         const personaDescription = context.powerUserSettings?.persona_description || '';
-
-        const preamble = resolveExtractionPreamble(settings);
-        const prefill = resolveExtractionPrefill(settings);
-        const outputLanguage = resolveOutputLanguage(settings);
-        const prompt = buildEventExtractionPrompt({
-            messages: messagesText,
+        const contextParams = {
+            messagesText,
             names: { char: characterName, user: userName },
-            context: {
-                memories: existingMemories,
-                charDesc: characterDescription,
-                personaDesc: personaDescription,
-            },
-            preamble,
-            prefill,
-            outputLanguage,
-        });
-
-        // Stage 3A: Event Extraction (LLM Call 1)
-        const t0Events = performance.now();
-        const eventJson = await callLLM(prompt, LLM_CONFIGS.extraction_events, { structured: true });
-        record('llm_events', performance.now() - t0Events);
-        const eventResult = parseEventExtractionResponse(eventJson);
-        let events = eventResult.events;
-
-        // Stage 3B: Graph Extraction (LLM Call 2) — skip if no events
-        // Wrapped in try-catch: graph failure degrades gracefully (events are still saved).
-        // Without this, a persistent graph parse failure (model refusal, truncation, non-JSON)
-        // would throw the entire batch, discard successfully extracted events, leave messages
-        // unprocessed, and cause the worker to retry the same batch indefinitely.
-        let graphResult = { entities: [], relationships: [] };
-        if (events.length > 0) {
-            try {
-                await rpmDelay(settings, 'Inter-call rate limit');
-                const formattedEvents = events.map((e, i) => `${i + 1}. [${e.importance}★] ${e.summary}`);
-                const graphPrompt = buildGraphExtractionPrompt({
-                    messages: messagesText,
-                    names: { char: characterName, user: userName },
-                    extractedEvents: formattedEvents,
-                    context: {
-                        charDesc: characterDescription,
-                        personaDesc: personaDescription,
-                    },
-                    preamble,
-                    prefill,
-                    outputLanguage,
-                });
-
-                const t0Graph = performance.now();
-                const graphJson = await callLLM(graphPrompt, LLM_CONFIGS.extraction_graph, { structured: true });
-                record('llm_graph', performance.now() - t0Graph);
-                graphResult = parseGraphExtractionResponse(graphJson);
-            } catch (graphError) {
-                // AbortError = session cancel (chat switch) — must propagate
-                if (graphError.name === 'AbortError') throw graphError;
-                logError('Graph extraction failed, continuing with events only', graphError);
-            }
-        }
-
-        // Merge into unified validated object for downstream stages
-        const validated = {
-            events,
-            entities: graphResult.entities,
-            relationships: graphResult.relationships,
+            charDesc: characterDescription,
+            personaDesc: personaDescription,
+            preamble: resolveExtractionPreamble(settings),
+            prefill: resolveExtractionPrefill(settings),
+            outputLanguage: resolveOutputLanguage(settings),
         };
 
-        // Enrich with metadata
+        // Stage 1: Event extraction (LLM call)
+        const existingMemories = selectMemoriesForExtraction(data, settings);
+        const { events: rawEvents } = await fetchEventsFromLLM(contextParams, existingMemories, abortSignal);
+
+        // Stage 2: Graph extraction (LLM call, skip if no events)
+        let graphResult = { entities: [], relationships: [] };
+        if (rawEvents.length > 0) {
+            await rpmDelay(settings, 'Inter-call rate limit');
+            const formattedEvents = rawEvents.map((e, i) => `${i + 1}. [${e.importance}★] ${e.summary}`);
+            graphResult = await fetchGraphFromLLM(contextParams, formattedEvents, abortSignal);
+        }
+
+        // Stage 3: Enrich & dedup events
         const messageIdsArray = messages.map((m) => m.id);
-        const minMessageId = Math.min(...messageIdsArray);
+        logDebug(`LLM returned ${rawEvents.length} events from ${messages.length} messages`);
+        const { events } = await enrichAndDedupEvents(
+            rawEvents,
+            messageIdsArray,
+            batchId,
+            data.memories || [],
+            settings
+        );
 
-        events = events.map((event, index) => ({
-            id: `event_${Date.now()}_${index}`,
-            type: 'event',
-            ...event,
-            tokens: tokenize(event.summary || ''),
-            message_ids: messageIdsArray,
-            sequence: minMessageId * 1000 + index,
-            created_at: Date.now(),
-            batch_id: batchId,
-            characters_involved: event.characters_involved || [],
-            witnesses: event.witnesses || event.characters_involved || [],
-            location: event.location || null,
-            is_secret: event.is_secret || false,
-            importance: event.importance || 3,
-            emotional_impact: event.emotional_impact || {},
-            relationship_impact: event.relationship_impact || {},
-        }));
-
-        logDebug(`LLM returned ${events.length} events from ${messages.length} messages`);
-
-        // Track processed message IDs (will be committed in Phase 1)
-        const processedIds = messages.map((m) => m.id);
-
-        // Stage 4: Event Processing (embedding + deduplication)
-        if (events.length > 0) {
-            await enrichEventsWithEmbeddings(events);
-
-            // Stamp embedding model ID on first successful embedding generation
-            // Prevents invalidateStaleEmbeddings from treating this chat as "legacy" on next open
-            if (!data.embedding_model_id && events.some((e) => hasEmbedding(e))) {
-                data.embedding_model_id = settings.embeddingSource;
-                if (settings.embeddingSource === 'st_vector') {
-                    const { stampStVectorFingerprint } = await import('../utils/data.js');
-                    stampStVectorFingerprint(data);
-                }
-            }
-
-            const dedupThreshold = settings.dedupSimilarityThreshold;
-            const jaccardThreshold = settings.dedupJaccardThreshold;
-            const existingMemoriesList = data.memories || [];
-            events = await filterSimilarEvents(events, existingMemoriesList, dedupThreshold, jaccardThreshold);
-
-            if (events.length < validated.events.length) {
-                logDebug(`Dedup: Filtered ${validated.events.length - events.length} similar events`);
+        // Stamp embedding model ID on first successful embedding generation
+        if (events.length > 0 && !data.embedding_model_id && events.some((e) => hasEmbedding(e))) {
+            data.embedding_model_id = settings.embeddingSource;
+            if (settings.embeddingSource === EMBEDDING_SOURCES.ST_VECTOR) {
+                const { stampStVectorFingerprint } = await import('../embeddings/migration.js');
+                stampStVectorFingerprint(data);
             }
         }
 
-        // Stage 4.5: Graph Update — upsert entities and relationships
-        initGraphState(data);
-        const entityCap = settings.entityDescriptionCap;
-        if (validated.entities) {
-            const t0Merge = performance.now();
-            const existingNodeCount = Object.keys(data.graph.nodes).length;
-            for (const entity of validated.entities) {
-                if (entity.name === 'Unknown') continue;
-                await mergeOrInsertEntity(
-                    data.graph,
-                    entity.name,
-                    entity.type,
-                    entity.description,
-                    entityCap,
-                    settings
-                );
-            }
-            record(
-                'entity_merge',
-                performance.now() - t0Merge,
-                `${validated.entities.length}×${existingNodeCount} nodes`
-            );
-        }
-        const edgeCap = settings.edgeDescriptionCap;
-        if (validated.relationships) {
-            for (const rel of validated.relationships) {
-                if (rel.source === 'Unknown' || rel.target === 'Unknown') continue;
-                upsertRelationship(data.graph, rel.source, rel.target, rel.description, edgeCap);
-            }
-        }
-        data.graph_message_count = (data.graph_message_count || 0) + messages.length;
-        // Clean up runtime-only merge redirects (don't persist to storage)
-        delete data.graph._mergeRedirects;
+        // Stage 4: Graph updates
+        const { graphSyncChanges } = await processGraphUpdates(
+            data.graph,
+            graphResult.entities,
+            graphResult.relationships,
+            settings
+        );
+        incrementGraphMessageCount(messages.length);
 
         // ===== PHASE 1 COMMIT: Events + Graph are done =====
-        const maxId = processedIds.length > 0 ? Math.max(...processedIds) : 0;
-
         if (events.length > 0) {
             // Canonicalize cross-script character names before downstream consumption
             canonicalizeEventCharNames(events, [characterName, userName], data.graph?.nodes);
-            data[MEMORIES_KEY] = data[MEMORIES_KEY] || [];
-            data[MEMORIES_KEY].push(...events);
+            addMemories(events);
             updateCharacterStatesFromEvents(events, data, [characterName, userName]);
         }
 
         // Mark processed AFTER events are committed to memories
-        data[PROCESSED_MESSAGES_KEY] = data[PROCESSED_MESSAGES_KEY] || [];
-        data[PROCESSED_MESSAGES_KEY].push(...processedIds);
-        data[LAST_PROCESSED_KEY] = Math.max(data[LAST_PROCESSED_KEY] || -1, maxId);
-        logDebug(`Phase 1 complete: ${events.length} events, ${processedIds.length} messages processed`);
+        const processedFps = messages.map((m) => getFingerprint(m));
+        markMessagesProcessed(processedFps);
+        logDebug(`Phase 1 complete: ${events.length} events, ${processedFps.length} messages processed`);
 
         // Update IDF cache after Phase 1 commit — corpus has changed
         updateIDFCache(data, data.graph?.nodes);
@@ -687,36 +1007,22 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             throw new Error('Chat changed during extraction');
         }
 
-        // Sync to ST Vector Storage if enabled
-        if (isStVectorSource()) {
-            const chatId = getCurrentChatId();
-            const unsyncedEvents = events.filter((e) => !isStSynced(e));
-            if (unsyncedEvents.length > 0) {
-                const items = unsyncedEvents.map((e) => ({
-                    hash: cyrb53(`[OV_ID:${e.id}] ${e.summary}`),
-                    text: `[OV_ID:${e.id}] ${e.summary}`,
-                    index: 0,
-                }));
-                const success = await syncItemsToST(items, chatId);
-                if (success) {
-                    for (const e of unsyncedEvents) markStSynced(e);
-                }
-            }
+        // Sync events + graph to ST Vector Storage (single applySyncChanges call)
+        const eventSyncChanges = { toSync: [], toDelete: [] };
+        for (const e of events.filter((e) => !isStSynced(e))) {
+            const text = `[OV_ID:${e.id}] ${e.summary}`;
+            eventSyncChanges.toSync.push({ hash: cyrb53(text), text, item: e });
         }
+        await applySyncChanges({
+            toSync: [...eventSyncChanges.toSync, ...graphSyncChanges.toSync],
+            toDelete: [...graphSyncChanges.toDelete],
+        });
 
         // ===== PHASE 2: Enrichment (non-critical) =====
         try {
-            // Stage 4.6: Reflection check (per character in new events)
+            // Stage 5: Reflection check (per character in new events)
             if (events.length > 0) {
-                initGraphState(data); // Ensures reflection_state exists
                 accumulateImportance(data.reflection_state, events);
-
-                // Collect unique characters from new events
-                const characters = new Set();
-                for (const event of events) {
-                    for (const c of event.characters_involved || []) characters.add(c);
-                    for (const w of event.witnesses || []) characters.add(w);
-                }
 
                 // ===== Backfill guard: skip Phase 2 LLM synthesis =====
                 if (options.isBackfill) {
@@ -725,80 +1031,22 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                 }
                 // ===== END BACKFILL GUARD =====
 
-                // Check each character for reflection trigger
-                const reflectionThreshold = settings.reflectionThreshold;
-                const ladderQueue = await createLadderQueue(settings.maxConcurrency);
-                const reflectionPromises = [];
-
-                for (const characterName of characters) {
-                    if (shouldReflect(data.reflection_state, characterName, reflectionThreshold)) {
-                        reflectionPromises.push(
-                            ladderQueue
-                                .add(async () => {
-                                    const reflections = await generateReflections(
-                                        characterName,
-                                        data[MEMORIES_KEY] || [],
-                                        data[CHARACTERS_KEY] || {}
-                                    );
-                                    if (reflections.length > 0) {
-                                        data[MEMORIES_KEY].push(...reflections);
-                                    }
-                                    // Reset accumulator after reflection
-                                    data.reflection_state[characterName].importance_sum = 0;
-                                })
-                                .catch((error) => {
-                                    if (error.name === 'AbortError') throw error;
-                                    logError(`Reflection error for ${characterName}`, error);
-                                })
-                        );
-                    }
+                // Collect unique characters from new events
+                const characters = new Set();
+                for (const event of events) {
+                    for (const c of event.characters_involved || []) characters.add(c);
+                    for (const w of event.witnesses || []) characters.add(w);
                 }
 
-                await Promise.all(reflectionPromises);
+                await synthesizeReflections(data, [...characters], settings, { abortSignal });
             }
 
-            // Stage 4.7: Community detection
+            // Stage 6: Community detection (interval check)
             const communityInterval = settings.communityDetectionInterval;
             const prevCount = (data.graph_message_count || 0) - messages.length;
             const currCount = data.graph_message_count || 0;
-            // Check if we crossed a message boundary for community detection
             if (Math.floor(currCount / communityInterval) > Math.floor(prevCount / communityInterval)) {
-                try {
-                    // Derive node keys for main characters (user + char) to prune hairball edges
-                    const baseKeys = [normalizeKey(characterName), normalizeKey(userName)];
-                    const mainCharacterKeys = expandMainCharacterKeys(baseKeys, data.graph.nodes || {});
-                    const crossScriptKeys = findCrossScriptCharacterKeys(baseKeys, data.graph.nodes || {});
-                    mainCharacterKeys.push(...crossScriptKeys.filter((k) => !mainCharacterKeys.includes(k)));
-                    const communityResult = detectCommunities(data.graph, mainCharacterKeys);
-                    if (communityResult) {
-                        // Consolidate bloated edges before summarization
-                        if (data.graph._edgesNeedingConsolidation?.length > 0) {
-                            const consolidated = await consolidateEdges(data.graph, settings);
-                            if (consolidated > 0) {
-                                logDebug(`Consolidated ${consolidated} graph edges before community summarization`);
-                            }
-                        }
-
-                        const groups = buildCommunityGroups(data.graph, communityResult.communities);
-                        const stalenessThreshold = settings.communityStalenessThreshold;
-                        const isSingleCommunity = communityResult.count === 1;
-                        const communityUpdateResult = await updateCommunitySummaries(
-                            data.graph,
-                            groups,
-                            data.communities || {},
-                            currCount,
-                            stalenessThreshold,
-                            isSingleCommunity
-                        );
-                        data.communities = communityUpdateResult.communities;
-                        if (communityUpdateResult.global_world_state) {
-                            data.global_world_state = communityUpdateResult.global_world_state;
-                        }
-                        logDebug(`Community detection: ${communityResult.count} communities found`);
-                    }
-                } catch (error) {
-                    logError('Community detection error', error);
-                }
+                await synthesizeCommunities(data, settings, characterName, userName);
             }
 
             // Final save — Phase 2 enrichment persisted
@@ -826,25 +1074,17 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             messages_processed: messages.length,
         };
     } catch (error) {
+        if (error.name === 'AbortError') throw error; // Don't log cancellation
         logError('Extraction error', error, { messageCount: messages.length });
         throw error;
     }
 }
 
-/**
- * Run Phase 2 enrichment (Reflections & Communities) independently.
- * Used after backfill completes to run comprehensive synthesis once.
- *
- * @param {Object} data - OpenVault data object (modified in-place)
- * @param {Object} settings - Extension settings
- * @param {string} targetChatId - Chat ID for change detection
- * @returns {Promise<void>}
- */
-export async function runPhase2Enrichment(data, settings, targetChatId) {
-    const memories = data[MEMORIES_KEY] || [];
+export async function runPhase2Enrichment(data, settings, targetChatId, options = {}) {
+    const { abortSignal = null } = options;
 
     // Guard: No memories to enrich
-    if (memories.length === 0) {
+    if (!data[MEMORIES_KEY]?.length) {
         logDebug('runPhase2Enrichment: No memories to enrich');
         return;
     }
@@ -852,82 +1092,12 @@ export async function runPhase2Enrichment(data, settings, targetChatId) {
     logDebug('runPhase2Enrichment: Starting comprehensive Phase 2 synthesis');
 
     try {
-        // ===== REFLECTIONS: Process all characters with accumulated importance =====
-        initGraphState(data); // Ensures reflection_state exists
         const characterNames = Object.keys(data.reflection_state || {});
-        const reflectionThreshold = settings.reflectionThreshold;
+        await synthesizeReflections(data, characterNames, settings, { abortSignal });
 
-        const ladderQueue = await createLadderQueue(settings.maxConcurrency);
-        const reflectionPromises = [];
-
-        for (const characterName of characterNames) {
-            if (shouldReflect(data.reflection_state, characterName, reflectionThreshold)) {
-                reflectionPromises.push(
-                    ladderQueue
-                        .add(async () => {
-                            const reflections = await generateReflections(
-                                characterName,
-                                memories,
-                                data[CHARACTERS_KEY] || {}
-                            );
-                            if (reflections.length > 0) {
-                                data[MEMORIES_KEY].push(...reflections);
-                            }
-                            // Reset accumulator after reflection
-                            data.reflection_state[characterName].importance_sum = 0;
-                        })
-                        .catch((error) => {
-                            if (error.name === 'AbortError') throw error;
-                            logError(`Reflection error for ${characterName}`, error);
-                        })
-                );
-            }
-        }
-
-        await Promise.all(reflectionPromises);
-
-        // ===== COMMUNITIES: Force-run unconditionally (skip interval check) =====
         const context = getDeps().getContext();
-        const characterName = context.name2;
-        const userName = context.name1;
+        await synthesizeCommunities(data, settings, context.name2, context.name1);
 
-        try {
-            const baseKeys = [normalizeKey(characterName), normalizeKey(userName)];
-            const mainCharacterKeys = expandMainCharacterKeys(baseKeys, data.graph.nodes || {});
-            const crossScriptKeys = findCrossScriptCharacterKeys(baseKeys, data.graph.nodes || {});
-            mainCharacterKeys.push(...crossScriptKeys.filter((k) => !mainCharacterKeys.includes(k)));
-            const communityResult = detectCommunities(data.graph, mainCharacterKeys);
-            if (communityResult) {
-                // Consolidate bloated edges before summarization
-                if (data.graph._edgesNeedingConsolidation?.length > 0) {
-                    const consolidated = await consolidateEdges(data.graph, settings);
-                    if (consolidated > 0) {
-                        logDebug(`Consolidated ${consolidated} graph edges before community summarization`);
-                    }
-                }
-
-                const groups = buildCommunityGroups(data.graph, communityResult.communities);
-                const stalenessThreshold = settings.communityStalenessThreshold;
-                const isSingleCommunity = communityResult.count === 1;
-                const communityUpdateResult = await updateCommunitySummaries(
-                    data.graph,
-                    groups,
-                    data.communities || {},
-                    data.graph_message_count || 0,
-                    stalenessThreshold,
-                    isSingleCommunity
-                );
-                data.communities = communityUpdateResult.communities;
-                if (communityUpdateResult.global_world_state) {
-                    data.global_world_state = communityUpdateResult.global_world_state;
-                }
-                logDebug(`runPhase2Enrichment: ${communityResult.count} communities processed`);
-            }
-        } catch (error) {
-            logError('Community detection error', error);
-        }
-
-        // Final save
         // Update IDF cache before save — reflections may have been added
         updateIDFCache(data, data.graph?.nodes);
         await saveOpenVaultData(targetChatId);
@@ -942,15 +1112,39 @@ export async function runPhase2Enrichment(data, settings, targetChatId) {
 /**
  * Extract memories from all unextracted messages in current chat
  * Processes in batches determined by extractionTokenBudget setting
- * @param {function} updateEventListenersFn - Function to update event listeners after backfill
+ * @param {function|object} optionsOrCallback - Legacy callback OR options object
  */
-export async function extractAllMessages(updateEventListenersFn) {
+export async function extractAllMessages(optionsOrCallback) {
+    // v6: Normalize options to handle legacy function argument
+    const opts = typeof optionsOrCallback === 'function' ? { onComplete: optionsOrCallback } : optionsOrCallback || {};
+
+    const {
+        isEmergencyCut = false,
+        abortSignal = null,
+        onComplete = null,
+        // Backfill UI callbacks (non-Emergency-Cut path)
+        onStart,
+        onProgress,
+        onPhase2Start,
+        onBatchRetryWait,
+        onFinish,
+        onAbort,
+        onError,
+        // Emergency Cut path (unchanged)
+        progressCallback = null,
+    } = opts;
     const context = getDeps().getContext();
     const chat = context.chat;
 
     if (!chat || chat.length === 0) {
         showToast('warning', 'No chat messages to extract');
-        return;
+        return { messagesProcessed: 0, eventsCreated: 0 };
+    }
+
+    // Guard: Prevent concurrent extraction if background worker is running
+    if (isWorkerRunning()) {
+        showToast('warning', 'Background extraction in progress. Please wait.', 'OpenVault');
+        return { messagesProcessed: 0, eventsCreated: 0 };
     }
 
     const settings = getDeps().getExtensionSettings()[extensionName];
@@ -958,43 +1152,40 @@ export async function extractAllMessages(updateEventListenersFn) {
     const data = getOpenVaultData();
     if (!data) {
         showToast('warning', 'No chat context available');
-        return;
+        return { messagesProcessed: 0, eventsCreated: 0 };
+    }
+
+    // v6: Check abort signal early (for Emergency Cut) - before any work
+    if (abortSignal?.aborted) {
+        throw new DOMException('Emergency Cut Cancelled', 'AbortError');
     }
 
     // Get initial estimate for progress display
     const { messageIds: initialMessageIds, batchCount: initialBatchCount } = getBackfillMessageIds(
         chat,
         data,
-        tokenBudget
+        tokenBudget,
+        isEmergencyCut // Bypass token budget check for Emergency Cut
     );
-    const alreadyExtractedIds = getExtractedMessageIds(data);
+    const processedFps = getProcessedFingerprints(data);
 
-    if (alreadyExtractedIds.size > 0) {
-        logDebug(`Backfill: Skipping ${alreadyExtractedIds.size} already-extracted messages`);
+    if (processedFps.size > 0) {
+        logDebug(`Backfill: Skipping ${processedFps.size} already-extracted messages`);
     }
 
     if (initialMessageIds.length === 0) {
-        if (alreadyExtractedIds.size > 0) {
-            showToast(
-                'info',
-                `All eligible messages already extracted (${alreadyExtractedIds.size} messages have memories)`
-            );
+        if (processedFps.size > 0) {
+            showToast('info', `All eligible messages already extracted (${processedFps.size} messages have memories)`);
         } else {
             showToast('warning', `Not enough messages for a complete batch (need token budget met)`);
         }
-        return;
+        return { messagesProcessed: 0, eventsCreated: 0 };
     }
 
-    // Show persistent progress toast
-    setStatus('extracting');
-    $(
-        toastr?.info(`Backfill: 0/${initialBatchCount} batches (0%)`, 'OpenVault - Extracting', {
-            timeOut: 0,
-            extendedTimeOut: 0,
-            tapToDismiss: false,
-            toastClass: 'toast openvault-backfill-toast',
-        })
-    );
+    // Notify caller that backfill is starting (skip for Emergency Cut - uses modal instead)
+    if (!isEmergencyCut) {
+        onStart?.(initialBatchCount);
+    }
 
     // Capture chat ID to detect if user switches during backfill
     const targetChatId = getCurrentChatId();
@@ -1008,6 +1199,11 @@ export async function extractAllMessages(updateEventListenersFn) {
     let cumulativeBackoffMs = 0;
 
     while (true) {
+        // v6: Check abort signal at start of loop
+        if (abortSignal?.aborted) {
+            throw new DOMException('Emergency Cut Cancelled', 'AbortError');
+        }
+
         // If we have no current batch or need to get a fresh one (after successful extraction)
         if (!currentBatch) {
             // Re-fetch current state to handle chat mutations (deletions/additions)
@@ -1016,7 +1212,7 @@ export async function extractAllMessages(updateEventListenersFn) {
             const freshData = getOpenVaultData();
 
             // Debug: log processed message tracking state
-            const processedCount = (freshData?.processed_message_ids || []).length;
+            const processedCount = (freshData?.processed_messages || []).length;
             const memoryCount = (freshData?.memories || []).length;
             logDebug(`Backfill state: ${processedCount} processed messages tracked, ${memoryCount} memories stored`);
 
@@ -1028,7 +1224,8 @@ export async function extractAllMessages(updateEventListenersFn) {
             const { messageIds: freshIds, batchCount: remainingBatches } = getBackfillMessageIds(
                 freshChat,
                 freshData,
-                tokenBudget
+                tokenBudget,
+                isEmergencyCut // Bypass token budget check for Emergency Cut
             );
 
             logDebug(
@@ -1036,26 +1233,33 @@ export async function extractAllMessages(updateEventListenersFn) {
             );
 
             // Get next batch using token budget
-            currentBatch = getNextBatch(freshChat, freshData, tokenBudget);
+            currentBatch = getNextBatch(freshChat, freshData, tokenBudget, isEmergencyCut);
             if (!currentBatch) {
                 logDebug('Backfill: No more complete batches available');
                 break;
             }
         }
 
-        // Update progress toast (use initial estimate for display consistency)
-        const progress = Math.round((batchesProcessed / initialBatchCount) * 100);
+        // Update progress (toast for normal, callback for Emergency Cut)
+        const _progress = Math.round((batchesProcessed / initialBatchCount) * 100);
         const retryText =
             retryCount > 0
                 ? ` (retry ${retryCount}, backoff ${Math.round(cumulativeBackoffMs / 1000)}s/${Math.round(MAX_BACKOFF_TOTAL_MS / 1000)}s)`
                 : '';
-        $('.openvault-backfill-toast .toast-message').text(
-            `Backfill: ${batchesProcessed}/${initialBatchCount} batches (${Math.min(progress, 100)}%) - Processing...${retryText}`
-        );
+
+        if (!isEmergencyCut) {
+            onProgress?.(batchesProcessed, initialBatchCount, totalEvents, retryText);
+        } else if (progressCallback) {
+            progressCallback(batchesProcessed + 1, initialBatchCount, totalEvents);
+        }
 
         try {
             logDebug(`Processing batch ${batchesProcessed + 1}/${initialBatchCount}${retryText}...`);
-            const result = await extractMemories(currentBatch, targetChatId, { isBackfill: true, silent: true });
+            const result = await extractMemories(currentBatch, targetChatId, {
+                isBackfill: true,
+                silent: true,
+                abortSignal, // v6: Pass signal to enable mid-request cancellation
+            });
             totalEvents += result?.events_created || 0;
             messagesProcessed += currentBatch?.length || 0;
 
@@ -1066,14 +1270,15 @@ export async function extractAllMessages(updateEventListenersFn) {
 
             await rpmDelay(settings, 'Batch rate limit');
         } catch (error) {
-            // AbortError = chat switched (same as existing chat-change detection)
+            // v6: AbortError propagation for Emergency Cut
             if (error.name === 'AbortError' || error.message === 'Chat changed during extraction') {
+                if (isEmergencyCut) {
+                    throw error; // Propagate to Emergency Cut handler
+                }
                 logDebug('Chat changed during backfill, aborting');
-                $('.openvault-backfill-toast').remove();
-                showToast('warning', 'Backfill aborted: chat changed', 'OpenVault');
                 clearAllLocks();
-                setStatus('ready');
-                return;
+                onAbort?.();
+                return { messagesProcessed: 0, eventsCreated: 0 };
             }
 
             retryCount++;
@@ -1088,14 +1293,21 @@ export async function extractAllMessages(updateEventListenersFn) {
 
             // If cumulative backoff exceeds limit, stop extraction entirely
             if (cumulativeBackoffMs >= MAX_BACKOFF_TOTAL_MS) {
+                // v6: Throw for Emergency Cut instead of silent success
+                if (isEmergencyCut) {
+                    throw new Error(
+                        `Extraction failed after ${Math.round(cumulativeBackoffMs / 1000)}s of API errors.`
+                    );
+                }
+
                 logDebug(
                     `Batch ${batchesProcessed + 1} failed: cumulative backoff reached ${Math.round(cumulativeBackoffMs / 1000)}s (limit: ${Math.round(MAX_BACKOFF_TOTAL_MS / 1000)}s). Stopping extraction.`
                 );
                 logError('Extraction stopped after exceeding backoff limit', error);
-                showToast(
-                    'error',
-                    `Extraction stopped: API errors persisted for ${Math.round(cumulativeBackoffMs / 1000)}s. Check your API connection and try again.`,
-                    'OpenVault'
+                onError?.(
+                    new Error(
+                        `Extraction stopped: API errors persisted for ${Math.round(cumulativeBackoffMs / 1000)}s. Check your API connection and try again.`
+                    )
                 );
                 break;
             }
@@ -1104,35 +1316,33 @@ export async function extractAllMessages(updateEventListenersFn) {
                 `Batch ${batchesProcessed + 1} failed with ${errorType}, retrying in ${backoffSeconds}s (attempt ${retryCount}, cumulative backoff: ${Math.round(cumulativeBackoffMs / 1000)}s/${Math.round(MAX_BACKOFF_TOTAL_MS / 1000)}s)...`
             );
 
-            // Update toast to show waiting state
-            $('.openvault-backfill-toast .toast-message').text(
-                `Backfill: ${batchesProcessed}/${initialBatchCount} batches - Waiting ${backoffSeconds}s before retry ${retryCount}...`
-            );
+            // Notify caller of retry wait (skip for Emergency Cut - modal shows progress)
+            if (!isEmergencyCut) {
+                onBatchRetryWait?.(batchesProcessed, initialBatchCount, backoffSeconds, retryCount);
+            }
 
             await new Promise((resolve) => setTimeout(resolve, backoffMs));
             // Do NOT clear currentBatch or increment batchesProcessed - retry the same batch
         }
     }
 
-    // ===== NEW: Run final Phase 2 synthesis =====
-    // Update existing progress toast for the final heavy lifting
-    logInfo('Backfill Phase 1 complete. Running final Phase 2 synthesis...');
-    $('.openvault-backfill-toast .toast-message').text(
-        `Backfill: 100% - Synthesizing world state and reflections. This may take a minute...`
-    );
+    // ===== NEW: Run final Phase 2 synthesis (skip for Emergency Cut - speed priority) =====
+    if (!isEmergencyCut) {
+        // Update existing progress toast for the final heavy lifting
+        logInfo('Backfill Phase 1 complete. Running final Phase 2 synthesis...');
+        onPhase2Start?.();
 
-    try {
-        await runPhase2Enrichment(data, settings, targetChatId);
-    } catch (error) {
-        logError('Final Phase 2 enrichment failed', error);
-        showToast('warning', 'Events saved, but final summarization failed. You can re-run later.', 'OpenVault');
-        // Don't throw - Phase 1 data is safe
+        try {
+            await runPhase2Enrichment(data, settings, targetChatId, { abortSignal });
+        } catch (error) {
+            logError('Final Phase 2 enrichment failed', error);
+            onError?.(new Error('Events saved, but final summarization failed. You can re-run later.'));
+            // Don't throw - Phase 1 data is safe
+        }
+    } else {
+        logInfo('[Emergency Cut Debug] Skipping Phase 2 enrichment for speed');
     }
     // ===== END FINAL PHASE 2 =====
-
-    // Now clear it when everything is truly done
-    // Clear progress toast
-    $('.openvault-backfill-toast').remove();
 
     // Reset operation state
     clearAllLocks();
@@ -1142,12 +1352,16 @@ export async function extractAllMessages(updateEventListenersFn) {
     await getDeps().saveChatConditional();
 
     // Re-register event listeners
-    if (updateEventListenersFn) {
-        updateEventListenersFn(true);
+    if (onComplete) {
+        onComplete(true);
     }
 
-    showToast('success', `Extracted ${totalEvents} events from ${messagesProcessed} messages`);
-    refreshAllUI();
-    setStatus('ready');
+    // Notify caller of completion (skip for Emergency Cut - caller handles its own UI)
+    if (!isEmergencyCut) {
+        onFinish?.({ messagesProcessed, eventsCreated: totalEvents });
+    }
+
     logDebug('Backfill complete');
+
+    return { messagesProcessed, eventsCreated: totalEvents };
 }

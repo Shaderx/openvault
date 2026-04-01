@@ -5,30 +5,10 @@
  * Uses graph-anchored stem matching to detect known entities.
  */
 
-import { extensionName } from '../constants.js';
-import { getDeps } from '../deps.js';
+import { CORPUS_GROUNDED_BOOST_RATIO, NON_GROUNDED_BOOST_RATIO } from '../constants.js';
 import { getOptimalChunkSize } from '../embeddings.js';
 import { stemName, stemWord } from '../utils/stemmer.js';
 import { tokenize } from './math.js';
-
-// Three-tier BM25 token weights (multipliers of entityBoostWeight)
-const CORPUS_GROUNDED_BOOST_RATIO = 0.6; // Layer 2: 60% of entity boost (3x when entityBoostWeight=5)
-const NON_GROUNDED_BOOST_RATIO = 0.4; // Layer 3: 40% of entity boost (2x when entityBoostWeight=5)
-
-/**
- * Get settings for query context extraction
- * @returns {Object} Settings object
- */
-function getQueryContextSettings() {
-    const settings = getDeps().getExtensionSettings()[extensionName];
-    return {
-        entityWindowSize: settings.entityWindowSize,
-        embeddingWindowSize: settings.embeddingWindowSize,
-        recencyDecayFactor: settings.recencyDecayFactor,
-        topEntitiesCount: settings.topEntitiesCount,
-        entityBoostWeight: settings.entityBoostWeight,
-    };
-}
 
 /**
  * Extract entities from recent messages using graph-anchored stem matching
@@ -37,12 +17,12 @@ function getQueryContextSettings() {
  * @param {Object} [graphNodes={}] - Graph nodes keyed by normalized name
  * @returns {{entities: string[], weights: Object<string, number>}}
  */
-export function extractQueryContext(messages, activeCharacters = [], graphNodes = {}) {
+export function extractQueryContext(messages, activeCharacters = [], graphNodes = {}, queryConfig) {
     if (!messages || messages.length === 0) {
         return { entities: [], weights: {} };
     }
 
-    const settings = getQueryContextSettings();
+    const settings = queryConfig;
 
     // Build stem → display name map from graph nodes + aliases + characters
     const stemToEntity = new Map();
@@ -124,12 +104,12 @@ export function extractQueryContext(messages, activeCharacters = [], graphNodes 
  * @param {{entities: string[], weights: Object}} extractedEntities - Extracted entity context
  * @returns {string} Query text for embedding
  */
-export function buildEmbeddingQuery(messages, extractedEntities) {
+export function buildEmbeddingQuery(messages, extractedEntities, queryConfig) {
     if (!messages || messages.length === 0) {
         return '';
     }
 
-    const settings = getQueryContextSettings();
+    const settings = queryConfig;
     const recent = messages.slice(0, settings.embeddingWindowSize);
 
     // Take recent messages without repetition (Gemma supports 512 tokens, ~1800 chars for Cyrillic)
@@ -164,9 +144,9 @@ export function buildEmbeddingQuery(messages, extractedEntities) {
  * @param {Object} [meta=null] - Optional metadata object to populate with layer counts
  * @returns {string[]} Token array with boosted entities and message stems
  */
-export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = null, meta = null) {
+export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = null, meta = null, queryConfig) {
     const tokens = [];
-    const settings = getQueryContextSettings();
+    const settings = queryConfig;
 
     // Layer 0: Multi-word entities (exact phrases, un-tokenized, added ONCE)
     // Layer 1: Single-word entities (stems, with 5x boost)

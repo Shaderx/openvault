@@ -1,6 +1,6 @@
 {
     "name": "openvault",
-    "version": "13.00",
+    "version": "17.00",
     "type": "module",
     "description": "SillyTavern memory extension",
     "scripts": {
@@ -8,17 +8,19 @@
         "prepare": "git config core.hooksPath .githooks",
         "lint": "biome check .",
         "lint:fix": "biome check --write --unsafe .",
+        "lint:jsdoc": "node scripts/check-jsdoc.mjs",
         "format": "biome format --write .",
         "test": "node scripts/test.js",
         "test:run": "vitest run",
-        "test:changed": "vitest --changed=HEAD~1 --run",
-        "test:watch": "vitest",
         "test:related": "vitest --run --reporter=dot related",
         "test:math": "vitest --run tests/math.test.js tests/retrieval/math.test.js",
         "test:extract": "vitest --run tests/extraction/",
         "test:ci": "vitest run --reporter=dot",
         "test:coverage": "vitest run --coverage",
         "test:ui": "vitest --ui",
+        "generate-types": "node scripts/generate-types.js",
+        "pretest": "npm run generate-types",
+        "typecheck": "npm run generate-types && tsc --noEmit",
         "sync-version": "node scripts/sync-version.js",
         "check-css": "node scripts/check-css.js",
         "trim": "python scripts/trim-logs.py",
@@ -39,7 +41,9 @@
         "p-queue": "^8.0.0",
         "repomix": "^0.3.2",
         "snowball-stemmers": "^0.6.0",
-        "vitest": "^4.0.16"
+        "typescript": "^6.0.2",
+        "vitest": "^4.0.16",
+        "zod-to-ts": "^2.0.0"
     },
     "dependencies": {
         "cyrillic-to-translit-js": "^3.2.1",

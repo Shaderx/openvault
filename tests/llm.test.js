@@ -157,6 +157,35 @@ describe('callLLM backup profile failover', () => {
         await expect(callLLM(testMessages, testConfig)).rejects.toThrow('main down');
         expect(sendRequest).toHaveBeenCalledTimes(2);
     });
+
+    it('uses explicitly passed profileId over settings', async () => {
+        const sendRequest = vi.fn().mockResolvedValue({ content: 'explicit-ok' });
+        setupTestContext({
+            settings: { extractionProfile: 'settings-id' },
+            deps: { connectionManager: { sendRequest } },
+        });
+
+        const result = await callLLM(testMessages, testConfig, { profileId: 'explicit-id' });
+        expect(result).toBe('explicit-ok');
+        expect(sendRequest.mock.calls[0][0]).toBe('explicit-id');
+    });
+
+    it('uses explicitly passed backupProfileId over settings', async () => {
+        const sendRequest = vi
+            .fn()
+            .mockRejectedValueOnce(new Error('main down'))
+            .mockResolvedValueOnce({ content: 'backup-ok' });
+        setupTestContext({
+            settings: { extractionProfile: 'main-id', backupProfile: 'settings-backup' },
+            deps: { connectionManager: { sendRequest } },
+        });
+
+        const result = await callLLM(testMessages, testConfig, {
+            backupProfileId: 'explicit-backup',
+        });
+        expect(result).toBe('backup-ok');
+        expect(sendRequest.mock.calls[1][0]).toBe('explicit-backup');
+    });
 });
 
 describe('callLLM abort signal', () => {

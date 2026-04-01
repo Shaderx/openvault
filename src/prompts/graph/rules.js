@@ -1,13 +1,15 @@
+import { ENTITY_TYPES } from '../../constants.js';
+
 /**
  * Task-specific rules for graph extraction and edge consolidation.
  */
 
 export const GRAPH_RULES = `Extract named entities mentioned or clearly implied in the messages. Focus on NEW entities or CHANGES to existing ones:
-- PERSON: Named characters, NPCs, people mentioned by name, and fictional identities presented as characters (includes personas, alter-egos, avatars)
-- PLACE: Named locations, buildings, rooms, cities, regions
-- ORGANIZATION: Named groups, factions, guilds, companies
-- OBJECT: Highly significant unique items, weapons, or plot devices. Do NOT extract mundane furniture, clothing, or food unless they are critical to the scene's dynamic
-- CONCEPT: Named abilities, spells, diseases, prophecies
+- ${ENTITY_TYPES.PERSON}: Named characters, NPCs, people mentioned by name, and fictional identities presented as characters (includes personas, alter-egos, avatars)
+- ${ENTITY_TYPES.PLACE}: Named locations, buildings, rooms, cities, regions
+- ${ENTITY_TYPES.ORGANIZATION}: Named groups, factions, guilds, companies
+- ${ENTITY_TYPES.OBJECT}: Highly significant unique items, weapons, or plot devices. Do NOT extract mundane furniture, clothing, or food unless they are critical to the scene's dynamic
+- ${ENTITY_TYPES.CONCEPT}: Named abilities, spells, diseases, prophecies
 
 Also extract relationships between pairs of entities when the connection is stated or clearly implied. Do NOT re-describe existing static relationships unless a specific progression or change occurred in this batch.
 
@@ -16,7 +18,7 @@ IMPORTANT: Extract entities and relationships even when no events are extracted.
 <thinking_process>
 Follow these steps IN ORDER. Write your work inside <think> tags BEFORE outputting the JSON:
 
-Step 1: Entity scan — List every named entity mentioned or implied. Include type (PERSON, PLACE, ORGANIZATION, OBJECT, CONCEPT).
+Step 1: Entity scan — List every named entity mentioned or implied. Include type (${Object.values(ENTITY_TYPES).join(', ')}).
 Step 2: Type validation — Verify each entity type against the allowed set. Skip mundane objects unless plot-critical.
 Step 3: Relationship map — For each entity pair with a stated or implied connection, note the direction and nature.
 Step 4: Output — Count entities and relationships, then produce the final JSON.

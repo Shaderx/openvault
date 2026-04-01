@@ -8,9 +8,7 @@
  * This handles transient network failures (ERR_CONNECTION_RESET) by automatically
  * falling back to alternative CDNs. If all public CDNs fail, consider adding a
  * self-hosted vendor copy as the final fallback.
- */
-
-/**
+ *
  * Mirror list for CDN fallback.
  * Ordered by preference: fastest/most reliable first.
  *
@@ -25,6 +23,12 @@
  * 3. Add mirror: (pkg) => pkg === 'package-name' ? '/vendor/package.mjs' : null
  * 4. Filter out nulls in the import loop
  */
+
+// @ts-check
+
+/** @typedef {import('../types.d.ts').CdnMirrorFn} CdnMirrorFn */
+
+/** @type {CdnMirrorFn[]} */
 const MIRRORS = [
     (pkg) => `https://esm.sh/${pkg}`,
     (pkg) => `https://cdn.skypack.dev/${pkg}`,
@@ -39,19 +43,25 @@ const MAX_ROUNDS = 2;
 const cache = new Map();
 
 /**
- * Test-only override map. Populated by vitest setup before modules load.
- * @type {Map<string, object>}
+ * Test-only override map. Stored on globalThis to survive vi.resetModules().
+ * @type {() => Map<string, object>}
  */
-const _testOverrides = new Map();
+const getTestOverrides = () => {
+    if (!globalThis.__openvault_cdn_test_overrides) {
+        globalThis.__openvault_cdn_test_overrides = new Map();
+    }
+    return globalThis.__openvault_cdn_test_overrides;
+};
 
 /**
  * Register a local module for a package spec (test-only).
  * Must be called from vitest setupFiles BEFORE source modules are imported.
  * @param {string} packageSpec
  * @param {object} mod - The module namespace object
+ * @returns {void}
  */
 export function _setTestOverride(packageSpec, mod) {
-    _testOverrides.set(packageSpec, mod);
+    getTestOverrides().set(packageSpec, mod);
 }
 
 /**
@@ -63,7 +73,8 @@ export function _setTestOverride(packageSpec, mod) {
  */
 export async function cdnImport(packageSpec) {
     // Test override — instant, no network
-    if (_testOverrides.has(packageSpec)) return _testOverrides.get(packageSpec);
+    const testOverrides = getTestOverrides();
+    if (testOverrides.has(packageSpec)) return testOverrides.get(packageSpec);
 
     // Application-level cache — same package spec never fetched twice
     if (cache.has(packageSpec)) return cache.get(packageSpec);

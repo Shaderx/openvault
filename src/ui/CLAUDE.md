@@ -9,10 +9,13 @@ Handles the ST settings panel with progressive disclosure design: status/browsin
 - **`render.js`**: State orchestration and DOM manipulation (`$()`).
 - **`settings.js`**: Event binding and persistence. `handleResetSettings()` preserves connection settings.
 
+**Callback Wiring Pattern (PR3, PR6)**: UI provides callbacks to domain functions. `handleOllamaTestClick`, `handleEmergencyCutClick`, `handleExtractAll` are thin wiring layers. Domain logic (`testOllamaConnection`, `executeEmergencyCut`, `extractAllMessages`) lives in embeddings.js and extract.js.
+
 ## TAB STRUCTURE (Progressive Disclosure)
 Settings reorganized by user activity pattern, not technical category:
 
 1. **Dashboard** (dashboard-connections): Quick Toggles → Status → Stats → Progress → [collapsed] Connection & Setup, Embeddings, API Limits
+   - **Emergency Cut**: Danger button (stacked below Backfill) to extract all unprocessed messages and hide chat history to break LLM repetition loops. Uses modal with progress bar, blocks chat input during operation.
 2. **Memories** (memory-bank): Browser/Search first → [collapsed] Character States, Extraction & Context, Reflection Engine
 3. **World** (world): Communities → Entities. **Pure viewer, zero settings**.
 4. **Advanced** (advanced): Warning banner → [collapsed] Scoring & Weights, Decay Math, Similarity Thresholds → Danger Zone
@@ -20,6 +23,7 @@ Settings reorganized by user activity pattern, not technical category:
 
 ## PATTERNS & CONVENTIONS
 - **Drawers (`.openvault-details`)**: Collapsible `<details>` elements. CSS hides native triangle, uses rotating `›` chevron.
+- **Modal Patterns**: Emergency Cut modal appends to `document.body` (not extension panel) to avoid CSS stacking context issues. Uses `z-index: 9999` and keyboard trap with accessibility (Escape to cancel, Tab/Enter allowed inside).
 - **Settings Binding**: Uses `bindSetting(elementId, settingKey, type)`. All get/set operations use centralized API from `src/settings.js`:
   - `getSettings(path?, defaultValue?)` for reads
   - `setSetting(path, value)` for writes (auto-saves via debounced save)

@@ -148,6 +148,11 @@ Production code uses bare URLs (e.g., `https://esm.sh/graphology`). Node/Vitest 
 - **Requirement**: Any CDN package MUST be aliased in `vitest.config.js` to a local `node_modules/` path.
 - **Requirement**: You must `npm install --save-dev` the package to make it available to the alias.
 
+## CDN TEST OVERRIDES
+`tests/setup.js` registers test overrides for CDN imports via `_setTestOverride()` in `src/utils/cdn.js`.
+- Tests using `vi.resetModules()` must call `await global.registerCdnOverrides()` in `beforeEach`.
+- **Gotcha**: `vi.resetModules()` resets module-level state. For state that must survive resets (like test overrides), store on `globalThis` (see `src/utils/cdn.js`).
+
 ## EMBEDDING MOCKS
 Do not run real Transformers.js models in Vitest.
 - Force the 'ollama' strategy in test settings (`embeddingSource: 'ollama'`).
@@ -190,6 +195,8 @@ npm run test:extract
 # With UI (for debugging parameterized tests)
 npm run test:ui
 ```
+
+- **Constants Mock Sync**: When adding new constants to `src/constants.js`, check if `tests/unit/settings-ui.test.js` (or any test that mocks constants) needs the new exports added to its mock. Missing entries cause import errors.
 
 ### Pre-Commit (Full Suite)
 

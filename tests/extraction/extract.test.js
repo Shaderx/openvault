@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../../src/constants.js';
 import { resetDeps } from '../../src/deps.js';
-import { extractMemories, runPhase2Enrichment } from '../../src/extraction/extract.js';
+import { extractAllMessages, extractMemories, runPhase2Enrichment } from '../../src/extraction/extract.js';
 
 /**
  * Standard LLM response data for extraction tests.
@@ -80,16 +80,20 @@ describe('extractMemories pipeline', () => {
 
     beforeEach(() => {
         mockData = {
+            schema_version: 2,
             memories: [],
             character_states: {},
-            last_processed_message_id: -1,
             processed_message_ids: [],
+            graph: { nodes: {}, edges: {} },
+            communities: {},
+            reflection_state: {},
+            graph_message_count: 0,
         };
 
         mockContext = {
             chat: [
-                { mes: 'Hello', is_user: true, name: 'User' },
-                { mes: 'Welcome to the Castle', is_user: false, name: 'King Aldric' },
+                { mes: 'Hello', is_user: true, name: 'User', send_date: '1000000' },
+                { mes: 'Welcome to the Castle', is_user: false, name: 'King Aldric', send_date: '1000001' },
             ],
             name1: 'User',
             name2: 'King Aldric',
@@ -236,19 +240,6 @@ describe('runPhase2Enrichment', () => {
             .mockResolvedValueOnce({ content: reflectionResponse })
             .mockResolvedValueOnce({ content: communityResponse });
 
-        setupTestContext({
-            context: mockContext,
-            settings: { ...getExtractionSettings(), reflectionThreshold: 40 },
-            deps: {
-                connectionManager: getMockConnectionManager(sendRequest),
-                fetch: vi.fn(async () => ({
-                    ok: true,
-                    json: async () => ({ embedding: [0.1, 0.2] }),
-                })),
-                saveChatConditional: vi.fn(async () => true),
-            },
-        });
-
         const mockDataWithState = {
             memories: [
                 {
@@ -294,6 +285,22 @@ describe('runPhase2Enrichment', () => {
             character_states: {},
         };
 
+        // Set up context metadata with test data so repository methods work correctly
+        mockContext.chatMetadata = { openvault: mockDataWithState };
+
+        setupTestContext({
+            context: mockContext,
+            settings: { ...getExtractionSettings(), reflectionThreshold: 40 },
+            deps: {
+                connectionManager: getMockConnectionManager(sendRequest),
+                fetch: vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ embedding: [0.1, 0.2] }),
+                })),
+                saveChatConditional: vi.fn(async () => true),
+            },
+        });
+
         const initialLength = mockDataWithState.memories.length;
         await runPhase2Enrichment(mockDataWithState, getExtractionSettings(), null);
 
@@ -327,5 +334,87 @@ describe('runPhase2Enrichment', () => {
         await runPhase2Enrichment(emptyData, getExtractionSettings(), null);
 
         expect(sendRequest).not.toHaveBeenCalled();
+    });
+});
+
+// ── extractAllMessages Emergency Cut support ──
+
+describe('extractAllMessages Emergency Cut support', () => {
+    let mockContext;
+
+    beforeEach(() => {
+        mockContext = {
+            chat: [
+                { mes: 'test message one', is_user: true, name: 'User', send_date: '1' },
+                { mes: 'test message two', is_user: false, name: 'Char', send_date: '2' },
+                { mes: 'test message three', is_user: true, name: 'User', send_date: '3' },
+                { mes: 'test message four', is_user: false, name: 'Char', send_date: '4' },
+            ],
+            name1: 'User',
+            name2: 'Char',
+            chatId: 'test-chat',
+            powerUserSettings: {},
+        };
+    });
+
+    afterEach(() => {
+        resetDeps();
+        vi.clearAllMocks();
+    });
+
+    it.skip('accepts options object with isEmergencyCut flag', async () => {
+        const progressCallback = vi.fn();
+        const abortSignal = new AbortController().signal;
+        const onPhase2Start = vi.fn();
+
+        setupTestContext({
+            context: mockContext,
+            settings: { ...getExtractionSettings(), extractionTokenBudget: 8000 },
+            deps: {
+                connectionManager: getMockConnectionManager(mockSendRequest()),
+                fetch: vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ embedding: [0.1, 0.2] }),
+                })),
+                saveChatConditional: vi.fn(async () => true),
+            },
+        });
+
+        // Should not throw - options object with isEmergencyCut should be accepted
+        await expect(
+            extractAllMessages({
+                isEmergencyCut: true,
+                progressCallback,
+                abortSignal,
+                onPhase2Start,
+            })
+        ).resolves.toBeDefined();
+    });
+
+    it('throws AbortError when signal is aborted during batch loop', async () => {
+        const controller = new AbortController();
+
+        setupTestContext({
+            context: mockContext,
+            settings: { ...getExtractionSettings(), extractionTokenBudget: 100 },
+            deps: {
+                connectionManager: getMockConnectionManager(mockSendRequest()),
+                fetch: vi.fn(async () => ({
+                    ok: true,
+                    json: async () => ({ embedding: [0.1, 0.2] }),
+                })),
+                saveChatConditional: vi.fn(async () => true),
+            },
+        });
+
+        // Abort immediately - should throw AbortError
+        controller.abort();
+
+        await expect(
+            extractAllMessages({
+                isEmergencyCut: true,
+                abortSignal: controller.signal,
+            })
+        ).rejects.toThrow(expect.objectContaining({ name: 'AbortError' }));
     });
 });

@@ -131,7 +131,11 @@ describe('OllamaStrategy abort signal', () => {
         const { getStrategy } = await import('../src/embeddings.js');
         const strategy = getStrategy('ollama');
         const ctrl = new AbortController();
-        await strategy.getEmbedding('test text', { signal: ctrl.signal });
+        await strategy.getEmbedding('test text', {
+            signal: ctrl.signal,
+            url: 'http://test:11434',
+            model: 'test-model',
+        });
 
         expect(fetchSpy).toHaveBeenCalledTimes(1);
         const fetchOptions = fetchSpy.mock.calls[0][1];
@@ -173,5 +177,68 @@ describe('enrichEventsWithEmbeddings abort signal', () => {
         await expect(enrichEventsWithEmbeddings([{ summary: 'test' }], { signal: ctrl.signal })).rejects.toThrow(
             expect.objectContaining({ name: 'AbortError' })
         );
+    });
+});
+
+describe('OllamaStrategy with injected params', () => {
+    it('uses injected url and model instead of getDeps', async () => {
+        const fetchSpy = vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ embedding: [0.1, 0.2] }),
+        }));
+
+        const depsModule = await import('../src/deps.js');
+        vi.spyOn(depsModule, 'getDeps').mockReturnValue({ fetch: fetchSpy });
+
+        const { getStrategy } = await import('../src/embeddings.js');
+        const strategy = getStrategy('ollama');
+        const result = await strategy.getEmbedding('test text', {
+            url: 'http://injected:11434',
+            model: 'injected-model',
+        });
+
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        const fetchUrl = fetchSpy.mock.calls[0][0];
+        expect(fetchUrl).toBe('http://injected:11434/api/embeddings');
+        const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+        expect(body.model).toBe('injected-model');
+        expect(result).toBeInstanceOf(Float32Array);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+});
+
+describe('testOllamaConnection', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('returns true on successful connection', async () => {
+        global.fetch = vi.fn(() => Promise.resolve({ ok: true }));
+        const { testOllamaConnection } = await import('../src/embeddings.js');
+
+        const result = await testOllamaConnection('http://localhost:11434');
+
+        expect(result).toBe(true);
+        expect(fetch).toHaveBeenCalledWith(
+            'http://localhost:11434/api/tags',
+            expect.objectContaining({ method: 'GET' })
+        );
+    });
+
+    it('throws on HTTP error response', async () => {
+        global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500 }));
+        const { testOllamaConnection } = await import('../src/embeddings.js');
+
+        await expect(testOllamaConnection('http://localhost:11434')).rejects.toThrow('HTTP 500');
+    });
+
+    it('throws on network error', async () => {
+        global.fetch = vi.fn(() => Promise.reject(new Error('ECONNREFUSED')));
+        const { testOllamaConnection } = await import('../src/embeddings.js');
+
+        await expect(testOllamaConnection('http://localhost:11434')).rejects.toThrow('ECONNREFUSED');
     });
 });
