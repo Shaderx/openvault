@@ -30,4 +30,11 @@ export const EDGE_CONSOLIDATION_RULES = `1. Summarize the CURRENT dynamic, but p
 2. For example: "Started as enemies, but allied after the dragon incident; now close friends."
 3. If the relationship has evolved significantly, capture that trajectory concisely.
 4. Keep the description under 100 tokens.
-5. Use EXACT entity names from the input data — do NOT transliterate, abbreviate, or translate names.`;
+5. Use EXACT entity names from the input data — do NOT transliterate, abbreviate, or translate names.
+
+<thinking_process>
+Follow these steps IN ORDER. Write your work inside <think tags BEFORE outputting the JSON:
+Step 1: Analyze the timeline segments.
+Step 2: Identify the core shift or evolution in the relationship.
+Step 3: Output the consolidated JSON.
+</thinking_process>`;
