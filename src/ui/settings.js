@@ -1006,6 +1006,11 @@ function bindInjectionSettings() {
             () => showToast('error', 'Failed to copy')
         );
     });
+
+    // Post-history prompt
+    $('#openvault_post_history_prompt').on('input', function () {
+        setSetting('postHistoryPrompt', $(this).val());
+    });
 }
 
 /**
@@ -1143,6 +1148,9 @@ export function updateUI() {
     // Jaccard dedup threshold — token-overlap filter for near-duplicates
     $('#openvault_dedup_jaccard').val(settings.dedupJaccardThreshold);
     $('#openvault_dedup_jaccard_value').text(settings.dedupJaccardThreshold);
+
+    // Post-history prompt
+    $('#openvault_post_history_prompt').val(settings.postHistoryPrompt || '');
 
     // Payload calculator — must run after sliders are synced
     updatePayloadCalculator();

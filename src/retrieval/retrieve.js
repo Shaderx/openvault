@@ -184,6 +184,10 @@ export function injectContext(contextText, worldText = '') {
     } else {
         safeSetExtensionPrompt(worldText, 'openvault_world', worldPosition, worldDepth);
     }
+
+    // Inject post-history prompt (IN_CHAT at depth 0 = after all messages)
+    const postHistoryPrompt = (settings?.postHistoryPrompt || '').trim();
+    safeSetExtensionPrompt(postHistoryPrompt, 'openvault_posthistory', 4, 0);
 }
 
 /**
