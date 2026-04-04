@@ -1,6 +1,6 @@
 /**
  * English event extraction few-shot examples.
- * 5 examples following SFW → kink gradient.
+ * 6 examples following SFW → kink gradient.
  */
 
 export const EXAMPLES = [
@@ -103,5 +103,28 @@ Step 2: Cross-reference — Existing: "Vera restrained Daniel with leather cuffs
 Step 3: Check progression — Core action same (crop impact), but: voice shaking (emotional shift), welts accumulating (physical escalation). Genuine progression.
 Step 4: Format JSON — Importance: 2 (progression within established scene).`,
         output: `{ "events": [{ "summary": "Daniel's thighs became crisscrossed with welts from repeated crop strikes; his voice shook during the color check", "importance": 2, "characters_involved": ["Vera", "Daniel"], "witnesses": ["Vera", "Daniel"], "location": null, "is_secret": false, "emotional_impact": { "Daniel": "strained but consenting" }, "relationship_impact": {} }] }`,
+    },
+    {
+        label: 'Conversational commitment (EN/SFW)',
+        input: `"I can't do Tuesdays anymore," Alice said, sipping her tea. "My new shift starts next week."
+Bob nodded, adjusting his glasses. "Understood. Wednesdays then? Same place?"
+"Wednesdays work. But you have to promise you'll actually text me if you're running late this time."
+"I promise," Bob smiled, giving her a quick hug before walking out the door.`,
+        thinking: `Step 1: Extract data — Alice changed schedule (new shift, can't do Tuesdays). Meetups moved to Wednesdays. Alice demanded Bob text if late. Bob promised to do so. Bob hugged Alice and left.
+Step 2: Cross-reference — No matches in established_memories.
+Step 3: Check progression — New schedule and communication rule established.
+Step 4: Format JSON — The hug and sipping tea are momentary (skip). The schedule change and texting promise are durable — they matter for future interactions. Importance: 3.`,
+        output: `{
+  "events": [{
+    "summary": "Alice and Bob agreed to move their meetups to Wednesdays, and Bob explicitly promised to text her if he runs late",
+    "importance": 3,
+    "characters_involved": ["Alice", "Bob"],
+    "witnesses": ["Alice", "Bob"],
+    "location": null,
+    "is_secret": false,
+    "emotional_impact": {},
+    "relationship_impact": { "Alice↔Bob": "established new schedule and communication rule" }
+  }]
+}`,
     },
 ];

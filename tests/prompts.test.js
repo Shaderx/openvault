@@ -810,9 +810,9 @@ describe('buildGlobalSynthesisPrompt prefill parameter', () => {
 describe('domain module structure', () => {
     it('events/examples returns correct count per language', async () => {
         const { getExamples } = await import('../src/prompts/events/examples/index.js');
-        expect(getExamples('en')).toHaveLength(5);
+        expect(getExamples('en')).toHaveLength(6);
         expect(getExamples('ru')).toHaveLength(5);
-        expect(getExamples('auto')).toHaveLength(10);
+        expect(getExamples('auto')).toHaveLength(11);
     });
 
     it('graph/examples returns correct count per language', async () => {
