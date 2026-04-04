@@ -107,4 +107,27 @@ Step 3: Check progression — Same position, same act, rhythm acceleration only.
 Step 4: Format JSON — Continuation with no progression. Output empty array.`,
         output: `{ "events": [] }`,
     },
+    {
+        label: 'Conversational commitment (RU/SFW)',
+        input: `— Не смогу больше по вторникам, — сказала Alice, попивая чай. — Новая смена начинается на следующей неделе.
+Bob кивнул, поправляя очки. — Понял. Значит, средам? В том же месте?
+— Средам подходит. Но ты должен пообещать, что на этот раз точно напишешь мне, если опоздаешь.
+— Обещаю, — улыбнулся Bob и быстро обнял её, прежде чем выйти за дверь.`,
+        thinking: `Step 1: Extract data — Alice changed schedule (new shift, can't do Tuesdays). Meetups moved to Wednesdays. Alice demanded Bob text if late. Bob promised to do so. Bob hugged Alice and left.
+Step 2: Cross-reference — No matches in established_memories.
+Step 3: Check progression — New schedule and communication rule established.
+Step 4: Format JSON — The hug and sipping tea are momentary (skip). The schedule change and texting promise are durable — they matter for future interactions. Importance: 3. Values in Russian.`,
+        output: `{
+  "events": [{
+    "summary": "Alice и Bob договорились перенести встречи на средам, и Bob явно пообещал написать ей, если опоздает",
+    "importance": 3,
+    "characters_involved": ["Alice", "Bob"],
+    "witnesses": ["Alice", "Bob"],
+    "location": null,
+    "is_secret": false,
+    "emotional_impact": {},
+    "relationship_impact": { "Alice↔Bob": "установлены новый график и правило коммуникации" }
+  }]
+}`,
+    },
 ];
