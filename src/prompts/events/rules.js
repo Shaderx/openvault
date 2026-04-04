@@ -65,7 +65,7 @@ is_transient: Set to true ONLY for short-term intentions, temporary states, or i
 </field_instructions>
 
 <thinking_process>
-Follow these steps IN ORDER. Write your work inside <think> tags BEFORE outputting the JSON:
+Follow these steps IN ORDER. Keep your reasoning VERY CONCISE — one line per step, no more than 5 actions considered. Do NOT debate, refine, or second-guess your decisions. Make a choice and move on immediately. Write your work inside <think tags BEFORE outputting the JSON:
 
 Step 1: List a maximum of 5 specific actions, emotions, facts, promises, stated preferences, or ongoing rules from the new messages.
 Step 2: Check <established_memories>. Is any of this already recorded?
