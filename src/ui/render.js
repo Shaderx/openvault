@@ -118,6 +118,8 @@ async function saveEdit(id, btnElement) {
 
     const summary = $card.find('[data-field="summary"]').val().trim();
     const importance = parseInt($card.find('[data-field="importance"]').val(), 10);
+    const temporal_anchor = $card.find('[data-field="temporal_anchor"]').val().trim() || null;
+    const is_transient = $card.find('[data-field="is_transient"]').is(':checked');
 
     if (!summary) {
         showToast('warning', 'Summary cannot be empty');
@@ -126,7 +128,7 @@ async function saveEdit(id, btnElement) {
 
     $btn.prop('disabled', true);
 
-    const updated = await updateMemoryAction(id, { summary, importance });
+    const updated = await updateMemoryAction(id, { summary, importance, temporal_anchor, is_transient });
     if (updated) {
         const memory = getMemoryById(id);
         if (memory && !hasEmbedding(memory) && isEmbeddingsEnabled()) {
