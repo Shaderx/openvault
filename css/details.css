@@ -92,3 +92,31 @@
     border-radius: 3px;
     font-size: 0.9em;
 }
+
+/* Warning Banner (Advanced tab) */
+.openvault-warning-banner {
+    display: flex;
+    gap: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid #ffc107;
+    border-radius: 4px;
+}
+
+.openvault-warning-icon {
+    font-size: 1.5em;
+    flex-shrink: 0;
+}
+
+.openvault-warning-title {
+    font-weight: bold;
+    color: #ffc107;
+    margin-bottom: 4px;
+}
+
+.openvault-warning-text {
+    font-size: 0.9em;
+    color: var(--SmartThemeBodyColor);
+    line-height: 1.4;
+}
