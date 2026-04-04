@@ -83,7 +83,7 @@ describe('buildEventExtractionPrompt', () => {
             names: { char: 'Alice', user: 'Bob' },
             context: {},
         });
-        expect(result).toHaveLength(3);
+        expect(result).toHaveLength(2);
         expect(result[0].role).toBe('system');
         expect(result[1].role).toBe('user');
     });
@@ -207,23 +207,13 @@ describe('buildGraphExtractionPrompt', () => {
 });
 
 describe('buildGraphExtractionPrompt prefill parameter', () => {
-    it('throws when prefill is missing', () => {
-        expect(() =>
-            buildGraphExtractionPrompt({
-                messages: '[A]: test',
-                names: { char: 'A', user: 'B' },
-            })
-        ).toThrow('prefill is required');
-    });
-
-    it('throws when prefill is empty string', () => {
-        expect(() =>
-            buildGraphExtractionPrompt({
-                messages: '[A]: test',
-                names: { char: 'A', user: 'B' },
-                prefill: '',
-            })
-        ).toThrow('prefill is required');
+    it('returns only 2 messages when prefill is empty', () => {
+        const result = buildGraphExtractionPrompt({
+            messages: '[A]: test',
+            names: { char: 'A', user: 'B' },
+            prefill: '',
+        });
+        expect(result).toHaveLength(2);
     });
 
     it('uses provided prefill in assistant message', () => {
@@ -267,12 +257,9 @@ describe('UNIFIED_REFLECTION_SCHEMA think tag support', () => {
 });
 
 describe('buildUnifiedReflectionPrompt prefill parameter', () => {
-    it('throws when prefill is missing', () => {
-        expect(() => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto')).toThrow('prefill is required');
-    });
-
-    it('throws when prefill is empty string', () => {
-        expect(() => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', '')).toThrow('prefill is required');
+    it('returns only 2 messages when prefill is empty', () => {
+        const result = buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', '');
+        expect(result).toHaveLength(2);
     });
 
     it('uses provided prefill in assistant message', () => {
@@ -290,14 +277,9 @@ describe('COMMUNITY_SCHEMA think tag support', () => {
 });
 
 describe('buildCommunitySummaryPrompt prefill parameter', () => {
-    it('throws when prefill is missing', () => {
-        expect(() => buildCommunitySummaryPrompt(['- Node'], ['- Edge'])).toThrow('prefill is required');
-    });
-
-    it('throws when prefill is empty string', () => {
-        expect(() => buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', '')).toThrow(
-            'prefill is required'
-        );
+    it('returns only 2 messages when prefill is empty', () => {
+        const result = buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', '');
+        expect(result).toHaveLength(2);
     });
 
     it('uses provided prefill in assistant message', () => {
@@ -334,14 +316,15 @@ describe('CN preamble and assistant prefill', () => {
         }
     });
 
-    it('event extraction prefills assistant with think tag', () => {
+    it('event extraction does NOT prefill assistant when prefill is empty', () => {
         const result = buildEventExtractionPrompt({
             messages: '[A]: test',
             names: { char: 'A', user: 'B' },
             context: {},
         });
-        expect(result[2].role).toBe('assistant');
-        expect(result[2].content).toBe('<think>\n');
+        expect(result).toHaveLength(2);
+        expect(result[0].role).toBe('system');
+        expect(result[1].role).toBe('user');
     });
 
     it('non-think prompts use provided prefill', () => {
@@ -470,13 +453,14 @@ describe('buildMessages via buildEventExtractionPrompt', () => {
         expect(result[1].role).toBe('user');
     });
 
-    it('defaults to <think> prefill for event extraction', () => {
+    it('does NOT include assistant message when prefill is empty', () => {
         const result = buildEventExtractionPrompt({
             messages: '[Alice]: Hello',
             names: { char: 'Alice', user: 'Bob' },
         });
-        expect(result).toHaveLength(3);
-        expect(result[2].content).toBe('<think>\n');
+        expect(result).toHaveLength(2);
+        expect(result[0].role).toBe('system');
+        expect(result[1].role).toBe('user');
     });
 });
 
@@ -765,14 +749,10 @@ describe('buildEdgeConsolidationPrompt', () => {
 });
 
 describe('buildEdgeConsolidationPrompt prefill parameter', () => {
-    it('throws when prefill is missing', () => {
+    it('returns only 2 messages when prefill is empty', () => {
         const edge = { source: 'A', target: 'B', description: 'Test', weight: 1 };
-        expect(() => buildEdgeConsolidationPrompt(edge)).toThrow('prefill is required');
-    });
-
-    it('throws when prefill is empty string', () => {
-        const edge = { source: 'A', target: 'B', description: 'Test', weight: 1 };
-        expect(() => buildEdgeConsolidationPrompt(edge, 'auto', 'auto', '')).toThrow('prefill is required');
+        const result = buildEdgeConsolidationPrompt(edge, 'auto', 'auto', '');
+        expect(result).toHaveLength(2);
     });
 
     it('uses provided prefill in assistant message', () => {
@@ -816,16 +796,9 @@ describe('buildGlobalSynthesisPrompt', () => {
 });
 
 describe('buildGlobalSynthesisPrompt prefill parameter', () => {
-    it('throws when prefill is missing', () => {
-        expect(() => buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto')).toThrow(
-            'prefill is required'
-        );
-    });
-
-    it('throws when prefill is empty string', () => {
-        expect(() => buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', '')).toThrow(
-            'prefill is required'
-        );
+    it('returns only 2 messages when prefill is empty', () => {
+        const result = buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', '');
+        expect(result).toHaveLength(2);
     });
 
     it('uses provided prefill in assistant message', () => {

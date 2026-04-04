@@ -27,9 +27,6 @@ import { COMMUNITY_SCHEMA, GLOBAL_SYNTHESIS_SCHEMA } from './schema.js';
  * @returns {LLMMessages} Array of {role, content} message objects
  */
 export function buildCommunitySummaryPrompt(nodeLines, edgeLines, preamble, outputLanguage = 'auto', prefill) {
-    if (!prefill) {
-        throw new Error('buildCommunitySummaryPrompt: prefill is required');
-    }
     const systemPrompt = assembleSystemPrompt({
         role: COMMUNITIES_ROLE,
         examples: getExamples('COMMUNITIES', outputLanguage),
@@ -56,7 +53,7 @@ Write a comprehensive report about this community of entities.
 
 ${constraints}`;
 
-    return buildMessages(systemPrompt, userPrompt, prefill, preamble);
+    return buildMessages(systemPrompt, userPrompt, prefill || '', preamble);
 }
 
 /**
@@ -68,10 +65,6 @@ ${constraints}`;
  * @returns {LLMMessages} Array of {role, content} message objects
  */
 export function buildGlobalSynthesisPrompt(communities, preamble, outputLanguage = 'auto', prefill) {
-    if (!prefill) {
-        throw new Error('buildGlobalSynthesisPrompt: prefill is required');
-    }
-
     const systemPrompt = assembleSystemPrompt({
         role: GLOBAL_SYNTHESIS_ROLE,
         examples: getExamples('GLOBAL_SYNTHESIS', outputLanguage),
@@ -101,5 +94,5 @@ Focus on macro-relationships, overarching tensions, and plot trajectory.
 
 ${constraints}`;
 
-    return buildMessages(systemPrompt, userPrompt, prefill, preamble);
+    return buildMessages(systemPrompt, userPrompt, prefill || '', preamble);
 }
