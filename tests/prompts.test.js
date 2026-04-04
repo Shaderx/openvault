@@ -824,11 +824,9 @@ describe('domain module structure', () => {
 
     it('reflection/examples returns correct count per type and language', async () => {
         const { getExamples } = await import('../src/prompts/reflection/examples/index.js');
-        expect(getExamples('REFLECTIONS', 'en')).toHaveLength(3);
-        expect(getExamples('REFLECTIONS', 'ru')).toHaveLength(3);
-        expect(getExamples('REFLECTIONS', 'auto')).toHaveLength(6);
-        expect(getExamples('QUESTIONS', 'en')).toHaveLength(3);
-        expect(getExamples('INSIGHTS', 'ru')).toHaveLength(3);
+        expect(getExamples('REFLECTIONS', 'en')).toHaveLength(5);
+        expect(getExamples('REFLECTIONS', 'ru')).toHaveLength(5);
+        expect(getExamples('REFLECTIONS', 'auto')).toHaveLength(10);
     });
 
     it('communities/examples returns correct count per type and language', async () => {
@@ -851,8 +849,6 @@ describe('domain module structure', () => {
             ...events.getExamples(),
             ...graph.getExamples(),
             ...reflection.getExamples('REFLECTIONS'),
-            ...reflection.getExamples('QUESTIONS'),
-            ...reflection.getExamples('INSIGHTS'),
             ...communities.getExamples('COMMUNITIES'),
             ...communities.getExamples('GLOBAL_SYNTHESIS'),
         ];
