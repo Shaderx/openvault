@@ -82,7 +82,8 @@ function filterBySearch(memories, query) {
         const summary = (m.summary || '').toLowerCase();
         const characters = (m.characters_involved || []).join(' ').toLowerCase();
         const location = (m.location || '').toLowerCase();
-        return summary.includes(query) || characters.includes(query) || location.includes(query);
+        const anchor = (m.temporal_anchor || '').toLowerCase();
+        return summary.includes(query) || characters.includes(query) || location.includes(query) || anchor.includes(query);
     });
 }
 
