@@ -231,6 +231,42 @@ describe('store/chat-data', () => {
             });
             expect(await updateMemory('nonexistent', { summary: 'x' })).toBe(false);
         });
+
+        it('should allow updating temporal_anchor field', async () => {
+            mockContext.chatMetadata[METADATA_KEY] = {
+                [MEMORIES_KEY]: [{ id: 'mem1', summary: 'Test', temporal_anchor: null }],
+            };
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: { debugMode: true },
+                }),
+                saveChatConditional: vi.fn().mockResolvedValue(undefined),
+            });
+            const result = await updateMemory('mem1', { temporal_anchor: 'Monday, Jan 1, 12:00 PM' });
+            expect(result).toBe(true);
+            expect(mockContext.chatMetadata[METADATA_KEY][MEMORIES_KEY][0].temporal_anchor).toBe(
+                'Monday, Jan 1, 12:00 PM',
+            );
+        });
+
+        it('should allow updating is_transient field', async () => {
+            mockContext.chatMetadata[METADATA_KEY] = {
+                [MEMORIES_KEY]: [{ id: 'mem1', summary: 'Test', is_transient: false }],
+            };
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: { debugMode: true },
+                }),
+                saveChatConditional: vi.fn().mockResolvedValue(undefined),
+            });
+            const result = await updateMemory('mem1', { is_transient: true });
+            expect(result).toBe(true);
+            expect(mockContext.chatMetadata[METADATA_KEY][MEMORIES_KEY][0].is_transient).toBe(true);
+        });
     });
 
     describe('deleteMemory', () => {
