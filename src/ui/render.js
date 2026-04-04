@@ -83,7 +83,9 @@ function filterBySearch(memories, query) {
         const characters = (m.characters_involved || []).join(' ').toLowerCase();
         const location = (m.location || '').toLowerCase();
         const anchor = (m.temporal_anchor || '').toLowerCase();
-        return summary.includes(query) || characters.includes(query) || location.includes(query) || anchor.includes(query);
+        return (
+            summary.includes(query) || characters.includes(query) || location.includes(query) || anchor.includes(query)
+        );
     });
 }
 

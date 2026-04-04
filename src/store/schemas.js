@@ -362,6 +362,7 @@ export const ScoringSettingsSchema = z.object({
     vectorSimilarityThreshold: z.number(),
     alpha: z.number(),
     combinedBoostWeight: z.number(),
+    transientDecayMultiplier: z.number().optional(),
 });
 
 // Memory update fields for updateMemory()
