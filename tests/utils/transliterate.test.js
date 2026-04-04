@@ -77,4 +77,29 @@ describe('resolveCharacterName', () => {
     it('returns null for empty canonical list', () => {
         expect(resolveCharacterName('Mina', [])).toBeNull();
     });
+
+    it('trims trailing whitespace before matching', () => {
+        expect(resolveCharacterName('Alice ', ['Alice', 'Bob'])).toBe('Alice');
+        expect(resolveCharacterName('Alice  ', ['Alice', 'Bob'])).toBe('Alice');
+    });
+
+    it('trims leading whitespace before matching', () => {
+        expect(resolveCharacterName(' Alice', ['Alice', 'Bob'])).toBe('Alice');
+    });
+
+    it('trims both leading and trailing whitespace', () => {
+        expect(resolveCharacterName('  Alice  ', ['Alice', 'Bob'])).toBe('Alice');
+    });
+
+    it('collapses internal whitespace before matching', () => {
+        expect(resolveCharacterName('King  Aldric', ['King Aldric', 'Bob'])).toBe('King Aldric');
+    });
+
+    it('trims whitespace in cross-script Cyrillic names', () => {
+        expect(resolveCharacterName(' Мина ', ['Мина', 'Suzy'])).toBe('Мина');
+    });
+
+    it('trims whitespace in transliteration lookup', () => {
+        expect(resolveCharacterName('Сузи ', ['Suzy', 'Vova'])).toBe('Suzy');
+    });
 });

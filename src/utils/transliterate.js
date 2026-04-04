@@ -61,7 +61,7 @@ export function levenshteinDistance(a, b) {
  * @returns {string|null} Matching canonical name, or null if no match
  */
 export function resolveCharacterName(name, canonicalNames, maxDistance = 2) {
-    const lower = name.toLowerCase();
+    const lower = name.toLowerCase().replace(/\s+/g, ' ').trim();
 
     // Exact case-insensitive match
     for (const canonical of canonicalNames) {
