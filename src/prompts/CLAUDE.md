@@ -1,52 +1,20 @@
-# Prompts Module
+# Prompts and LLM Directives
 
-LLM prompt construction for all extraction domains. Targets mid-tier CN instruct models (Qwen, Kimi).
+## TOPOLOGY & ANTI-RECENCY BIAS
+- **Construct via `buildMessages()`.** Always use the shared formatter.
+- **System Prompt:** Assemble using `assembleSystemPrompt()`. Include ONLY the role definition and few-shot examples.
+- **User Prompt:** Append the constraint block using `assembleUserConstraints()`. Order strictly: `Language Rules -> Task Rules -> Schema -> Execution Trigger`. Forcing constraints to the very end of the context window guarantees mid-tier model compliance.
 
-## Tag Convention: `<think>` ONLY
+## `<think>` TAG ENFORCEMENT
+- **Use `<think>` exclusively.** Never prompt the model to output `<thinking>` or `<reasoning>`.
+- **Wrap structural guidelines in `<thinking_process>`.** Use this XML tag in system rules to define the steps, but instruct the model to execute those steps inside standard `<think>` tags.
+- **Strip tags safely.** Run all LLM output through `stripThinkingTags()` before JSON parsing. Handle orphaned closing tags resulting from assistant prefilling.
 
-Every reference to reasoning tags in this module MUST use `<think>`, never `<thinking>`:
-- `EXECUTION_TRIGGER` in `shared/formatters.js` instructs `<think>`
-- `MIRROR_LANGUAGE_RULES` in `shared/rules.js` references `<think>`
-- `PREFILL_PRESETS` in `shared/preambles.js` all use `<think>`
-- `formatExamples()` in `shared/format-examples.js` wraps the `thinking` property in `<think>...</think>`
-- `<thinking_process>` blocks inside each domain's `rules.js` instruct `<think>` tags
+## LANGUAGE MIRRORING
+- **Enforce original scripts for entity names.** Never translate or transliterate character names in JSON values.
+- **Mirror the prose.** Output values in Russian if the input is Russian. Output keys exclusively in English.
+- **Detect non-Latin scripts heuristically.** If `outputLanguage` is 'auto', scan the user message for Cyrillic/CJK and dynamically inject the "Do NOT translate to English" reminder.
 
-The XML wrapper `<thinking_process>` is a structural delimiter (not a tag the model outputs). The model *outputs* `<think>`. These are different things — do not confuse them.
-
-Backward compat: `stripThinkingTags()` in `src/utils/text.js` still strips `<thinking>` from model output, but prompts must never instruct it.
-
-## Domain Structure
-
-Four extraction domains + shared utilities. Each domain follows a fixed file convention:
-
-| File | Purpose |
-|------|---------|
-| `role.js` | System role definition (who the model is) |
-| `rules.js` | Task-specific rules with `<thinking_process>` reasoning steps |
-| `schema.js` | Output JSON schema description |
-| `builder.js` | Assembles messages via `buildMessages()` |
-| `examples/{en,ru}.js` | Bilingual few-shot examples with `thinking` + `output` properties |
-| `examples/index.js` | Merges and re-exports EN/RU examples |
-
-Domains: `events/` (Stage A), `graph/` (Stage B), `reflection/`, `communities/`.
-
-## Prompt Topology
-
-System prompt = role + examples (via `assembleSystemPrompt`).
-User prompt = context + messages + constraints (via `assembleUserConstraints`).
-
-Schema and rules are in the **user** prompt (end of context window) to defeat recency bias. See root `CLAUDE.md` for the `buildMessages` contract.
-
-## Shared Utilities (`shared/`)
-
-- `formatters.js` — `assembleSystemPrompt`, `assembleUserConstraints`, `buildMessages`, `EXECUTION_TRIGGER`, language resolution
-- `format-examples.js` — `formatExamples()` formats few-shot examples into numbered XML blocks, wrapping `thinking` in `<think>` tags
-- `preambles.js` — Anti-refusal preambles (CN/EN), `PREFILL_PRESETS`, `resolveExtractionPrefill`
-- `rules.js` — `MIRROR_LANGUAGE_RULES` (shared across all domains)
-
-## Few-Shot Examples
-
-Each example object has: `{ input, thinking?, output, label? }`.
-- `thinking`: Plain reasoning text (no tags) — `formatExamples` wraps it in `<think>...</think>`
-- `label`: Language tag like `(EN/SFW)`, `(RU/NSFW)` — used for filtering when `outputLanguage` is forced
-- Examples progress SFW → explicit to calibrate model compliance
+## FEW-SHOT EXAMPLES
+- **Format via `formatExamples()`.** Wrap examples in numbered `<example_X>` tags. Map the `thinking` object property to actual `<think>` blocks.
+- **Calibrate compliance via SFW-to-Kink gradients.** Ensure examples cover mundane actions, violent conflicts, and explicit/kink scenarios to bypass refusal filters mechanically.

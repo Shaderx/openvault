@@ -1,48 +1,23 @@
-# Chat Data Repository
+# Storage, State, and Migrations
 
-## WHAT
-Repository pattern for local chat metadata mutations. Encapsulates all CRUD operations on `context.chatMetadata.openvault`. Provides a clean boundary between domain logic and SillyTavern's state storage.
+## REPOSITORY PATTERN
+- **Mutate chat data exclusively through repository methods.** Use `addMemories`, `markMessagesProcessed`, and `incrementGraphMessageCount` in `store/chat-data.js`. Never `push()` to arrays directly from domain code.
+- **Protect async saves with chat-change guards.** Pass the `expectedChatId` to `saveOpenVaultData()`. Abort the save if the user switched chats mid-operation.
 
-## CORE OPERATIONS
+## STATE MANAGEMENT
+- **Isolate background extraction from manual backfills.** `operationState.extractionInProgress` flags manual backfills. `isWorkerRunning()` flags the background worker. Ensure they mutually exclude.
+- **Scope kill-switches to the current session.** Use `isSessionDisabled()` for catastrophic migration failures. Never mutate global extension settings to disable the extension entirely.
 
-### Read Operations
-- `getOpenVaultData()` - Get the full OpenVault data object from chat metadata. Returns null if context unavailable.
-- `getCurrentChatId()` - Get current chat ID for tracking across async operations.
+## SCHEMA MIGRATIONS (`src/store/migrations/`)
+- **Apply migrations sequentially.** Loop `v1 -> v2 -> v3` on chat load based on `schema_version`.
+- **Implement transactional rollbacks.** Wrap `runSchemaMigrations` in a `try/catch`. On error, restore the structured clone backup and invoke `setSessionDisabled(true)`.
+- **Update three locations for every schema change:** 
+  1. `getOpenVaultData()` for new chats.
+  2. The migration backfill function.
+  3. Zod schemas in `src/store/schemas.js`.
+- **Do not write defensive domain checks.** Ensure migrations fully backfill missing fields so domain code can trust the schema shape.
 
-### Write Operations (Repository Pattern)
-- `saveOpenVaultData(expectedChatId?)` - Persist changes to chat metadata. Includes chat-change guard.
-- `addMemories(newMemories)` - Append new memories to the store (PR6).
-- `markMessagesProcessed(fingerprints)` - Record message fingerprints as processed (PR6).
-- `incrementGraphMessageCount(count)` - Increment the graph message count (PR6).
-
-### CRUD Operations
-- `updateMemory(id, updates)` - Update a memory by ID. Allowed fields: summary, importance, tags, is_secret, temporal_anchor, is_transient. Invalidates embedding if summary changed.
-- `deleteMemory(id)` - Delete a memory by ID.
-- `deleteCurrentChatData()` - Delete all OpenVault data for current chat. Unhides all hidden messages. Purges ST Vector collection if using st_vector.
-- `generateId()` - Generate a unique ID (timestamp + random).
-
-## MIGRATIONS
-
-Located in `migrations/` subfolder. See `migrations/CLAUDE.md` for versioning strategy and patterns.
-- `index.js` - Orchestrator: checks `schema_version`, runs required migrations sequentially
-- `v2.js` - v1→v2 conversion: processed message fingerprints, embedding arrays→base64, graph state backfill
-
-**Transactional Rollback Pattern**:
-```javascript
-const backup = structuredClone(data);
-try {
-    if (runSchemaMigrations(data, chat)) { await saveOpenVaultData(); }
-} catch (error) {
-    context.chatMetadata[METADATA_KEY] = backup;  // Restore
-    setSessionDisabled(true);  // Per-session, NOT global settings
-}
-```
-
-**Version Tracking**: `data.schema_version` (integer). Missing = v1. New chats get current version from `getOpenVaultData()`.
-
-## GOTCHAS & RULES
-- **Chat Change Guard**: `saveOpenVaultData(expectedChatId)` checks if chat changed before saving. Prevents data corruption from async operations.
-- **ST Vector Purge**: `deleteCurrentChatData()` calls `purgeSTCollection()` from `services/st-vector.js` to clean up remote embeddings.
-- **Embedding Invalidation**: `updateMemory()` calls `deleteEmbedding()` from `utils/embedding-codec.js` when summary changes, forcing re-embed on next retrieval.
-- **Message Unhiding**: `deleteCurrentChatData()` unhides all `is_system` messages to prevent permanently unextractable messages.
-- **Repository Methods**: PR6 added `addMemories`, `markMessagesProcessed`, `incrementGraphMessageCount` to eliminate direct array pushes from domain code.
+## ST VECTOR EXTERNAL SERVICE
+- **Pass CSRF headers to all ST Vector calls.** Inject `getDeps().getRequestHeaders()` into `fetch` to pass `X-CSRF-Token`.
+- **Isolate collections by chat ID.** Format collection IDs as `openvault-{chatId}-{source}` to prevent data cross-contamination.
+- **Purge orphans immediately.** On the first query of a session, call `/api/characters/chats`. If the chat no longer exists, trigger `/api/vector/purge`.

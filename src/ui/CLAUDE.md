@@ -1,63 +1,19 @@
-# UI Subsystem
+# UI, DOM, and Progressive Disclosure
 
-## WHAT
-Handles the ST settings panel with progressive disclosure design: status/browsing first, settings hidden behind collapsible sections. Uses standard jQuery with strict architectural boundaries.
+## PROGRESSIVE DISCLOSURE ARCHITECTURE
+- **Structure tabs by workflow.** `Dashboard` (Status/Toggles/Emergency Cut), `Memories` (Browser/Extract settings), `World` (Pure viewer), `Advanced` (Expert math/Danger Zone), `Perf` (Metrics).
+- **Hide expert settings in Drawers.** Use `<details class="openvault-details">`. Do not expose vector thresholds or decay lambda without a warning banner.
+- **Decouple DOM from Domain.** Route UI clicks through thin wrapper functions in `settings.js`. Pass callbacks (`onProgress`, `onError`) down to domain orchestrators (`extract.js`).
 
-## ARCHITECTURE
-- **`helpers.js`**: Pure data transformations (pagination, filtering, math). **ZERO DOM INTERACTION**. Fully unit testable.
-- **`templates.js`**: Pure functions returning HTML strings. **ZERO STATE MUTATION**.
-- **`render.js`**: State orchestration and DOM manipulation (`$()`).
-- **`settings.js`**: Event binding and persistence. `handleResetSettings()` preserves connection settings.
+## DOM & JQUERY CONVENTIONS
+- **Bind events centrally.** Use `bindSetting()` in `initBrowser()`. Never use inline HTML `onclick`.
+- **Mount modals to `document.body`.** Avoid SillyTavern's extension panel CSS stacking context issues (e.g. `z-index` clipping) by appending the Emergency Cut modal directly to the body.
+- **Trap keyboard focus.** Ensure modal `Escape` handlers work, but `stopPropagation()` to prevent ST from swallowing the keypress.
+- **Sanitize dynamically rendered text.** Wrap all user-generated strings (summaries, character names) in `escapeHtml()`.
 
-**Callback Wiring Pattern (PR3, PR6)**: UI provides callbacks to domain functions. `handleOllamaTestClick`, `handleEmergencyCutClick`, `handleExtractAll` are thin wiring layers. Domain logic (`testOllamaConnection`, `executeEmergencyCut`, `extractAllMessages`) lives in embeddings.js and extract.js.
+## PAYLOAD CALCULATOR
+- **Use `PAYLOAD_CALC` as the single source of truth.** (`src/constants.js`). 
+- **Include overhead in warnings.** Calculate `Budget + Rearview + 12k Overhead`. Display severity colors: Green (≤32k), Yellow (≤48k), Orange (≤64k), Red (>64k).
 
-## TAB STRUCTURE (Progressive Disclosure)
-Settings reorganized by user activity pattern, not technical category:
-
-1. **Dashboard** (dashboard-connections): Quick Toggles → Status → Stats → Progress → [collapsed] Connection & Setup, Embeddings, API Limits
-   - **Emergency Cut**: Danger button (stacked below Backfill) to extract all unprocessed messages and hide chat history to break LLM repetition loops. Uses modal with progress bar, blocks chat input during operation.
-2. **Memories** (memory-bank): Browser/Search first → [collapsed] Character States, Extraction & Context, Reflection Engine
-3. **World** (world): Communities → Entities. **Pure viewer, zero settings**.
-4. **Advanced** (advanced): Warning banner → [collapsed] Scoring & Weights, Decay Math, Similarity Thresholds → Danger Zone
-5. **Perf** (perf): Performance metrics table with health indicators
-
-## PATTERNS & CONVENTIONS
-- **Drawers (`.openvault-details`)**: Collapsible `<details>` elements. CSS hides native triangle, uses rotating `›` chevron.
-- **Modal Patterns**: Emergency Cut modal appends to `document.body` (not extension panel) to avoid CSS stacking context issues. Uses `z-index: 9999` and keyboard trap with accessibility (Escape to cancel, Tab/Enter allowed inside).
-- **Settings Binding**: Uses `bindSetting(elementId, settingKey, type)`. All get/set operations use centralized API from `src/settings.js`:
-  - `getSettings(path?, defaultValue?)` for reads
-  - `setSetting(path, value)` for writes (auto-saves via debounced save)
-- **No Internal Functions**: Removed internal `getSettings()` and `saveSetting()` — all operations go through the centralized settings module.
-- **Reset Behavior**: `handleResetSettings()` preserves connection profiles (extractionProfile, embeddingSource, ollamaUrl, etc.) and only resets fine-tuning math.
-- **Warning Banner**: Advanced tab has amber warning banner discouraging changes to pre-calibrated values.
-- **Naming**:
-  - IDs: `openvault_setting_name`
-  - Values: `openvault_setting_name_value`
-  - Setting Keys: `camelCase` (e.g., `reflectionThreshold`)
-
-## INTERNAL CONSTANTS (Not User-Configurable)
-These 9 settings were moved from `defaultSettings` to internal constants in `src/constants.js`:
-- `REFLECTION_DEDUP_REJECT_THRESHOLD` (0.9), `REFLECTION_DEDUP_REPLACE_THRESHOLD` (0.8)
-- `REFLECTION_DECAY_THRESHOLD` (750), `ENTITY_DESCRIPTION_CAP` (3), `EDGE_DESCRIPTION_CAP` (5)
-- `COMMUNITY_STALENESS_THRESHOLD` (100), `COMBINED_BOOST_WEIGHT` (15)
-- `IMPORTANCE_5_FLOOR` (5), `ENTITY_MERGE_THRESHOLD` (0.8)
-
-## PAYLOAD CALCULATOR (`PAYLOAD_CALC`)
-- Single source of truth in `src/constants.js`.
-- Shows real total token cost: `Budget + Rearview + OVERHEAD`.
-- **OVERHEAD** = 12k (8k max output + 4k prompt/safety buffer).
-- Thresholds: Green <=32k, Yellow <=48k, Orange <=64k, Red >64k.
-- Shows LLM context size compatibility warning.
-
-## GOTCHAS & RULES
-- **No Inline Events**: Bind exclusively via jQuery `.on()` in `initBrowser()`.
-- **XSS Safety**: ALL user-generated data (summaries, entity names) MUST pass through `escapeHtml()` from `src/utils/dom.js` before templates.
-- **Manual Backfill Guard**: Checks `isWorkerRunning()` first. Rejects if active to prevent race conditions.
-
-## PERF TAB
-- **Purpose**: Last-run timings for 12 metrics (2 sync, 10 async) with health indicators.
-- **Table**: Icon | Metric name | Last timing | Scale | Status dot
-- **SYNC Badge**: Blocking metrics (`retrieval_injection`, `auto_hide`) show red "SYNC" badge.
-- **Copy Button**: `formatForClipboard()` generates plain text report.
-- **Rendering**: `renderPerfTab()` in `settings.js` called from `refreshAllUI()`.
-- **Hydration**: `loadPerfFromChat()` restores persisted perf data on chat switch.
+## SETTINGS MANAGEMENT
+- **Preserve connection settings on reset.** `handleResetSettings()` must cache `embeddingSource`, `ollamaUrl`, and API limits before restoring default math thresholds.
