@@ -107,12 +107,42 @@
     color: var(--SmartThemeEmColor, #888);
 }
 
+.openvault-community-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: 8px;
+}
+
+.openvault-community-actions .menu_button {
+    padding: 2px 6px;
+    font-size: 0.8em;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+
+.openvault-community-actions .menu_button:hover {
+    opacity: 1;
+}
+
+.openvault-community-editing {
+    border: 1px solid var(--SmartThemeBorderColor, #333);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+
 /* Entities */
 .openvault-entity-card {
     border: 1px solid var(--SmartThemeBorderColor, #333);
     border-radius: 6px;
     padding: 10px 12px;
     margin-bottom: 6px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.openvault-entity-card:hover {
+    transform: translateX(2px);
+    box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .openvault-entity-header {
@@ -163,6 +193,24 @@
     font-size: 0.9em;
     color: var(--SmartThemeEmColor, #888);
     margin-bottom: 4px;
+}
+
+.openvault-entity-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.openvault-entity-footer .menu_button {
+    padding: 2px 6px;
+    font-size: 0.8em;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+
+.openvault-entity-footer .menu_button:hover {
+    opacity: 1;
 }
 
 .openvault-entity-mentions {

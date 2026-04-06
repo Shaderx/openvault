@@ -294,6 +294,16 @@ class TransformersStrategy extends EmbeddingStrategy {
                 try {
                     const module = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1');
                     pipelineFn = module.pipeline;
+                    // Transformers sets onnx env webgpu.powerPreference to 'high-performance'; on Chromium/Windows
+                    // that option is ignored and logs a warning (crbug.com/369219127). Omit it before creating the pipeline.
+                    try {
+                        const webgpu = module.env?.backends?.onnx?.webgpu;
+                        if (webgpu && 'powerPreference' in webgpu) {
+                            delete webgpu.powerPreference;
+                        }
+                    } catch {
+                        /* ignore */
+                    }
                     logInfo(`[loadPipeline] Step 2 OK: Transformers.js imported`);
                 } catch (cdnErr) {
                     logError(`[loadPipeline] Step 2 FAILED: CDN import of Transformers.js`, cdnErr);

@@ -12,6 +12,10 @@ import {
     deleteMemory as deleteMemoryAction,
     getOpenVaultData,
     updateMemory as updateMemoryAction,
+    updateEntity as updateEntityAction,
+    deleteEntity as deleteEntityAction,
+    updateCommunity as updateCommunityAction,
+    deleteCommunity as deleteCommunityAction,
 } from '../store/chat-data.js';
 import { escapeHtml, showToast } from '../utils/dom.js';
 import { hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
@@ -28,7 +32,9 @@ import { refreshStats } from './status.js';
 import {
     renderCharacterState,
     renderCommunityAccordion,
+    renderCommunityEdit,
     renderEntityCard,
+    renderEntityEdit,
     renderMemoryEdit,
     renderMemoryItem,
     renderReflectionProgress,
@@ -346,6 +352,10 @@ function renderCommunityList() {
     const $count = $('#openvault_community_count');
     const data = getOpenVaultData();
 
+    if ($container.find('.openvault-edit-form').length > 0) {
+        return;
+    }
+
     const communities = data?.communities || {};
     const ids = Object.keys(communities);
 
@@ -365,8 +375,12 @@ function renderEntityList() {
     const $count = $('#openvault_entity_count');
     const data = getOpenVaultData();
 
+    if ($container.find('.openvault-edit-form').length > 0) {
+        return;
+    }
+
     const nodes = data?.graph?.nodes || {};
-    const allEntities = Object.values(nodes);
+    const allEntities = Object.entries(nodes).map(([key, node]) => ({ ...node, _key: key }));
 
     const typeFilter = $('#openvault_entity_type_filter').val() || '';
     const searchQuery = $('#openvault_entity_search').val()?.toLowerCase().trim() || '';
@@ -391,11 +405,204 @@ function renderWorldTab() {
 }
 
 // =============================================================================
+// Entity Edit/Delete
+// =============================================================================
+
+function getEntityByKey(key) {
+    const data = getOpenVaultData();
+    if (!data) return null;
+    const node = data.graph?.nodes?.[key];
+    if (!node) return null;
+    return { ...node, _key: key };
+}
+
+function enterEntityEditMode(key) {
+    const entity = getEntityByKey(key);
+    if (!entity) return;
+
+    const $card = $('#openvault_entity_list').find(`[data-entity-key="${key}"]`);
+    $card.replaceWith(renderEntityEdit(entity));
+}
+
+function exitEntityEditMode(key) {
+    const entity = getEntityByKey(key);
+    if (!entity) return;
+
+    const $card = $('#openvault_entity_list').find(`[data-entity-key="${key}"]`);
+    $card.replaceWith(renderEntityCard(entity));
+}
+
+async function saveEntityEdit(key, btnElement) {
+    const $card = $('#openvault_entity_list').find(`[data-entity-key="${key}"]`);
+    const $btn = $(btnElement);
+
+    const name = $card.find('[data-field="name"]').val().trim();
+    const type = $card.find('[data-field="type"]').val();
+    const description = $card.find('[data-field="description"]').val().trim();
+
+    if (!name) {
+        showToast('warning', 'Name cannot be empty');
+        return;
+    }
+
+    $btn.prop('disabled', true);
+
+    const updated = await updateEntityAction(key, { name, type, description });
+    if (updated) {
+        const entity = getEntityByKey(key);
+        if (entity && !hasEmbedding(entity) && isEmbeddingsEnabled()) {
+            const embedding = await getDocumentEmbedding(`${type}: ${name} - ${description}`);
+            if (embedding) {
+                setEmbedding(entity, embedding);
+                await getDeps().saveChatConditional();
+            }
+        }
+
+        const updatedEntity = getEntityByKey(key);
+        if (updatedEntity) {
+            $card.replaceWith(renderEntityCard(updatedEntity));
+        }
+        showToast('success', 'Entity updated');
+        refreshStats();
+    }
+    $btn.prop('disabled', false);
+}
+
+function bindEntityEvents() {
+    const $container = $('#openvault_entity_list');
+
+    $container.on('click', '.openvault-edit-entity', (e) => {
+        e.stopPropagation();
+        const key = $(e.currentTarget).data('key');
+        enterEntityEditMode(key);
+    });
+
+    $container.on('click', '.openvault-delete-entity', async (e) => {
+        e.stopPropagation();
+        const key = $(e.currentTarget).data('key');
+        const deleted = await deleteEntityAction(key);
+        if (deleted) {
+            renderEntityList();
+            renderCommunityList();
+            refreshStats();
+            showToast('success', 'Entity deleted');
+        }
+    });
+
+    $container.on('click', '.openvault-cancel-entity-edit', (e) => {
+        const key = $(e.currentTarget).data('key');
+        exitEntityEditMode(key);
+    });
+
+    $container.on('click', '.openvault-save-entity-edit', async (e) => {
+        const key = $(e.currentTarget).data('key');
+        await saveEntityEdit(key, e.currentTarget);
+    });
+}
+
+// =============================================================================
+// Community Edit/Delete
+// =============================================================================
+
+function getCommunityById(id) {
+    const data = getOpenVaultData();
+    return data?.communities?.[id] || null;
+}
+
+function enterCommunityEditMode(id) {
+    const community = getCommunityById(id);
+    if (!community) return;
+
+    const $item = $('#openvault_community_list').find(`[data-community-id="${id}"]`);
+    $item.replaceWith(renderCommunityEdit(id, community));
+}
+
+function exitCommunityEditMode(id) {
+    const community = getCommunityById(id);
+    if (!community) return;
+
+    const $item = $('#openvault_community_list').find(`[data-community-id="${id}"]`);
+    $item.replaceWith(renderCommunityAccordion(id, community));
+}
+
+async function saveCommunityEdit(id, btnElement) {
+    const $item = $('#openvault_community_list').find(`[data-community-id="${id}"]`);
+    const $btn = $(btnElement);
+
+    const title = $item.find('[data-field="title"]').val().trim();
+    const summary = $item.find('[data-field="summary"]').val().trim();
+    const findingsRaw = $item.find('[data-field="findings"]').val().trim();
+    const findings = findingsRaw ? findingsRaw.split('\n').map((f) => f.trim()).filter(Boolean) : [];
+
+    if (!title) {
+        showToast('warning', 'Title cannot be empty');
+        return;
+    }
+
+    $btn.prop('disabled', true);
+
+    const updated = await updateCommunityAction(id, { title, summary, findings });
+    if (updated) {
+        const community = getCommunityById(id);
+        if (community && !hasEmbedding(community) && isEmbeddingsEnabled()) {
+            const embedding = await getDocumentEmbedding(summary);
+            if (embedding) {
+                setEmbedding(community, embedding);
+                await getDeps().saveChatConditional();
+            }
+        }
+
+        const updatedCommunity = getCommunityById(id);
+        if (updatedCommunity) {
+            $item.replaceWith(renderCommunityAccordion(id, updatedCommunity));
+        }
+        showToast('success', 'Community updated');
+        refreshStats();
+    }
+    $btn.prop('disabled', false);
+}
+
+function bindCommunityEvents() {
+    const $container = $('#openvault_community_list');
+
+    $container.on('click', '.openvault-edit-community', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = $(e.currentTarget).data('id');
+        enterCommunityEditMode(id);
+    });
+
+    $container.on('click', '.openvault-delete-community', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = $(e.currentTarget).data('id');
+        const deleted = await deleteCommunityAction(id);
+        if (deleted) {
+            renderCommunityList();
+            refreshStats();
+            showToast('success', 'Community deleted');
+        }
+    });
+
+    $container.on('click', '.openvault-cancel-community-edit', (e) => {
+        const id = $(e.currentTarget).data('id');
+        exitCommunityEditMode(id);
+    });
+
+    $container.on('click', '.openvault-save-community-edit', async (e) => {
+        const id = $(e.currentTarget).data('id');
+        await saveCommunityEdit(id, e.currentTarget);
+    });
+}
+
+// =============================================================================
 // Browser Orchestration Layer
 // =============================================================================
 
 export function initBrowser() {
     bindMemoryListEvents();
+    bindEntityEvents();
+    bindCommunityEvents();
     initPositionBadges();
     renderMemoryList();
     renderCharacterStates();

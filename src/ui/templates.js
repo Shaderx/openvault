@@ -238,15 +238,24 @@ export function renderReflectionProgress(reflectionState, threshold) {
  * @returns {string} HTML
  */
 export function renderCommunityAccordion(id, community) {
+    const escapedId = escapeHtml(id);
     const memberCount = community.nodeKeys?.length || 0;
     const findings = (community.findings || []).map((f) => `<li>${escapeHtml(f)}</li>`).join('');
     const members = (community.nodeKeys || []).map((k) => escapeHtml(k)).join(', ');
 
     return `
-        <details class="openvault-community-item">
+        <details class="openvault-community-item" data-community-id="${escapedId}">
             <summary>
                 <span class="openvault-community-title">${escapeHtml(community.title || id)}</span>
                 <span class="openvault-community-badge">${memberCount} entities</span>
+                <div class="openvault-community-actions">
+                    <button class="menu_button openvault-edit-community" data-id="${escapedId}" title="Edit community">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="menu_button openvault-delete-community" data-id="${escapedId}" title="Delete community">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
             </summary>
             <div class="openvault-community-content">
                 <p>${escapeHtml(community.summary || 'No summary')}</p>
@@ -258,19 +267,112 @@ export function renderCommunityAccordion(id, community) {
 }
 
 /**
+ * Render edit form for a community.
+ * @param {string} id - Community ID
+ * @param {Object} community - Community data
+ * @returns {string} HTML
+ */
+export function renderCommunityEdit(id, community) {
+    const escapedId = escapeHtml(id);
+    const findingsText = (community.findings || []).join('\n');
+
+    return `
+        <div class="openvault-community-item openvault-community-editing" data-community-id="${escapedId}">
+            <div class="openvault-edit-form">
+                <div class="openvault-edit-row">
+                    <label>
+                        Title
+                        <input type="text" class="text_pole" data-field="title" value="${escapeHtml(community.title || '')}" />
+                    </label>
+                </div>
+                <div class="openvault-edit-row">
+                    <label>
+                        Summary
+                        <textarea class="openvault-edit-textarea" data-field="summary">${escapeHtml(community.summary || '')}</textarea>
+                    </label>
+                </div>
+                <div class="openvault-edit-row">
+                    <label>
+                        Findings (one per line)
+                        <textarea class="openvault-edit-textarea" data-field="findings">${escapeHtml(findingsText)}</textarea>
+                    </label>
+                </div>
+                <div class="openvault-edit-actions">
+                    <button class="menu_button openvault-cancel-community-edit" data-id="${escapedId}">
+                        <i class="fa-solid fa-times"></i> Cancel
+                    </button>
+                    <button class="menu_button openvault-save-community-edit" data-id="${escapedId}">
+                        <i class="fa-solid fa-check"></i> Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
  * Render a single entity card.
- * @param {Object} entity - { name, type, description, mentions }
+ * @param {Object} entity - { name, type, description, mentions, _key }
  * @returns {string} HTML
  */
 export function renderEntityCard(entity) {
+    const key = escapeHtml(entity._key || '');
     return `
-        <div class="openvault-entity-card">
+        <div class="openvault-entity-card" data-entity-key="${key}">
             <div class="openvault-entity-header">
                 <span class="openvault-entity-name">${escapeHtml(entity.name)}</span>
                 <span class="openvault-entity-type-badge ${entity.type.toLowerCase()}">${escapeHtml(entity.type)}</span>
             </div>
             <div class="openvault-entity-description">${escapeHtml(entity.description || '')}</div>
-            <small class="openvault-entity-mentions">${entity.mentions || 0} mentions</small>
+            <div class="openvault-entity-footer">
+                <small class="openvault-entity-mentions">${entity.mentions || 0} mentions</small>
+                <div>
+                    <button class="menu_button openvault-edit-entity" data-key="${key}" title="Edit entity">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="menu_button openvault-delete-entity" data-key="${key}" title="Delete entity">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Render edit form for an entity.
+ * @param {Object} entity - Entity data with _key
+ * @returns {string} HTML
+ */
+export function renderEntityEdit(entity) {
+    const key = escapeHtml(entity._key || '');
+    const typeOptions = ['PERSON', 'PLACE', 'ORGANIZATION', 'OBJECT', 'CONCEPT']
+        .map((t) => `<option value="${t}"${t === entity.type ? ' selected' : ''}>${t}</option>`)
+        .join('');
+
+    return `
+        <div class="openvault-entity-card" data-entity-key="${key}">
+            <div class="openvault-edit-form">
+                <div class="openvault-edit-row">
+                    <label>
+                        Name
+                        <input type="text" class="text_pole" data-field="name" value="${escapeHtml(entity.name || '')}" />
+                    </label>
+                    <label>
+                        Type
+                        <select data-field="type">${typeOptions}</select>
+                    </label>
+                </div>
+                <textarea class="openvault-edit-textarea" data-field="description">${escapeHtml(entity.description || '')}</textarea>
+                <div class="openvault-edit-actions">
+                    <button class="menu_button openvault-cancel-entity-edit" data-key="${key}">
+                        <i class="fa-solid fa-times"></i> Cancel
+                    </button>
+                    <button class="menu_button openvault-save-entity-edit" data-key="${key}">
+                        <i class="fa-solid fa-check"></i> Save
+                    </button>
+                </div>
+            </div>
         </div>
     `;
 }

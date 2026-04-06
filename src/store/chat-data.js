@@ -207,6 +207,145 @@ export async function deleteCurrentChatData() {
 }
 
 /**
+ * Update an entity node by its normalized key.
+ * @param {string} key - Normalized entity key in graph.nodes
+ * @param {Object} updates - Fields to update (name, type, description)
+ * @returns {Promise<boolean>} True if updated, false otherwise
+ */
+export async function updateEntity(key, updates) {
+    const data = getOpenVaultData();
+    if (!data) {
+        showToast('warning', 'No chat loaded');
+        return false;
+    }
+
+    const entity = data.graph?.nodes?.[key];
+    if (!entity) {
+        logDebug(`Entity ${key} not found`);
+        return false;
+    }
+
+    const descriptionChanged = updates.description !== undefined && updates.description !== entity.description;
+
+    const allowedFields = ['name', 'type', 'description'];
+    for (const field of allowedFields) {
+        if (updates[field] !== undefined) {
+            entity[field] = updates[field];
+        }
+    }
+
+    if (descriptionChanged) {
+        deleteEmbedding(entity);
+    }
+
+    await getDeps().saveChatConditional();
+    logDebug(`Updated entity ${key}${descriptionChanged ? ' (embedding invalidated)' : ''}`);
+    return true;
+}
+
+/**
+ * Delete an entity by its normalized key.
+ * Also removes edges referencing it and cleans community nodeKeys.
+ * @param {string} key - Normalized entity key
+ * @returns {Promise<boolean>} True if deleted, false otherwise
+ */
+export async function deleteEntity(key) {
+    const data = getOpenVaultData();
+    if (!data) {
+        showToast('warning', 'No chat loaded');
+        return false;
+    }
+
+    if (!data.graph?.nodes?.[key]) {
+        logDebug(`Entity ${key} not found`);
+        return false;
+    }
+
+    delete data.graph.nodes[key];
+
+    if (data.graph.edges) {
+        for (const [edgeKey, edge] of Object.entries(data.graph.edges)) {
+            if (edge.source === key || edge.target === key) {
+                delete data.graph.edges[edgeKey];
+            }
+        }
+    }
+
+    if (data.communities) {
+        for (const community of Object.values(data.communities)) {
+            if (community.nodeKeys) {
+                const idx = community.nodeKeys.indexOf(key);
+                if (idx !== -1) community.nodeKeys.splice(idx, 1);
+            }
+        }
+    }
+
+    await getDeps().saveChatConditional();
+    logDebug(`Deleted entity ${key}`);
+    return true;
+}
+
+/**
+ * Update a community by ID.
+ * @param {string} id - Community ID (e.g. "C0")
+ * @param {Object} updates - Fields to update (title, summary, findings)
+ * @returns {Promise<boolean>} True if updated, false otherwise
+ */
+export async function updateCommunity(id, updates) {
+    const data = getOpenVaultData();
+    if (!data) {
+        showToast('warning', 'No chat loaded');
+        return false;
+    }
+
+    const community = data.communities?.[id];
+    if (!community) {
+        logDebug(`Community ${id} not found`);
+        return false;
+    }
+
+    const summaryChanged = updates.summary !== undefined && updates.summary !== community.summary;
+
+    const allowedFields = ['title', 'summary', 'findings'];
+    for (const field of allowedFields) {
+        if (updates[field] !== undefined) {
+            community[field] = updates[field];
+        }
+    }
+
+    if (summaryChanged) {
+        deleteEmbedding(community);
+    }
+
+    await getDeps().saveChatConditional();
+    logDebug(`Updated community ${id}${summaryChanged ? ' (embedding invalidated)' : ''}`);
+    return true;
+}
+
+/**
+ * Delete a community by ID.
+ * @param {string} id - Community ID (e.g. "C0")
+ * @returns {Promise<boolean>} True if deleted, false otherwise
+ */
+export async function deleteCommunity(id) {
+    const data = getOpenVaultData();
+    if (!data) {
+        showToast('warning', 'No chat loaded');
+        return false;
+    }
+
+    if (!data.communities?.[id]) {
+        logDebug(`Community ${id} not found`);
+        return false;
+    }
+
+    delete data.communities[id];
+    await getDeps().saveChatConditional();
+    logDebug(`Deleted community ${id}`);
+    return true;
+}
+
+/**
  * Append new memories to the store.
  * @param {Memory[]} newMemories - Memory objects to add
  * @returns {void}

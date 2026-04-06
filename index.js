@@ -46,6 +46,11 @@ function registerCommands() {
                     if (result.status === 'success' && result.events_created > 0) {
                         showToast('success', `Extracted ${result.events_created} memory events`);
                         refreshAllUI();
+                    } else if (result.status === 'no_events_retry') {
+                        showToast(
+                            'info',
+                            `No events found (attempt ${result.attempt}/${result.max_attempts}), messages kept for retry`
+                        );
                     } else if (result.status === 'skipped') {
                         showToast(
                             'info',
