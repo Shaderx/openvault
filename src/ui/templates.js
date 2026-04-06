@@ -60,6 +60,11 @@ function buildBadges(memory) {
             `<span class="openvault-memory-card-badge location"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(location)}</span>`
         );
     }
+    if (memory.is_transient) {
+        badges.push(
+            `<span class="openvault-memory-card-badge transient"><i class="fa-solid fa-wind"></i> Transient</span>`
+        );
+    }
 
     return badges.join('');
 }
@@ -80,10 +85,14 @@ function buildCharacterTags(characters) {
  */
 function buildCardHeader(memory) {
     const date = formatMemoryDate(memory.created_at);
+    const anchorHtml = memory.temporal_anchor
+        ? `<span class="openvault-memory-card-date" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-clock"></i> ${escapeHtml(memory.temporal_anchor)}</span>`
+        : '';
 
     return `
         <div class="openvault-memory-card-header">
             <div class="openvault-memory-card-meta">
+                ${anchorHtml}
                 <span class="openvault-memory-card-date">${escapeHtml(date)}</span>
             </div>
         </div>
@@ -148,6 +157,16 @@ function buildEditFields(memory) {
             <label>
                 Importance
                 <select data-field="importance">${buildImportanceOptions(importance)}</select>
+            </label>
+        </div>
+        <div class="openvault-edit-row">
+            <label>Time Anchor</label>
+            <input type="text" class="text_pole" data-field="temporal_anchor" value="${escapeHtml(memory.temporal_anchor || '')}" placeholder="e.g. Friday 3:00 PM">
+        </div>
+        <div class="openvault-edit-row">
+            <label class="checkbox_label">
+                <input type="checkbox" data-field="is_transient" ${memory.is_transient ? 'checked' : ''}>
+                <span>Transient (Fades fast)</span>
             </label>
         </div>
     `;

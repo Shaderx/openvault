@@ -1,4 +1,4 @@
-import { formatContextForInjection } from '../../src/retrieval/formatting.js';
+import { formatContextForInjection, formatMemory } from '../../src/retrieval/formatting.js';
 
 describe('formatContextForInjection - Subconscious Drives', () => {
     it('should separate reflections from events into different XML blocks', () => {
@@ -89,5 +89,56 @@ describe('formatContextForInjection without hard quotas', () => {
         const count = (result.match(/Old memory/g) || []).length;
         // With soft balance, could be more than 50% if scoring selected them
         expect(count).toBeGreaterThan(0);
+    });
+});
+
+describe('formatMemory', () => {
+    it('should prepend temporal anchor when present', () => {
+        const memory = {
+            summary: 'Character A suggested meeting at the library',
+            importance: 3,
+            temporal_anchor: 'Friday, June 14, 3:40 PM',
+            is_secret: false,
+        };
+
+        const formatted = formatMemory(memory);
+        expect(formatted).toBe('[★★★] [Friday, June 14, 3:40 PM] Character A suggested meeting at the library');
+    });
+
+    it('should not add time prefix when temporal_anchor is null', () => {
+        const memory = {
+            summary: 'Character A suggested meeting at the library',
+            importance: 3,
+            temporal_anchor: null,
+            is_secret: false,
+        };
+
+        const formatted = formatMemory(memory);
+        expect(formatted).toBe('[★★★] Character A suggested meeting at the library');
+        expect(formatted).not.toContain('[null]');
+    });
+
+    it('should not add time prefix when temporal_anchor is undefined', () => {
+        const memory = {
+            summary: 'Character A suggested meeting at the library',
+            importance: 3,
+            is_secret: false,
+        };
+
+        const formatted = formatMemory(memory);
+        expect(formatted).toBe('[★★★] Character A suggested meeting at the library');
+    });
+
+    it('should combine temporal anchor with [Known] prefix', () => {
+        const memory = {
+            summary: 'Character A suggested meeting at the library',
+            importance: 3,
+            temporal_anchor: 'Friday, June 14, 3:40 PM',
+            is_secret: false,
+            witnesses: ['A', 'B', 'C'],
+        };
+
+        const formatted = formatMemory(memory);
+        expect(formatted).toBe('[★★★] [Friday, June 14, 3:40 PM] [Known] Character A suggested meeting at the library');
     });
 });

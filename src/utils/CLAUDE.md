@@ -12,7 +12,7 @@
 | `logInfo(msg, data?)` | Always | Rare milestones that fire **at most once per user action**: init, backfill complete, model change, settings loaded |
 | `logWarn(msg, data?)` | Always | Recovered errors, edge-case fallbacks (array-instead-of-object, stale lock cleared, unknown config key) |
 | `logError(msg, error?, context?)` | Always | Unrecoverable failures. Pass the caught `Error` as second arg. Pass a context object (counts, model names, truncated inputs) as third arg for the 3 critical paths (JSON parse, embedding, extraction). |
-| `logRequest(label, data)` | `requestLogging` only | Full LLM request/response payloads inside `groupCollapsed`. Already well-designed — do not change. |
+| `logRequest(label, data)` | `requestLogging` only | LLM request/response logging. **Success**: compact summary (profile, tokens, char count, message count). **Failure**: full verbose output (messages, response, error). |
 
 **Rules:**
 - **Never** use bare `console.*` or `getDeps().console.*` outside `logging.js` and `deps.js`.
@@ -36,7 +36,8 @@
 - **Turn-Boundary Snapping** (`snapToTurnBoundary`): Trims message index arrays backward until it finds a valid `Bot -> User` transition or End-of-Chat. **CRITICAL**: Prevents auto-hide or batching from splitting a User message from its Bot response.
 
 ### `cdn.js`
-CDN import retry with mirror fallback (esm.sh → skypack → esm.run → unpkg).
+CDN import with version pinning, retry, and mirror fallback (esm.sh → skypack → esm.run → unpkg).
+- **Version Pinning**: `CDN_VERSIONS` frozen map pins all CDN packages (kept in sync with `package.json`). `resolveVersion()` maps bare specs (`'zod'` → `'zod@4.3.6'`) and sub-path specs (`'gpt-tokenizer/encoding/o200k_base'` → `'gpt-tokenizer@3.4.0/encoding/o200k_base'`). When updating a package version, update BOTH `package.json` and `CDN_VERSIONS`.
 - `_setTestOverride(spec, module)`: Test-only hook to mock CDN imports with local `node_modules/` packages.
 - Test overrides stored on `globalThis.__openvault_cdn_test_overrides` to survive `vi.resetModules()`.
 - **Why**: `vi.resetModules()` resets module-level state; global storage ensures overrides persist across test runs.

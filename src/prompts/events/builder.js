@@ -67,5 +67,5 @@ Use EXACT character names: ${characterName}, ${userName}. Never transliterate th
 
 ${constraints}`;
 
-    return buildMessages(systemPrompt, userPrompt, prefill ?? '<think>\n', preamble);
+    return buildMessages(systemPrompt, userPrompt, prefill || '', preamble);
 }

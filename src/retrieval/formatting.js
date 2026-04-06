@@ -59,6 +59,25 @@ function formatEmotionalTrajectory(emotionalInfo, limit = 5) {
 }
 
 /**
+ * Format a single memory for display
+ * @param {Object} memory - Memory object with summary, importance, is_secret, witnesses, temporal_anchor
+ * @returns {string} Formatted memory string
+ */
+export function formatMemory(memory) {
+    const importance = memory.importance || 3;
+    const stars = '\u2605'.repeat(importance);
+
+    // Tag [Known] for public events with >2 witnesses, default is private
+    const isKnown = !memory.is_secret && (memory.witnesses?.length || 0) > 2;
+    const prefix = isKnown ? '[Known] ' : '';
+
+    // Prepend temporal anchor if present
+    const timePrefix = memory.temporal_anchor ? `[${memory.temporal_anchor}] ` : '';
+
+    return `[${stars}] ${timePrefix}${prefix}${memory.summary}`;
+}
+
+/**
  * Format context for injection into prompt using timeline buckets
  * @param {Object[]} memories - Selected memories
  * @param {string[]} presentCharacters - Characters present in the scene (excluding POV)
@@ -98,18 +117,6 @@ export function formatContextForInjection(
         return `Present: ${presentCharacters.join(', ')}`;
     };
 
-    // Helper to format a single memory (events only)
-    const formatMemory = (memory) => {
-        const importance = memory.importance || 3;
-        const stars = '\u2605'.repeat(importance);
-
-        // Invert: tag [Known] for public events with >2 witnesses, default is private
-        const isKnown = !memory.is_secret && (memory.witnesses?.length || 0) > 2;
-        const prefix = isKnown ? '[Known] ' : '';
-
-        return `[${stars}] ${prefix}${memory.summary}`;
-    };
-
     // Calculate token overhead for non-empty bucket headers
     const bucketHeaders = {
         old: '## The Story So Far',
@@ -139,7 +146,7 @@ export function formatContextForInjection(
     let totalTokens = 0;
 
     for (const memory of [...buckets.old, ...buckets.mid, ...buckets.recent]) {
-        const memoryTokens = countTokens(memory.summary || '') + 5;
+        const memoryTokens = countTokens(formatMemory(memory)) + 1;
         if (totalTokens + memoryTokens <= availableForMemories) {
             fittingMemoryIds.add(memory.id);
             totalTokens += memoryTokens;

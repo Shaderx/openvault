@@ -34,9 +34,6 @@ export function buildGraphExtractionPrompt({
     prefill,
     outputLanguage = 'auto',
 }) {
-    if (!prefill) {
-        throw new Error('buildGraphExtractionPrompt: prefill is required');
-    }
     const { char: characterName, user: userName } = names;
     const { charDesc: characterDescription = '', personaDesc: personaDescription = '' } = context;
 
@@ -68,7 +65,7 @@ Use EXACT character names: ${characterName}, ${userName}. Never transliterate th
 
 ${constraints}`;
 
-    return buildMessages(systemPrompt, userPrompt, prefill, preamble);
+    return buildMessages(systemPrompt, userPrompt, prefill || '', preamble);
 }
 
 /**
@@ -80,10 +77,6 @@ ${constraints}`;
  * @returns {LLMMessages} Array of {role, content} message objects
  */
 export function buildEdgeConsolidationPrompt(edgeData, preamble, outputLanguage = 'auto', prefill) {
-    if (!prefill) {
-        throw new Error('buildEdgeConsolidationPrompt: prefill is required');
-    }
-
     const systemPrompt = assembleSystemPrompt({
         role: EDGE_CONSOLIDATION_ROLE,
         examples: [],
@@ -112,5 +105,5 @@ Synthesize these relationship developments into ONE unified description.
 
 ${constraints}`;
 
-    return buildMessages(systemPrompt, userPrompt, prefill, preamble);
+    return buildMessages(systemPrompt, userPrompt, prefill || '', preamble);
 }

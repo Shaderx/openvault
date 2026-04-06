@@ -102,6 +102,8 @@ Everything stays on your machine. The in-browser embedding model means no text g
 
 ## Version History
 
+- **18.50** - Rewrite examples with sonnet
+- **17.00** - Add commitment/preference to memory, add real time tracking. New type of memories - transient with faster decay
 - **16.00** - Improved LLM answer parsing
 - **15.50** - Added data schema versioning for easier migrations
 - **15.00** - Major refactoring, bug fixes

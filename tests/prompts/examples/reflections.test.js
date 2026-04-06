@@ -4,18 +4,18 @@ import { getExamples } from '../../../src/prompts/reflection/examples/index.js';
 const UNIFIED_REFLECTION_EXAMPLES = getExamples('REFLECTIONS', 'auto');
 
 describe('UNIFIED_REFLECTION_EXAMPLES', () => {
-    it('exports exactly 6 examples (3 EN + 3 RU)', () => {
-        expect(UNIFIED_REFLECTION_EXAMPLES).toHaveLength(6);
+    it('exports exactly 10 examples (5 EN + 5 RU)', () => {
+        expect(UNIFIED_REFLECTION_EXAMPLES).toHaveLength(10);
     });
 
-    it('contains 3 English examples', () => {
+    it('contains 5 English examples', () => {
         const enExamples = UNIFIED_REFLECTION_EXAMPLES.filter((e) => e.label.includes('(EN'));
-        expect(enExamples).toHaveLength(3);
+        expect(enExamples).toHaveLength(5);
     });
 
-    it('contains 3 Russian examples', () => {
+    it('contains 5 Russian examples', () => {
         const ruExamples = UNIFIED_REFLECTION_EXAMPLES.filter((e) => e.label.includes('(RU'));
-        expect(ruExamples).toHaveLength(3);
+        expect(ruExamples).toHaveLength(5);
     });
 
     it('each example has input, output, thinking with reflections array', () => {

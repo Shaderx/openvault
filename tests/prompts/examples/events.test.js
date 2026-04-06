@@ -4,8 +4,8 @@ import { getExamples } from '../../../src/prompts/events/examples/index.js';
 const EVENT_EXAMPLES = getExamples('auto');
 
 describe('EVENT_EXAMPLES', () => {
-    it('exports exactly 10 examples', () => {
-        expect(EVENT_EXAMPLES).toHaveLength(10);
+    it('exports exactly 14 examples', () => {
+        expect(EVENT_EXAMPLES).toHaveLength(14);
     });
 
     it('each example has required fields: label, input, output', () => {
@@ -29,11 +29,11 @@ describe('EVENT_EXAMPLES', () => {
         }
     });
 
-    it('has 5 English and 5 Russian examples', () => {
+    it('has 7 English and 7 Russian examples', () => {
         const enExamples = EVENT_EXAMPLES.filter((ex) => ex.label.includes('EN'));
         const ruExamples = EVENT_EXAMPLES.filter((ex) => ex.label.includes('RU'));
-        expect(enExamples).toHaveLength(5);
-        expect(ruExamples).toHaveLength(5);
+        expect(enExamples).toHaveLength(7);
+        expect(ruExamples).toHaveLength(7);
     });
 
     it('Russian examples have Russian text in output', () => {
@@ -53,9 +53,9 @@ describe('EVENT_EXAMPLES', () => {
         }
     });
 
-    it('includes dedup edge cases with empty events arrays', () => {
+    it('includes dedup edge cases with importance 2 (progression within established scene)', () => {
         const dedupExamples = EVENT_EXAMPLES.filter(
-            (ex) => ex.output.includes('"events": []') || ex.output.includes('"events":[]')
+            (ex) => ex.label.includes('Dedup') && ex.output.includes('"importance": 2')
         );
         expect(dedupExamples.length).toBeGreaterThanOrEqual(1);
     });

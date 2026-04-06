@@ -122,4 +122,85 @@ describe('schemas', () => {
             expect(result.success).toBe(true);
         });
     });
+
+    describe('EventSchema', () => {
+        it('should validate events with temporal_anchor and is_transient', () => {
+            const validEvent = {
+                summary: 'A significant event that took place in the story',
+                importance: 3,
+                temporal_anchor: 'Friday, June 14, 3:40 PM',
+                is_transient: true,
+            };
+            const result = schemas.EventSchema.safeParse(validEvent);
+            expect(result.success).toBe(true);
+            expect(result.data.temporal_anchor).toBe('Friday, June 14, 3:40 PM');
+            expect(result.data.is_transient).toBe(true);
+        });
+
+        it('should default temporal_anchor to null when omitted', () => {
+            const eventWithoutTime = {
+                summary: 'A significant event that took place in the story',
+                importance: 3,
+            };
+            const result = schemas.EventSchema.safeParse(eventWithoutTime);
+            expect(result.success).toBe(true);
+            expect(result.data.temporal_anchor).toBeNull();
+        });
+
+        it('should default is_transient to false when omitted', () => {
+            const eventWithoutTransient = {
+                summary: 'A significant event that took place in the story',
+                importance: 3,
+            };
+            const result = schemas.EventSchema.safeParse(eventWithoutTransient);
+            expect(result.success).toBe(true);
+            expect(result.data.is_transient).toBe(false);
+        });
+    });
+
+    describe('MemoryUpdateSchema', () => {
+        it('should allow updating temporal_anchor and is_transient', () => {
+            const validUpdate = {
+                temporal_anchor: 'Saturday, June 15, 9:00 AM',
+                is_transient: false,
+            };
+            const result = schemas.MemoryUpdateSchema.safeParse(validUpdate);
+            expect(result.success).toBe(true);
+        });
+    });
+
+    describe('ScoringConfigSchema', () => {
+        it('should include transientDecayMultiplier', () => {
+            const validConfig = {
+                forgetfulnessBaseLambda: 0.05,
+                forgetfulnessImportance5Floor: 0.3,
+                reflectionDecayThreshold: 0.2,
+                reflectionLevelMultiplier: 0.5,
+                vectorSimilarityThreshold: 0.3,
+                alpha: 0.6,
+                combinedBoostWeight: 0.4,
+                embeddingSource: 'local',
+                transientDecayMultiplier: 5.0,
+            };
+            const result = schemas.ScoringConfigSchema.safeParse(validConfig);
+            expect(result.success).toBe(true);
+            expect(result.data.transientDecayMultiplier).toBe(5.0);
+        });
+
+        it('should default transientDecayMultiplier when omitted', () => {
+            const validConfig = {
+                forgetfulnessBaseLambda: 0.05,
+                forgetfulnessImportance5Floor: 0.3,
+                reflectionDecayThreshold: 0.2,
+                reflectionLevelMultiplier: 0.5,
+                vectorSimilarityThreshold: 0.3,
+                alpha: 0.6,
+                combinedBoostWeight: 0.4,
+                embeddingSource: 'local',
+            };
+            const result = schemas.ScoringConfigSchema.safeParse(validConfig);
+            expect(result.success).toBe(true);
+            expect(result.data.transientDecayMultiplier).toBe(5.0);
+        });
+    });
 });

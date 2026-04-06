@@ -262,7 +262,13 @@ export function calculateScore(
     // Access-reinforced decay: dampen lambda by retrieval history
     const hits = memory.retrieval_hits || 0;
     const hitDamping = Math.max(0.5, 1 / (1 + hits * 0.1));
-    const lambda = (constants.BASE_LAMBDA / (importance * importance)) * hitDamping;
+    let lambda = (constants.BASE_LAMBDA / (importance * importance)) * hitDamping;
+
+    // Apply transient multiplier for short-term memories (faster decay)
+    if (memory.is_transient) {
+        const multiplier = settings.transientDecayMultiplier || 5.0;
+        lambda *= multiplier;
+    }
 
     // Core forgetfulness formula: Score = Importance × e^(-λ × Distance)
     const base = importance * Math.exp(-lambda * distance);

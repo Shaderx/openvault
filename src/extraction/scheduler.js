@@ -174,7 +174,7 @@ export function getBackfillMessageIds(chat, data, tokenBudget, isEmergencyCut = 
 
     // Emergency Cut bypasses token budget - extract all unextracted messages
     if (!isEmergencyCut && totalTokens < tokenBudget) {
-        console.log(`[Emergency Cut Debug] getBackfillMessageIds: returning empty (token budget not met)`);
+        console.log(`getBackfillMessageIds: no messages to extract (token budget not met)`);
         return { messageIds: [], batchCount: 0 };
     }
 

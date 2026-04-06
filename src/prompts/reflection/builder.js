@@ -34,10 +34,6 @@ export function buildUnifiedReflectionPrompt(
     // @ts-expect-error - TS1016: flat param list with default before required param is TS limitation
     prefill
 ) {
-    if (!prefill) {
-        throw new Error('buildUnifiedReflectionPrompt: prefill is required');
-    }
-
     const hasOldReflections = recentMemories.some((m) => m.type === 'reflection' && (m.level || 1) >= 1);
 
     const memoryList = recentMemories
@@ -88,5 +84,5 @@ Based on these memories about ${characterName}:
 ${levelAwareInstruction}
 ${constraints}`;
 
-    return buildMessages(systemPrompt, userPrompt, prefill, preamble);
+    return buildMessages(systemPrompt, userPrompt, prefill || '', preamble);
 }

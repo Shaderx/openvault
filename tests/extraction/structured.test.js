@@ -5,6 +5,7 @@ import {
     getEventExtractionJsonSchema,
     getGraphExtractionJsonSchema,
     parseCommunitySummaryResponse,
+    parseConsolidationResponse,
     parseEvent,
     parseEventExtractionResponse,
     parseGlobalSynthesisResponse,
@@ -292,5 +293,54 @@ describe('Global Synthesis Schema', () => {
         const valid = { global_summary: 'A'.repeat(100) };
         const result2 = GlobalSynthesisSchema.safeParse(valid);
         expect(result2.success).toBe(true);
+    });
+
+    it('recovers bare string as global_summary', () => {
+        const bare = JSON.stringify(
+            'The story has evolved from initial meeting to deep conflict across multiple chapters'
+        );
+        const result = parseGlobalSynthesisResponse(bare);
+        expect(result).toEqual({
+            global_summary: 'The story has evolved from initial meeting to deep conflict across multiple chapters',
+        });
+    });
+
+    it('recovers bare string in single-element array as global_summary', () => {
+        const wrapped = JSON.stringify([
+            'The story has evolved from initial meeting to deep conflict across many chapters',
+        ]);
+        const result = parseGlobalSynthesisResponse(wrapped);
+        expect(result.global_summary).toBe(
+            'The story has evolved from initial meeting to deep conflict across many chapters'
+        );
+    });
+});
+
+describe('parseConsolidationResponse', () => {
+    it('parses valid edge consolidation response', () => {
+        const json = JSON.stringify({ consolidated_description: 'Alice and Bob have a deep bond built on trust' });
+        const result = parseConsolidationResponse(json);
+        expect(result.consolidated_description).toBe('Alice and Bob have a deep bond built on trust');
+    });
+
+    it('recovers bare string as consolidated_description', () => {
+        const bare = JSON.stringify('Alice and Bob share mutual trust after years of friendship');
+        const result = parseConsolidationResponse(bare);
+        expect(result).toEqual({
+            consolidated_description: 'Alice and Bob share mutual trust after years of friendship',
+        });
+    });
+
+    it('recovers bare string inside single-element array', () => {
+        const wrapped = JSON.stringify(['Alice and Bob reconciled after a long period of tension and distrust']);
+        const result = parseConsolidationResponse(wrapped);
+        expect(result.consolidated_description).toBe(
+            'Alice and Bob reconciled after a long period of tension and distrust'
+        );
+    });
+
+    it('throws on empty string', () => {
+        const empty = JSON.stringify('');
+        expect(() => parseConsolidationResponse(empty)).toThrow();
     });
 });

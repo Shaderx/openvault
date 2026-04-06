@@ -31,6 +31,8 @@ export const MemorySchema = z.object({
     mentions: z.number().optional(),
     retrieval_hits: z.number().optional(),
     archived: z.boolean().optional(),
+    temporal_anchor: z.string().nullable().optional(),
+    is_transient: z.boolean().optional(),
     _st_synced: z.boolean().optional(),
     _proxyVectorScore: z.number().optional(),
 });
@@ -73,7 +75,7 @@ export const GraphDataSchema = z.object({
  * Extended in structured.js with .catch() fallbacks for LLM output
  */
 export const BaseEntitySchema = z.object({
-    name: z.string().min(1).describe('Entity name, capitalized'),
+    name: z.string().min(1).trim().describe('Entity name, capitalized'),
     type: z.enum(['PERSON', 'PLACE', 'ORGANIZATION', 'OBJECT', 'CONCEPT']),
     description: z.string().describe('Comprehensive description of the entity'),
 });
@@ -83,8 +85,8 @@ export const BaseEntitySchema = z.object({
  * Extended in structured.js with .catch() fallbacks for LLM output
  */
 export const BaseRelationshipSchema = z.object({
-    source: z.string().min(1).describe('Source entity name'),
-    target: z.string().min(1).describe('Target entity name'),
+    source: z.string().min(1).trim().describe('Source entity name'),
+    target: z.string().min(1).trim().describe('Target entity name'),
     description: z.string().min(1).describe('Description of the relationship'),
 });
 
@@ -116,12 +118,14 @@ export const ScoredMemorySchema = z.object({
 export const EventSchema = z.object({
     summary: z.string().min(20, 'Summary must be a complete descriptive sentence'),
     importance: z.number().int().min(1).max(5).default(3),
-    characters_involved: z.array(z.string()).default([]),
-    witnesses: z.array(z.string()).default([]),
+    characters_involved: z.array(z.string().trim()).default([]),
+    witnesses: z.array(z.string().trim()).default([]),
     location: z.string().nullable().default(null),
     is_secret: z.boolean().default(false),
-    emotional_impact: z.record(z.string(), z.any()).optional().default({}),
-    relationship_impact: z.record(z.string(), z.any()).optional().default({}),
+    temporal_anchor: z.string().nullable().optional().default(null),
+    is_transient: z.boolean().optional().default(false),
+    emotional_impact: z.record(z.string().trim(), z.any()).optional().default({}),
+    relationship_impact: z.record(z.string().trim(), z.any()).optional().default({}),
 });
 
 export const EventExtractionSchema = z.object({
@@ -188,6 +192,7 @@ export const ScoringConfigSchema = z.object({
     alpha: z.number(),
     combinedBoostWeight: z.number(),
     embeddingSource: z.enum(['local', 'ollama', 'st_vector']),
+    transientDecayMultiplier: z.number().positive().optional().default(5.0),
 });
 
 export const QueryConfigSchema = z.object({
@@ -357,6 +362,7 @@ export const ScoringSettingsSchema = z.object({
     vectorSimilarityThreshold: z.number(),
     alpha: z.number(),
     combinedBoostWeight: z.number(),
+    transientDecayMultiplier: z.number().optional(),
 });
 
 // Memory update fields for updateMemory()
@@ -365,6 +371,8 @@ export const MemoryUpdateSchema = z.object({
     importance: z.number().int().min(1).max(5).optional(),
     tags: z.array(z.string()).optional(),
     is_secret: z.boolean().optional(),
+    temporal_anchor: z.string().nullable().optional(),
+    is_transient: z.boolean().optional(),
 });
 
 // Character names pair for prompt building

@@ -25,4 +25,15 @@ describe('graph/rules', () => {
         expect(GRAPH_RULES).toContain('alter-egos');
         expect(GRAPH_RULES).toContain('avatars');
     });
+
+    it('should include dietary/lifestyle requirements in CONCEPT definition', () => {
+        expect(GRAPH_RULES).toContain('dietary/lifestyle requirements');
+        expect(GRAPH_RULES).toContain('Peanut Allergy');
+        expect(GRAPH_RULES).toContain('Veganism');
+    });
+
+    it('should include preference capture instruction', () => {
+        expect(GRAPH_RULES).toContain('Capture durable character preferences as relationships');
+        expect(GRAPH_RULES).toContain('Strongly dislikes');
+    });
 });

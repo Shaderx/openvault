@@ -500,3 +500,90 @@ describe('Reflection decay with level divisor', () => {
         expect(score.total).toBeGreaterThan(0); // Should not error
     });
 });
+
+describe('Transient decay multiplier', () => {
+    const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 5 };
+    const baseSettings = { vectorSimilarityThreshold: 0.5, alpha: 0.5, combinedBoostWeight: 2.0 };
+
+    it('should apply transient multiplier for transient memories', async () => {
+        const { calculateScore } = await import('../../src/retrieval/math.js');
+
+        const memory = {
+            importance: 3,
+            is_transient: true,
+            message_ids: [50],
+            retrieval_hits: 0,
+        };
+        const settings = { ...baseSettings, transientDecayMultiplier: 5.0 };
+
+        const transientScore = calculateScore(memory, null, 100, constants, settings);
+
+        // Same memory without is_transient should have higher score
+        const normalMemory = { ...memory, is_transient: false };
+        const normalScore = calculateScore(normalMemory, null, 100, constants, settings);
+
+        expect(transientScore.base).toBeLessThan(normalScore.base);
+    });
+
+    it('should not apply multiplier for non-transient memories', async () => {
+        const { calculateScore } = await import('../../src/retrieval/math.js');
+
+        const memory = {
+            importance: 3,
+            is_transient: false,
+            message_ids: [50],
+            retrieval_hits: 0,
+        };
+        const settings = { ...baseSettings, transientDecayMultiplier: 5.0 };
+
+        const result = calculateScore(memory, null, 100, constants, settings);
+        // Score should be standard calculation without multiplier
+        const expectedLambda = 0.05 / (3 * 3); // baseLambda / importance^2
+        const expectedBase = 3 * Math.exp(-expectedLambda * 50);
+
+        expect(result.base).toBeCloseTo(expectedBase, 5);
+    });
+
+    it('should default multiplier to 5.0 when not provided', async () => {
+        const { calculateScore } = await import('../../src/retrieval/math.js');
+
+        const transientMemory = {
+            importance: 3,
+            is_transient: true,
+            message_ids: [50],
+            retrieval_hits: 0,
+        };
+        const normalMemory = {
+            importance: 3,
+            is_transient: false,
+            message_ids: [50],
+            retrieval_hits: 0,
+        };
+        // settings WITHOUT transientDecayMultiplier
+        const settings = baseSettings;
+
+        const transientScore = calculateScore(transientMemory, null, 100, constants, settings);
+        const normalScore = calculateScore(normalMemory, null, 100, constants, settings);
+
+        expect(transientScore.base).toBeLessThan(normalScore.base);
+    });
+
+    it.each([
+        { distance: 30 },
+        { distance: 50 },
+        { distance: 70 },
+    ])('should correctly decay transient memories at distance $distance', async ({ distance }) => {
+        const { calculateScore } = await import('../../src/retrieval/math.js');
+
+        const settings = { ...baseSettings, transientDecayMultiplier: 5.0 };
+
+        const normalMemory = { importance: 3, is_transient: false, message_ids: [0], retrieval_hits: 0 };
+        const transientMemory = { importance: 3, is_transient: true, message_ids: [0], retrieval_hits: 0 };
+
+        const normalResult = calculateScore(normalMemory, null, distance, constants, settings);
+        const transientResult = calculateScore(transientMemory, null, distance, constants, settings);
+
+        expect(transientResult.base).toBeLessThan(normalResult.base);
+        expect(transientResult.base).toBeGreaterThan(0);
+    });
+});

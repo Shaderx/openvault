@@ -4,6 +4,7 @@ import { record } from './perf/store.js';
 import { getSessionSignal } from './state.js';
 import { hasEmbedding, setEmbedding } from './utils/embedding-codec.js';
 import { logDebug, logError, logInfo } from './utils/logging.js';
+import { cdnImport } from './utils/cdn.js';
 
 // =============================================================================
 // Strategy Classes (from src/embeddings/strategies.js)
@@ -153,7 +154,7 @@ const TRANSFORMERS_MODELS = {
     },
     'bge-small-en-v1.5': {
         name: 'Xenova/bge-small-en-v1.5',
-        dtypeWebGPU: 'fp16',
+        dtypeWebGPU: 'q4f16',
         dtypeWASM: 'q8',
         dimensions: 384,
         description: '384d · 133MB · English · MTEB: 62.17 · SOTA RAG',
@@ -272,91 +273,47 @@ class TransformersStrategy extends EmbeddingStrategy {
 
         this.#loadingPromise = (async () => {
             try {
-                // Step 1: WebGPU detection
-                let useWebGPU;
-                try {
-                    useWebGPU = await isWebGPUAvailable();
-                } catch (gpuErr) {
-                    logError(`[loadPipeline] Step 1 FAILED: WebGPU detection`, gpuErr);
-                    useWebGPU = false;
-                }
+                const useWebGPU = await isWebGPUAvailable();
 
+                // Check if model requires WebGPU
                 if (modelConfig.requiresWebGPU && !useWebGPU) {
-                    throw new Error(`${modelKey} requires WebGPU which is not available in this browser`);
+                    throw new Error(`${modelKey} requires WebGPU which is not available`);
                 }
 
                 const device = useWebGPU ? 'webgpu' : 'wasm';
                 const dtype = useWebGPU ? modelConfig.dtypeWebGPU : modelConfig.dtypeWASM;
-                logInfo(`[loadPipeline] Step 1 OK: device=${device}, dtype=${dtype}, model=${modelKey}`);
 
-                // Step 2: Import Transformers.js from CDN
-                let pipelineFn;
+                logDebug(`Loading ${modelKey} with ${device} (${dtype})`);
+
+                const transformers = await cdnImport('@huggingface/transformers');
+                const { pipeline } = transformers;
+
+                // Suppress WebGPU powerPreference warning on Chromium/Windows (crbug.com/369219127)
                 try {
-                    const module = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1');
-                    pipelineFn = module.pipeline;
-                    // Transformers sets onnx env webgpu.powerPreference to 'high-performance'; on Chromium/Windows
-                    // that option is ignored and logs a warning (crbug.com/369219127). Omit it before creating the pipeline.
-                    try {
-                        const webgpu = module.env?.backends?.onnx?.webgpu;
-                        if (webgpu && 'powerPreference' in webgpu) {
-                            delete webgpu.powerPreference;
-                        }
-                    } catch {
-                        /* ignore */
+                    const webgpu = transformers.env?.backends?.onnx?.webgpu;
+                    if (webgpu && 'powerPreference' in webgpu) {
+                        delete webgpu.powerPreference;
                     }
-                    logInfo(`[loadPipeline] Step 2 OK: Transformers.js imported`);
-                } catch (cdnErr) {
-                    logError(`[loadPipeline] Step 2 FAILED: CDN import of Transformers.js`, cdnErr);
-                    throw cdnErr;
-                }
+                } catch { /* ignore */ }
 
-                // Step 3: Create pipeline (downloads ONNX model if not in browser cache)
-                const progressCb = (lastRef) => (progress) => {
-                    if (progress.status === 'progress' && progress.total) {
-                        const pct = Math.round((progress.loaded / progress.total) * 100);
-                        if (pct >= lastRef.v + 25) {
-                            lastRef.v = Math.floor(pct / 25) * 25;
-                            this.#updateStatus(`Loading ${modelKey}: ${lastRef.v}%`);
+                let lastReportedPct = 0;
+                const pipe = await pipeline('feature-extraction', modelConfig.name, {
+                    device,
+                    dtype,
+                    progress_callback: (progress) => {
+                        if (progress.status === 'progress' && progress.total) {
+                            const pct = Math.round((progress.loaded / progress.total) * 100);
+                            if (pct >= lastReportedPct + 25) {
+                                lastReportedPct = Math.floor(pct / 25) * 25;
+                                this.#updateStatus(`Loading ${modelKey}: ${lastReportedPct}%`);
+                            }
                         }
-                    }
-                };
-
-                let pipe;
-                let finalDevice = device;
-                try {
-                    logInfo(`[loadPipeline] Step 3: Creating pipeline ${modelConfig.name} (${dtype}) via ${device}...`);
-                    pipe = await pipelineFn('feature-extraction', modelConfig.name, {
-                        device,
-                        dtype,
-                        progress_callback: progressCb({ v: 0 }),
-                    });
-                    logInfo(`[loadPipeline] Step 3 OK: Pipeline created for ${modelKey} via ${device}`);
-                } catch (webgpuErr) {
-                    // If WebGPU failed and WASM is available, fall back automatically
-                    if (useWebGPU && modelConfig.dtypeWASM && !modelConfig.requiresWebGPU) {
-                        logError(`[loadPipeline] Step 3 WebGPU failed, falling back to WASM (${modelConfig.dtypeWASM})`, webgpuErr);
-                        this.#updateStatus(`Loading ${modelKey} via WASM (fallback)...`);
-                        try {
-                            pipe = await pipelineFn('feature-extraction', modelConfig.name, {
-                                device: 'wasm',
-                                dtype: modelConfig.dtypeWASM,
-                                progress_callback: progressCb({ v: 0 }),
-                            });
-                            finalDevice = 'wasm';
-                            logInfo(`[loadPipeline] Step 3 OK: WASM fallback succeeded for ${modelKey}`);
-                        } catch (wasmErr) {
-                            logError(`[loadPipeline] Step 3 WASM fallback also FAILED`, wasmErr);
-                            throw wasmErr;
-                        }
-                    } else {
-                        logError(`[loadPipeline] Step 3 FAILED: pipeline('feature-extraction', '${modelConfig.name}', {device: '${device}', dtype: '${dtype}'})`, webgpuErr);
-                        throw webgpuErr;
-                    }
-                }
+                    },
+                });
 
                 this.#cachedPipeline = pipe;
-                this.#cachedDevice = finalDevice;
-                const deviceLabel = finalDevice === 'webgpu' ? 'WebGPU' : 'WASM';
+                this.#cachedDevice = device;
+                const deviceLabel = useWebGPU ? 'WebGPU' : 'WASM';
                 this.#updateStatus(`${modelKey} (${deviceLabel}) ✓`);
                 return pipe;
             } catch (error) {
@@ -406,33 +363,6 @@ class TransformersStrategy extends EmbeddingStrategy {
 
     async getDocumentEmbedding(text, { signal, prefix = '' } = {}) {
         return this.#embed(text, prefix, { signal });
-    }
-
-    /**
-     * Whether the pipeline for the current model key is already loaded in memory.
-     * @returns {boolean}
-     */
-    isLoaded() {
-        return !!(this.#cachedPipeline && this.#cachedModelId === this.#currentModelKey);
-    }
-
-    /**
-     * Eagerly load (or verify cached) the pipeline for the current model.
-     * If the ONNX weights are already in the browser Cache API the load is fast;
-     * otherwise they are downloaded from HuggingFace with progress updates.
-     * Safe to call multiple times — deduplicates via #loadingPromise.
-     * @returns {Promise<void>}
-     */
-    async preload() {
-        if (this.isLoaded()) {
-            this.#updateStatus(`${this.#currentModelKey} already loaded ✓`);
-            return;
-        }
-        try {
-            await this.#loadPipeline(this.#currentModelKey);
-        } catch (error) {
-            logError(`Preload failed for ${this.#currentModelKey}`, error);
-        }
     }
 
     async reset() {
@@ -703,21 +633,6 @@ export function isEmbeddingsEnabled() {
     const source = settings.embeddingSource;
     const strategy = getStrategy(source);
     return strategy.isEnabled();
-}
-
-/**
- * Eagerly preload the currently configured Transformers.js model.
- * Downloads weights if not in browser cache; no-ops for Ollama.
- * Safe to fire-and-forget — errors are logged, never thrown.
- */
-export async function preloadCurrentModel() {
-    const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings.embeddingSource;
-    const strategy = getStrategy(source);
-
-    if (typeof strategy.preload === 'function') {
-        await strategy.preload();
-    }
 }
 
 // LRU cache for embedding results to avoid redundant API calls

@@ -139,18 +139,27 @@ export function logRequest(label, data) {
     const group = c.groupCollapsed ? c.groupCollapsed.bind(c) : c.log.bind(c);
     const groupEnd = c.groupEnd ? c.groupEnd.bind(c) : () => {};
 
-    group(`[OpenVault] ${prefix} ${label} — ${isError ? 'FAILED' : 'OK'}`);
-    c.log('Profile:', data.profileId);
-    c.log('Max Tokens:', data.maxTokens);
-    c.log('Messages:', data.messages);
-    if (data.response !== undefined) {
-        c.log('Response:', data.response);
-    }
-    if (data.error) {
+    if (isError) {
+        // Full verbose output for failures
+        group(`[OpenVault] ${prefix} ${label} — FAILED`);
+        c.log('Profile:', data.profileId);
+        c.log('Max Tokens:', data.maxTokens);
+        c.log('Messages:', data.messages);
+        if (data.response !== undefined) {
+            c.log('Response:', data.response);
+        }
         c.error('Error:', data.error);
         if (data.error.cause) {
             c.error('Caused by:', data.error.cause);
         }
+        groupEnd();
+    } else {
+        // Compact summary for successful calls
+        const responseLength = typeof data.response === 'string' ? data.response.length : 0;
+        const messageCount = Array.isArray(data.messages) ? data.messages.length : 0;
+        group(`[OpenVault] ✅ ${label} — OK (${responseLength} chars, ${messageCount} messages)`);
+        c.log('Profile:', data.profileId);
+        c.log('Max Tokens:', data.maxTokens);
+        groupEnd();
     }
-    groupEnd();
 }

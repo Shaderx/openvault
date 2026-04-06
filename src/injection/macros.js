@@ -15,12 +15,27 @@ export const cachedContent = {
  * Must be called after extension is loaded.
  */
 export function initMacros() {
-    const { registerMacro } = getDeps().getContext();
+    const context = getDeps().getContext();
 
-    // Macros MUST be synchronous - no async/await
-    // Do NOT wrap name in {{ }} - ST does that automatically
-    registerMacro('openvault_memory', () => cachedContent.memory);
-    registerMacro('openvault_world', () => cachedContent.world);
+    const newRegistry = context.macros?.registry;
+
+    if (newRegistry?.registerMacro) {
+        // ST 1.16.0+ new MacroRegistry API — second arg must be an options object with handler key
+        newRegistry.registerMacro('openvault_memory', {
+            handler: () => cachedContent.memory,
+            description: 'OpenVault injected memory content',
+            category: 'misc',
+        });
+        newRegistry.registerMacro('openvault_world', {
+            handler: () => cachedContent.world,
+            description: 'OpenVault injected world info content',
+            category: 'misc',
+        });
+    } else if (context.registerMacro) {
+        // Legacy API (pre-1.16.0) — accepts (name, fn) directly
+        context.registerMacro('openvault_memory', () => cachedContent.memory);
+        context.registerMacro('openvault_world', () => cachedContent.world);
+    }
 }
 
 // Auto-initialize on import

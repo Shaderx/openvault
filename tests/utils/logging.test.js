@@ -171,7 +171,7 @@ describe('logging', () => {
             expect(mockConsole.log).not.toHaveBeenCalled();
         });
 
-        it('logs grouped output when requestLogging is enabled', () => {
+        it('logs compact summary on success when requestLogging is enabled', () => {
             const groupCollapsed = vi.fn();
             const groupEnd = vi.fn();
             setDeps({
@@ -179,13 +179,16 @@ describe('logging', () => {
                 getExtensionSettings: () => ({ [extensionName]: { requestLogging: true } }),
             });
             logRequest('Extraction', { messages: ['m1'], maxTokens: 200, profileId: 'p2', response: 'ok' });
-            expect(groupCollapsed).toHaveBeenCalledWith('[OpenVault] ✅ Extraction — OK');
+            expect(groupCollapsed).toHaveBeenCalledWith('[OpenVault] ✅ Extraction — OK (2 chars, 1 messages)');
             expect(mockConsole.log).toHaveBeenCalledWith('Profile:', 'p2');
-            expect(mockConsole.log).toHaveBeenCalledWith('Response:', 'ok');
+            expect(mockConsole.log).toHaveBeenCalledWith('Max Tokens:', 200);
+            // Successful calls should NOT log full Response or Messages
+            expect(mockConsole.log).not.toHaveBeenCalledWith('Response:', expect.anything());
+            expect(mockConsole.log).not.toHaveBeenCalledWith('Messages:', expect.anything());
             expect(groupEnd).toHaveBeenCalled();
         });
 
-        it('logs error label on failure', () => {
+        it('logs full verbose output on failure', () => {
             const groupCollapsed = vi.fn();
             const groupEnd = vi.fn();
             setDeps({
@@ -193,9 +196,13 @@ describe('logging', () => {
                 getExtensionSettings: () => ({ [extensionName]: { requestLogging: true } }),
             });
             const err = new Error('boom');
-            logRequest('Extraction', { messages: [], maxTokens: 100, profileId: 'p1', error: err });
+            logRequest('Extraction', { messages: ['m1'], maxTokens: 100, profileId: 'p1', response: 'bad output', error: err });
             expect(groupCollapsed).toHaveBeenCalledWith('[OpenVault] ❌ Extraction — FAILED');
+            expect(mockConsole.log).toHaveBeenCalledWith('Profile:', 'p1');
+            expect(mockConsole.log).toHaveBeenCalledWith('Messages:', ['m1']);
+            expect(mockConsole.log).toHaveBeenCalledWith('Response:', 'bad output');
             expect(mockConsole.error).toHaveBeenCalledWith('Error:', err);
+            expect(groupEnd).toHaveBeenCalled();
         });
     });
 });

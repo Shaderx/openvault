@@ -15,7 +15,7 @@
 /** @typedef {import('../types').ScoringSettings} ScoringSettings */
 /** @typedef {import('../types').IDFCache} IDFCache */
 
-import { OVER_FETCH_MULTIPLIER } from '../constants.js';
+import { DEBUG_TRIMMED_CANDIDATES, OVER_FETCH_MULTIPLIER } from '../constants.js';
 import { getQueryEmbedding, getStrategy, isEmbeddingsEnabled } from '../embeddings.js';
 import { logDebug } from '../utils/logging.js';
 import { assignMemoriesToBuckets, getMemoryPosition } from '../utils/text.js';
@@ -64,6 +64,7 @@ async function scoreMemoriesDirect(
         vectorSimilarityThreshold: scoringConfig.vectorSimilarityThreshold,
         alpha: scoringConfig.alpha,
         combinedBoostWeight: scoringConfig.combinedBoostWeight,
+        transientDecayMultiplier: scoringConfig.transientDecayMultiplier,
     };
     const scored = await scoreMemories(
         memories,
@@ -231,6 +232,7 @@ async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemor
                 vectorSimilarityThreshold: scoringConfig.vectorSimilarityThreshold,
                 alpha: scoringConfig.alpha,
                 combinedBoostWeight: scoringConfig.combinedBoostWeight,
+                transientDecayMultiplier: scoringConfig.transientDecayMultiplier,
             };
             const scored = await scoreMemories(
                 candidates,
@@ -375,7 +377,13 @@ export async function selectRelevantMemories(memories, ctx) {
     const beforeBuckets = assignMemoriesToBuckets(scoredMemories, ctx.chatLength);
     const afterBuckets = assignMemoriesToBuckets(finalResults, ctx.chatLength);
 
-    const countTokens = (bucket) => bucket.reduce((sum, m) => sum + (m.summary?.length || 0), 0); // Approximation
+    const sumBucketTokens = (bucket) => bucket.reduce((sum, m) => sum + countTokens(m.summary || ''), 0);
+
+    // Capture top trimmed candidates (highest-scoring memories that missed the budget cut)
+    const trimmedCandidates = scoredResults
+        .filter((r) => !selectedIds.has(r.memory.id))
+        .slice(0, DEBUG_TRIMMED_CANDIDATES)
+        .map((r) => ({ id: r.memory.id, score: r.score, summary: r.memory.summary?.slice(0, 120) }));
 
     // Cache token budget utilization and bucket distribution for debug export
     cacheRetrievalDebug({
@@ -384,17 +392,18 @@ export async function selectRelevantMemories(memories, ctx) {
             scoredCount: scoredMemories.length,
             selectedCount: finalResults.length,
             trimmedByBudget: scoredMemories.length - finalResults.length,
+            trimmed_candidates: trimmedCandidates,
         },
         bucketDistribution: {
             before: {
-                old: countTokens(beforeBuckets.old),
-                mid: countTokens(beforeBuckets.mid),
-                recent: countTokens(beforeBuckets.recent),
+                old: sumBucketTokens(beforeBuckets.old),
+                mid: sumBucketTokens(beforeBuckets.mid),
+                recent: sumBucketTokens(beforeBuckets.recent),
             },
             after: {
-                old: countTokens(afterBuckets.old),
-                mid: countTokens(afterBuckets.mid),
-                recent: countTokens(afterBuckets.recent),
+                old: sumBucketTokens(afterBuckets.old),
+                mid: sumBucketTokens(afterBuckets.mid),
+                recent: sumBucketTokens(afterBuckets.recent),
             },
             selectedCount: finalResults.length,
         },

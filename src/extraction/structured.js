@@ -77,14 +77,32 @@ function toJsonSchema(zodSchema, schemaName) {
 }
 
 /**
+ * Wrap a bare string in a JSON object with the specified key.
+ * Some LLMs (especially smaller or quantized models) return a raw string
+ * instead of the expected `{ key: "string" }` object for single-field schemas.
+ *
+ * @param {any} data - The parsed data to check
+ * @param {string} key - The key to wrap the string with
+ * @returns {Object|any} Wrapped object, or original data if not a string
+ */
+function recoverBareString(data, key) {
+    if (typeof data === 'string') {
+        logWarn(`LLM returned bare string, wrapping in ${key}`);
+        return { [key]: data };
+    }
+    return data;
+}
+
+/**
  * Parse LLM response with markdown stripping, thinking tag removal, and Zod validation
  *
  * @param {string} content - Raw LLM response
  * @param {z.ZodType} schema - Zod schema to validate against
+ * @param {Function|null} [recoverFn=null] - Optional pre-validation transform (e.g. bare-string recovery)
  * @returns {Object} Validated parsed data
  * @throws {Error} If JSON parsing or validation fails
  */
-function parseStructuredResponse(content, schema) {
+function parseStructuredResponse(content, schema, recoverFn = null) {
     // Use safeParseJSON with new API (handles thinking tags and markdown internally)
     const result = safeParseJSON(content);
     if (!result.success) {
@@ -100,6 +118,11 @@ function parseStructuredResponse(content, schema) {
 
     let parsed = result.data;
 
+    // Apply recovery function before array unwrapping (e.g. bare-string → object)
+    if (recoverFn) {
+        parsed = recoverFn(parsed);
+    }
+
     // Array recovery — unwrap bare arrays to first element
     if (Array.isArray(parsed)) {
         if (parsed.length === 0) {
@@ -107,6 +130,11 @@ function parseStructuredResponse(content, schema) {
         }
         logWarn(`LLM returned ${parsed.length}-element array instead of object — unwrapping first element`);
         parsed = parsed[0];
+    }
+
+    // Re-apply recovery after array unwrapping (bare string may emerge from [\"string\"])
+    if (recoverFn) {
+        parsed = recoverFn(parsed);
     }
 
     const schemaResult = schema.safeParse(parsed);
@@ -367,7 +395,7 @@ export function getGlobalSynthesisJsonSchema() {
  * @returns {Object} Validated global synthesis with global_summary
  */
 export function parseGlobalSynthesisResponse(content) {
-    return parseStructuredResponse(content, GlobalSynthesisSchema);
+    return parseStructuredResponse(content, GlobalSynthesisSchema, (data) => recoverBareString(data, 'global_summary'));
 }
 
 // --- Edge Consolidation Schema ---
@@ -393,5 +421,7 @@ export function getEdgeConsolidationJsonSchema() {
  * @returns {Object} Validated consolidation response
  */
 export function parseConsolidationResponse(content) {
-    return parseStructuredResponse(content, EdgeConsolidationSchema);
+    return parseStructuredResponse(content, EdgeConsolidationSchema, (data) =>
+        recoverBareString(data, 'consolidated_description')
+    );
 }
