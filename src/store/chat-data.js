@@ -168,7 +168,7 @@ export async function deleteMemory(id) {
  * Update an entity's fields. Handles rename by rewriting edges and merge redirects.
  * @param {string} key - Current normalized entity key
  * @param {Object} updates - { name?, type?, description?, aliases? }
- * @returns {Promise<{key: string, stChanges?: {toDelete: string[]}}|null>} Result with new key and optional ST Vector changes, null on failure
+ * @returns {Promise<{key: string, stChanges?: {toDelete: {hash: number}[]}}|null>} Result with new key and optional ST Vector changes, null on failure
  */
 export async function updateEntity(key, updates) {
     const { saveChatConditional } = getDeps();
@@ -199,8 +199,7 @@ export async function updateEntity(key, updates) {
             // Calculate hash using same format as insertion in graph.js:486:
             // [OV_ID:key] description (no fallback to name)
             const text = `[OV_ID:${key}] ${node.description}`;
-            const hash = cyrb53(text).toString();
-            toDelete.push(hash);
+            toDelete.push({ hash: cyrb53(text) });
         }
 
         // Create new node with updated fields
@@ -235,7 +234,7 @@ export async function updateEntity(key, updates) {
 
                 // Queue old edge for ST Vector deletion if synced
                 if (edge._st_synced) {
-                    toDelete.push(cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`).toString());
+                    toDelete.push({ hash: cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`) });
                 }
 
                 delete graph.edges[edgeKey];
@@ -292,7 +291,7 @@ export async function updateEntity(key, updates) {
  * Delete an entity and all its edges and merge redirects.
  * Also deletes from ST Vector storage if _st_synced to prevent orphan embeddings.
  * @param {string} key - Normalized entity key
- * @returns {Promise<{success: boolean, stChanges?: {toDelete: string[]}}>}
+ * @returns {Promise<{success: boolean, stChanges?: {toDelete: {hash: number}[]}}>}
  */
 export async function deleteEntity(key) {
     const { saveChatConditional } = getDeps();
@@ -310,8 +309,7 @@ export async function deleteEntity(key) {
         // Calculate hash using same format as insertion in graph.js:486:
         // [OV_ID:key] description (no fallback to name)
         const text = `[OV_ID:${key}] ${node.description}`;
-        const hash = cyrb53(text).toString();
-        toDelete.push(hash);
+        toDelete.push({ hash: cyrb53(text) });
     }
 
     // Delete the node
@@ -499,7 +497,7 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
         // Self-loop check: delete if would be target->target
         if (newSource === newTarget) {
             if (edge._st_synced) {
-                toDelete.push(cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`).toString());
+                toDelete.push({ hash: cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`) });
             }
             delete g.edges[oldKey];
             continue;
@@ -537,14 +535,14 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
 
             // Collect hash for old edge deletion
             if (edge._st_synced) {
-                toDelete.push(cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`).toString());
+                toDelete.push({ hash: cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`) });
             }
 
             delete g.edges[oldKey];
         } else if (newKey !== oldKey) {
             // No collision: rewrite edge
             if (edge._st_synced) {
-                toDelete.push(cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`).toString());
+                toDelete.push({ hash: cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`) });
             }
             edge.source = newSource;
             edge.target = newTarget;
@@ -557,7 +555,7 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
     // 4. Cleanup
     // Collect hash for source node deletion
     if (sourceNode._st_synced) {
-        toDelete.push(cyrb53(`[OV_ID:${sourceKey}] ${sourceNode.description}`).toString());
+        toDelete.push({ hash: cyrb53(`[OV_ID:${sourceKey}] ${sourceNode.description}`) });
     }
 
     delete g.nodes[sourceKey];

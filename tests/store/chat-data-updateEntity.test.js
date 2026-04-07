@@ -100,6 +100,8 @@ describe('updateEntity', () => {
         expect(result.key).toBe(newKey);
         expect(result.stChanges?.toDelete).toBeDefined();
         expect(result.stChanges.toDelete.length).toBe(1);
+        expect(result.stChanges.toDelete[0]).toHaveProperty('hash');
+        expect(typeof result.stChanges.toDelete[0].hash).toBe('number');
     });
 
     it('should update existing redirects that point to oldKey on rename', async () => {
