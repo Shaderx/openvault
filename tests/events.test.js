@@ -450,8 +450,8 @@ describe('onChatChanged migration', () => {
         const { onChatChanged } = await import('../src/events.js');
         await onChatChanged();
 
-        // Should have migrated to fingerprint
-        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(2);
+        // Should have migrated through v2 and v3
+        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(3);
         expect(mockContext.chatMetadata[METADATA_KEY][PROCESSED_MESSAGES_KEY]).toContain('1000000');
         expect(mockToast).toHaveBeenCalledWith('info', expect.stringContaining('optimized'), 'Data Migration', {});
     });
