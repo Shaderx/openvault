@@ -32,23 +32,36 @@ export function filterMemories(memories, typeFilter, characterFilter) {
 }
 
 /**
- * Filter entities by type and search query.
- * @param {Array} entities - Array of { name, type, description, mentions }
- * @param {string} typeFilter - Entity type (PERSON, PLACE, etc.) or "" for all
- * @param {string} searchQuery - Text search on name/description (case-insensitive)
- * @returns {Array} Filtered entities
+ * Filter entities based on search query and type filter
+ * @param {Object} graph - Graph object with nodes (from data.graph)
+ * @param {string} query - Search query
+ * @param {string} typeFilter - Entity type to filter by (or empty for all)
+ * @returns {Array<[string, Object]>} Array of [key, entity] tuples
  */
-export function filterEntities(entities, typeFilter, searchQuery) {
-    const query = searchQuery.toLowerCase();
-    return entities.filter((e) => {
-        if (typeFilter && e.type !== typeFilter) return false;
-        if (query) {
-            const name = (e.name || '').toLowerCase();
-            const desc = (e.description || '').toLowerCase();
-            if (!name.includes(query) && !desc.includes(query)) return false;
-        }
-        return true;
-    });
+export function filterEntities(graph, query, typeFilter) {
+    const normalizedQuery = query.toLowerCase().trim();
+
+    return Object.entries(graph?.nodes || {})
+        .filter(([, entity]) => {
+            // Type filter
+            if (typeFilter && entity.type !== typeFilter) {
+                return false;
+            }
+
+            // Search query - check name, description, and aliases
+            if (!normalizedQuery) {
+                return true;
+            }
+
+            const name = (entity.name || '').toLowerCase();
+            const desc = (entity.description || '').toLowerCase();
+            const aliases = (entity.aliases || []).join(' ').toLowerCase();
+
+            return name.includes(normalizedQuery) ||
+                   desc.includes(normalizedQuery) ||
+                   aliases.includes(normalizedQuery);
+        })
+        .sort((a, b) => (b[1].mentions || 0) - (a[1].mentions || 0));
 }
 
 /**

@@ -370,15 +370,13 @@ function renderEntityList() {
     const $count = $('#openvault_entity_count');
     const data = getOpenVaultData();
 
-    const nodes = data?.graph?.nodes || {};
-    const allEntities = Object.values(nodes);
-
+    const graph = data?.graph || {};
     const typeFilter = $('#openvault_entity_type_filter').val() || '';
     const searchQuery = $('#openvault_entity_search').val()?.toLowerCase().trim() || '';
 
-    const filtered = filterEntities(allEntities, typeFilter, searchQuery);
+    const filtered = filterEntities(graph, searchQuery, typeFilter);
 
-    $count.text(allEntities.length);
+    $count.text(Object.keys(graph?.nodes || {}).length);
 
     if (filtered.length === 0) {
         const msg = searchQuery || typeFilter ? 'No entities match your filters' : 'No entities extracted yet';
@@ -386,7 +384,9 @@ function renderEntityList() {
         return;
     }
 
-    const html = filtered.map(renderEntityCard).join('');
+    const html = filtered
+        .map(([key, entity]) => renderEntityCard(entity, key))
+        .join('');
     $container.html(html);
 }
 

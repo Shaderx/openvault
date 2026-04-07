@@ -93,51 +93,117 @@ describe('ui/helpers', () => {
     });
 
     describe('filterEntities', () => {
-        const entities = [
-            { name: 'King Aldric', type: 'PERSON', description: 'The aging ruler', mentions: 7 },
-            { name: 'Castle', type: 'PLACE', description: 'Ancient fortress', mentions: 3 },
-            { name: 'Royal Guard', type: 'ORGANIZATION', description: 'Elite soldiers', mentions: 5 },
-            { name: 'Magic Sword', type: 'OBJECT', description: 'Legendary blade', mentions: 2 },
-        ];
+        const mockGraph = {
+            nodes: {
+                aldric: { name: 'King Aldric', type: 'PERSON', description: 'The aging ruler', mentions: 7 },
+                castle: { name: 'Castle', type: 'PLACE', description: 'Ancient fortress', mentions: 3 },
+                guard: { name: 'Royal Guard', type: 'ORGANIZATION', description: 'Elite soldiers', mentions: 5 },
+                sword: { name: 'Magic Sword', type: 'OBJECT', description: 'Legendary blade', mentions: 2 },
+            },
+        };
 
         it('returns all entities when no filters', () => {
-            expect(filterEntities(entities, '', '')).toHaveLength(4);
+            expect(filterEntities(mockGraph, '', '')).toHaveLength(4);
         });
 
         it('filters by type', () => {
-            const result = filterEntities(entities, 'PERSON', '');
+            const result = filterEntities(mockGraph, '', 'PERSON');
             expect(result).toHaveLength(1);
-            expect(result[0].name).toBe('King Aldric');
+            expect(result[0][1].name).toBe('King Aldric');
+            expect(result[0][0]).toBe('aldric');
         });
 
         it('filters by search query (name)', () => {
-            const result = filterEntities(entities, '', 'castle');
+            const result = filterEntities(mockGraph, 'castle', '');
             expect(result).toHaveLength(1);
-            expect(result[0].name).toBe('Castle');
+            expect(result[0][1].name).toBe('Castle');
         });
 
         it('filters by search query (description)', () => {
-            const result = filterEntities(entities, '', 'legendary');
+            const result = filterEntities(mockGraph, 'legendary', '');
             expect(result).toHaveLength(1);
-            expect(result[0].name).toBe('Magic Sword');
+            expect(result[0][1].name).toBe('Magic Sword');
         });
 
         it('combines type and search filters', () => {
-            const result = filterEntities(entities, 'PERSON', 'aldric');
+            const result = filterEntities(mockGraph, 'aldric', 'PERSON');
             expect(result).toHaveLength(1);
         });
 
         it('returns empty for no matches', () => {
-            expect(filterEntities(entities, '', 'nonexistent')).toHaveLength(0);
+            expect(filterEntities(mockGraph, 'nonexistent', '')).toHaveLength(0);
         });
 
-        it('handles empty array', () => {
-            expect(filterEntities([], '', '')).toHaveLength(0);
+        it('handles empty graph', () => {
+            expect(filterEntities({}, '', '')).toHaveLength(0);
+        });
+
+        it('handles null/undefined graph', () => {
+            expect(filterEntities(null, '', '')).toHaveLength(0);
+            expect(filterEntities(undefined, '', '')).toHaveLength(0);
         });
 
         it('search is case-insensitive', () => {
-            const result = filterEntities(entities, '', 'KING');
+            const result = filterEntities(mockGraph, 'KING', '');
             expect(result).toHaveLength(1);
+        });
+
+        it('sorts by mentions descending', () => {
+            const result = filterEntities(mockGraph, '', '');
+            expect(result[0][0]).toBe('aldric');   // 7 mentions
+            expect(result[1][0]).toBe('guard');     // 5 mentions
+            expect(result[2][0]).toBe('castle');    // 3 mentions
+            expect(result[3][0]).toBe('sword');     // 2 mentions
+        });
+
+        it('searches aliases', () => {
+            const graphWithAliases = {
+                nodes: {
+                    marcus: {
+                        name: 'Marcus Hale',
+                        type: 'PERSON',
+                        description: 'A former soldier',
+                        aliases: ['masked figure', 'the stranger'],
+                        mentions: 1,
+                    },
+                    tavern: {
+                        name: 'The Tavern',
+                        type: 'PLACE',
+                        description: 'A drinking establishment',
+                        aliases: [],
+                        mentions: 2,
+                    },
+                },
+            };
+            const result = filterEntities(graphWithAliases, 'masked figure', '');
+            expect(result).toHaveLength(1);
+            expect(result[0][0]).toBe('marcus');
+        });
+
+        it('searches partial alias match', () => {
+            const graphWithAliases = {
+                nodes: {
+                    marcus: {
+                        name: 'Marcus Hale',
+                        type: 'PERSON',
+                        description: 'A former soldier',
+                        aliases: ['masked figure', 'the stranger'],
+                        mentions: 1,
+                    },
+                },
+            };
+            const result = filterEntities(graphWithAliases, 'stranger', '');
+            expect(result).toHaveLength(1);
+            expect(result[0][0]).toBe('marcus');
+        });
+
+        it('handles missing aliases gracefully', () => {
+            const graphNoAliases = {
+                nodes: {
+                    item: { name: 'Item', type: 'OBJECT', description: 'A thing', mentions: 1 },
+                },
+            };
+            expect(filterEntities(graphNoAliases, 'thing', '')).toHaveLength(1);
         });
     });
 
