@@ -47,6 +47,21 @@ Elements:
 
 The `data-key` attribute uses the entity's graph key (the normalized name used in `graphData.nodes`).
 
+**Embedding pending badge:** If `!hasEmbedding(entity)`, show the existing `pending-embed` badge (yellow rotate icon) next to the type badge — same pattern used for memories. This signals to the user why the background worker is re-embedding after an edit.
+
+## Entity Search — Alias Support
+
+Update `filterEntities()` in `src/ui/helpers.js` to include aliases in the search match:
+
+```js
+// Current: checks name and description only
+// Add: include aliases in the search
+const aliases = (e.aliases || []).join(' ').toLowerCase();
+if (!name.includes(query) && !desc.includes(query) && !aliases.includes(query)) return false;
+```
+
+This ensures that searching "masked figure" finds "Marcus Hale" if that alias was added.
+
 ## Entity Card — Edit Mode
 
 New `renderEntityEdit(entity)` function in `src/ui/templates.js`. Follows the memory edit pattern — the view-mode card is replaced in-place with the edit form, and swapped back on save/cancel.
@@ -69,7 +84,7 @@ Fields:
 - **Name** — text input, pre-filled with `entity.name`
 - **Type** — select dropdown with the 5 entity types
 - **Description** — textarea, pre-filled with `entity.description`
-- **Aliases** — chip list with × remove buttons, plus an input + "Add" button for new aliases
+- **Aliases** — chip list with × remove buttons, plus an input + "Add" button for new aliases. Placeholder text: `"e.g. The Stranger, Masked Figure..."` to guide users.
 
 Actions:
 - **Cancel** — calls `cancelEntityEdit(key)`, replaces edit form with `renderEntityCard(entity)`
@@ -85,26 +100,32 @@ Algorithm in `updateEntity()`:
 1. Normalize the new name → newKey
 2. If newKey === oldKey: simple field update (no edge rewrite needed)
 3. If newKey !== oldKey:
-   a. Create graphData.nodes[newKey] = copy of old node with updated fields
-   b. Delete graphData.nodes[oldKey]
-   c. For each edge in graphData.edges:
+   a. **Collision check**: if graphData.nodes[newKey] already exists,
+      abort and return null. Show toast:
+      "An entity named '{newName}' already exists. Merging is coming in a future update."
+   b. Create graphData.nodes[newKey] = copy of old node with updated fields
+   c. Delete graphData.nodes[oldKey]
+   d. For each edge in graphData.edges:
       - If edge.source === oldKey: rewrite to newKey
       - If edge.target === oldKey: rewrite to newKey
       - Delete old edge key, insert under new composite key
-   d. Set graphData._mergeRedirects[oldKey] = newKey
-   e. Invalidate embedding on the node
+   e. Set graphData._mergeRedirects[oldKey] = newKey
+   f. Call deleteEmbedding(node) — clears embedding, embedding_b64, _st_synced
 4. Save
 ```
 
-The `_mergeRedirects` entry ensures that any future extraction output referencing the old name resolves to the new key via the existing `_resolveKey()` function.
+**Collision blocker:** Phase 1 blocks renames to existing entity names. This prevents silently overwriting an existing node. Entity merging (Phase 2) will handle this case properly.
+
+The `_mergeRedirects` entry ensures that any future extraction output referencing the old name resolves to the new key via the existing `_resolveKey()` function. `deleteEmbedding()` (from `src/utils/embedding-codec.js`) clears `embedding`, `embedding_b64`, and `_st_synced`, ensuring the vector store re-syncs on the next cycle.
 
 ## Entity Deletion
 
 Triggered by the delete button on the view-mode card.
 
 Flow:
-1. `confirm('Delete entity "{name}" and all its relationships?')` — browser confirm dialog
-2. Call `deleteEntity(key)` from `src/store/chat-data.js`
+1. Count edges for this entity (`edges.filter(e => e.source === key || e.target === key).length`)
+2. `confirm('Delete "{name}"? This will also remove ${edgeCount} connected relationship(s).')` — browser confirm dialog with edge count
+3. Call `deleteEntity(key)` from `src/store/chat-data.js`
 3. Implementation:
    - Delete `graphData.nodes[key]`
    - Scan `graphData.edges`, remove any edge where `source === key` or `target === key`
@@ -210,8 +231,9 @@ $container.on('click', '.openvault-add-alias', (e) => {
 |---|---|
 | `templates/settings_panel.html` | Replace World tab with Entities tab + Communities tab |
 | `src/store/chat-data.js` | Add `updateEntity()`, `deleteEntity()` |
-| `src/ui/templates.js` | Update `renderEntityCard()` (add buttons + aliases), add `renderEntityEdit()` |
+| `src/ui/templates.js` | Update `renderEntityCard()` (add buttons + aliases + pending-embed badge), add `renderEntityEdit()` |
 | `src/ui/render.js` | Add entity edit/delete/alias event bindings, update `renderEntityList()` |
+| `src/ui/helpers.js` | Update `filterEntities()` to include aliases in search |
 | `css/world.css` → `css/entities.css` | Rename file, add styles for alias chips, edit form, action buttons |
 | `tests/ui/world-structure.test.js` | Update selectors from `data-tab="world"` to `data-tab="entities"` / `data-tab="communities"` |
 | `tests/store/chat-data.test.js` | Add tests for `updateEntity()` (including rename + edge rewrite), `deleteEntity()` |
@@ -249,4 +271,8 @@ Unit tests in `tests/store/chat-data.test.js` for store methods, `tests/ui/` for
 9. **Alias chips render** — edit form shows existing aliases as removable chips
 10. **Entity edit cancel** — reverts to view mode, no data written
 11. **Empty name validation** — save rejected if name is blank
-12. **Tab structure** — Entities and Communities tabs exist, World tab gone
+12. **Rename collision** — rename to existing key blocked, returns null
+13. **Alias search** — `filterEntities` finds entity by alias text
+14. **Embedding pending badge** — card shows badge when embedding missing
+15. **Delete confirm shows edge count** — confirm message includes edge count
+16. **Tab structure** — Entities and Communities tabs exist, World tab gone
