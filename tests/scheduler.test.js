@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../src/constants.js';
+import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY, SWIPE_PROTECTION_TAIL_MESSAGES } from '../src/constants.js';
 import {
     getBackfillMessageIds,
     getBackfillStats,
@@ -8,6 +8,7 @@ import {
     getProcessedFingerprints,
     getUnextractedMessageIds,
     isBatchReady,
+    trimTailTurns,
 } from '../src/extraction/scheduler.js';
 
 // Timestamp counter for test messages
@@ -409,5 +410,78 @@ describe('getBackfillMessageIds (token-based)', () => {
         const result = getBackfillMessageIds(chat, {}, 10000);
         expect(result.batchCount).toBe(0);
         expect(result.messageIds).toEqual([]);
+    });
+});
+
+describe('trimTailTurns', () => {
+    it('trims 1 turn from a 5-turn snapped batch', () => {
+        // 5 turns: U,B, U,B, U,B, U,B, U,B
+        const chat = makeChat([
+            ['u1', true], ['b1', false],
+            ['u2', true], ['b2', false],
+            ['u3', true], ['b3', false],
+            ['u4', true], ['b4', false],
+            ['u5', true], ['b5', false],
+        ]);
+        const ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        const result = trimTailTurns(chat, ids, 1);
+        // Turn 5 (ids 8,9) trimmed → [0..7]
+        expect(result).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    });
+
+    it('returns original when turnsToTrim is 0', () => {
+        const chat = makeChat([['u1', true], ['b1', false]]);
+        const ids = [0, 1];
+        const result = trimTailTurns(chat, ids, 0);
+        expect(result).toBe(ids); // Same reference
+    });
+
+    it('returns original when trimming would empty the batch', () => {
+        // Single turn: U, B — trimming 1 turn would empty it
+        const chat = makeChat([['u1', true], ['b1', false]]);
+        const ids = [0, 1];
+        const result = trimTailTurns(chat, ids, 1);
+        expect(result).toBe(ids); // Same reference, not trimmed
+    });
+
+    it('returns original when messageIds is empty', () => {
+        const result = trimTailTurns([], [], 1);
+        expect(result).toEqual([]);
+    });
+
+    it('handles multi-message turns (U,U,B,B counts as 1 turn)', () => {
+        // Turn 1: U, U, B, B
+        // Turn 2: U, B
+        const chat = makeChat([
+            ['u1', true], ['u2', true], ['b1', false], ['b2', false],
+            ['u3', true], ['b3', false],
+        ]);
+        const ids = [0, 1, 2, 3, 4, 5];
+        const result = trimTailTurns(chat, ids, 1);
+        // Turn 2 (ids 4,5) trimmed → [0..3]
+        expect(result).toEqual([0, 1, 2, 3]);
+    });
+
+    it('trims 2 turns from a 4-turn batch', () => {
+        const chat = makeChat([
+            ['u1', true], ['b1', false],
+            ['u2', true], ['b2', false],
+            ['u3', true], ['b3', false],
+            ['u4', true], ['b4', false],
+        ]);
+        const ids = [0, 1, 2, 3, 4, 5, 6, 7];
+        const result = trimTailTurns(chat, ids, 2);
+        // Turns 3+4 (ids 4..7) trimmed → [0..3]
+        expect(result).toEqual([0, 1, 2, 3]);
+    });
+
+    it('returns original when chat has only user messages (no Bot→User boundary)', () => {
+        const chat = makeChat([
+            ['u1', true], ['u2', true], ['u3', true],
+        ]);
+        const ids = [0, 1, 2];
+        const result = trimTailTurns(chat, ids, 1);
+        // No bot message → no turn boundary found → can't trim → return original
+        expect(result).toBe(ids);
     });
 });

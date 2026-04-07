@@ -5,7 +5,7 @@
  * Determines which messages need extracting and whether batches are ready.
  */
 
-import { PROCESSED_MESSAGES_KEY } from '../constants.js';
+import { PROCESSED_MESSAGES_KEY, SWIPE_PROTECTION_TAIL_MESSAGES } from '../constants.js';
 import { cyrb53 } from '../utils/embedding-codec.js';
 import { getMessageTokenCount, getTokenSum, snapToTurnBoundary } from '../utils/tokens.js';
 
@@ -76,6 +76,53 @@ export function isBatchReady(chat, data, tokenBudget) {
     const processedFps = getProcessedFingerprints(data);
     const unextractedIds = getUnextractedMessageIds(chat, processedFps);
     return getTokenSum(chat, unextractedIds) >= tokenBudget;
+}
+
+/**
+ * Trim N complete turns from the tail of a snapped batch.
+ * A "turn" ends at a Bot→User boundary (bot message followed by user message or end of chat).
+ * Returns the trimmed array, or the original if trimming would empty it.
+ * @param {Object[]} chat - Full chat messages array
+ * @param {number[]} messageIds - Ordered message indices to trim
+ * @param {number} turnsToTrim - Number of complete turns to remove from tail
+ * @returns {number[]} Trimmed message IDs, or original if trim would empty it
+ */
+export function trimTailTurns(chat, messageIds, turnsToTrim) {
+    if (turnsToTrim <= 0 || messageIds.length === 0) return messageIds;
+
+    let cutIndex = messageIds.length;
+    let turnsFound = 0;
+
+    for (let i = messageIds.length - 1; i >= 0; i--) {
+        const id = messageIds[i];
+        const msg = chat[id];
+        const nextInChat = chat[id + 1];
+
+        // Bot→User boundary (same logic as snapToTurnBoundary)
+        if (msg && !msg.is_user && (!nextInChat || nextInChat.is_user)) {
+            turnsFound++;
+            if (turnsFound === turnsToTrim) {
+                // Walk back to find the start of this turn (first user message in the sequence)
+                cutIndex = i;
+                for (let j = i - 1; j >= 0; j--) {
+                    const prevMsg = chat[messageIds[j]];
+                    if (prevMsg && prevMsg.is_user) {
+                        cutIndex = j;
+                    } else {
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    // If no boundaries found, return original
+    if (turnsFound === 0) return messageIds;
+
+    // If trimming would empty the batch, return original (protect start-of-chat)
+    const trimmed = messageIds.slice(0, cutIndex);
+    return trimmed.length > 0 ? trimmed : messageIds;
 }
 
 /**
