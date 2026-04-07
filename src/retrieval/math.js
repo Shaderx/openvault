@@ -249,7 +249,11 @@ export function calculateScore(
     // === Forgetfulness Curve ===
     // Use message distance (narrative time) instead of timestamp
     const messageIds = memory.message_ids || [0];
-    const maxMessageId = Math.max(...messageIds);
+    let maxMessageId = -Infinity;
+    for (let i = 0; i < messageIds.length; i++) {
+        if (messageIds[i] > maxMessageId) maxMessageId = messageIds[i];
+    }
+    if (!isFinite(maxMessageId)) maxMessageId = 0;
     const distance = Math.max(0, chatLength - maxMessageId);
 
     // Get importance (1-5, default 3)
@@ -453,7 +457,13 @@ export async function scoreMemories(
 
     // Apply exact phrase boost: flat additive score for matching phrases
     // Use max IDF as phrase weight (phrases are highly specific)
-    const maxIDF = idfMap ? Math.max(...idfMap.values()) : Math.log(idfCorpus.length + 1);
+    let maxIDF = idfMap ? -Infinity : Math.log(idfCorpus.length + 1);
+    if (idfMap) {
+        for (const val of idfMap.values()) {
+            if (val > maxIDF) maxIDF = val;
+        }
+    }
+    if (!isFinite(maxIDF)) maxIDF = Math.log(idfCorpus.length + 1);
 
     for (let i = 0; i < memories.length; i++) {
         if (exactPhrases.length === 0) break;
@@ -468,7 +478,10 @@ export async function scoreMemories(
     }
 
     // Batch-max normalize BM25 to [0, 1] for alpha-blend scoring
-    const maxBM25 = Math.max(...rawBM25Scores, 1e-9);
+    let maxBM25 = 1e-9;
+    for (let i = 0; i < rawBM25Scores.length; i++) {
+        if (rawBM25Scores[i] > maxBM25) maxBM25 = rawBM25Scores[i];
+    }
     const normalizedBM25Scores = rawBM25Scores.map((s) => s / maxBM25);
 
     // ===== TWO-PASS RETRIEVAL OPTIMIZATION =====
