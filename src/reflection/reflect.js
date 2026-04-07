@@ -14,6 +14,7 @@
  */
 
 import {
+    defaultSettings,
     extensionName,
     REFLECTION_CANDIDATE_LIMIT,
     REFLECTION_DEDUP_REJECT_THRESHOLD,
@@ -292,7 +293,17 @@ export async function generateReflections(characterName, allMemories, characterS
             character: characterName,
             source_ids: eventEvidenceIds, // Event IDs used as source
             parent_ids: reflectionEvidenceIds, // Reflection IDs synthesized (empty for level 1)
-            level: hasReflectionEvidence ? 2 : 1, // Level 2 if synthesizing reflections, else 1
+            level: hasReflectionEvidence
+                ? Math.min(
+                      defaultSettings.maxReflectionLevel,
+                      1 + Math.max(
+                          ...reflectionEvidenceIds.map((id) => {
+                              const parent = candidateSet.find((r) => r.id === id);
+                              return parent?.level || 1;
+                          })
+                      )
+                  )
+                : 1,
             witnesses: [characterName],
             location: null,
             is_secret: false,
