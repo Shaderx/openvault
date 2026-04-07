@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY, SWIPE_PROTECTION_TAIL_MESSAGES } from '../src/constants.js';
+import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../src/constants.js';
 import {
     getBackfillMessageIds,
     getBackfillStats,
@@ -417,11 +417,16 @@ describe('trimTailTurns', () => {
     it('trims 1 turn from a 5-turn snapped batch', () => {
         // 5 turns: U,B, U,B, U,B, U,B, U,B
         const chat = makeChat([
-            ['u1', true], ['b1', false],
-            ['u2', true], ['b2', false],
-            ['u3', true], ['b3', false],
-            ['u4', true], ['b4', false],
-            ['u5', true], ['b5', false],
+            ['u1', true],
+            ['b1', false],
+            ['u2', true],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
+            ['u4', true],
+            ['b4', false],
+            ['u5', true],
+            ['b5', false],
         ]);
         const ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         const result = trimTailTurns(chat, ids, 1);
@@ -430,7 +435,10 @@ describe('trimTailTurns', () => {
     });
 
     it('returns original when turnsToTrim is 0', () => {
-        const chat = makeChat([['u1', true], ['b1', false]]);
+        const chat = makeChat([
+            ['u1', true],
+            ['b1', false],
+        ]);
         const ids = [0, 1];
         const result = trimTailTurns(chat, ids, 0);
         expect(result).toBe(ids); // Same reference
@@ -438,7 +446,10 @@ describe('trimTailTurns', () => {
 
     it('returns original when trimming would empty the batch', () => {
         // Single turn: U, B — trimming 1 turn would empty it
-        const chat = makeChat([['u1', true], ['b1', false]]);
+        const chat = makeChat([
+            ['u1', true],
+            ['b1', false],
+        ]);
         const ids = [0, 1];
         const result = trimTailTurns(chat, ids, 1);
         expect(result).toBe(ids); // Same reference, not trimmed
@@ -453,8 +464,12 @@ describe('trimTailTurns', () => {
         // Turn 1: U, U, B, B
         // Turn 2: U, B
         const chat = makeChat([
-            ['u1', true], ['u2', true], ['b1', false], ['b2', false],
-            ['u3', true], ['b3', false],
+            ['u1', true],
+            ['u2', true],
+            ['b1', false],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
         ]);
         const ids = [0, 1, 2, 3, 4, 5];
         const result = trimTailTurns(chat, ids, 1);
@@ -464,10 +479,14 @@ describe('trimTailTurns', () => {
 
     it('trims 2 turns from a 4-turn batch', () => {
         const chat = makeChat([
-            ['u1', true], ['b1', false],
-            ['u2', true], ['b2', false],
-            ['u3', true], ['b3', false],
-            ['u4', true], ['b4', false],
+            ['u1', true],
+            ['b1', false],
+            ['u2', true],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
+            ['u4', true],
+            ['b4', false],
         ]);
         const ids = [0, 1, 2, 3, 4, 5, 6, 7];
         const result = trimTailTurns(chat, ids, 2);
@@ -477,7 +496,9 @@ describe('trimTailTurns', () => {
 
     it('returns original when chat has only user messages (no Bot→User boundary)', () => {
         const chat = makeChat([
-            ['u1', true], ['u2', true], ['u3', true],
+            ['u1', true],
+            ['u2', true],
+            ['u3', true],
         ]);
         const ids = [0, 1, 2];
         const result = trimTailTurns(chat, ids, 1);
@@ -489,9 +510,12 @@ describe('trimTailTurns', () => {
 describe('getNextBatch swipe protection', () => {
     it('excludes the last turn from extraction', () => {
         const chat = makeChat([
-            [LONG_USER_MESSAGE, true], [LONG_BOT_MESSAGE, false],
-            [LONG_USER_MESSAGE, true], [LONG_BOT_MESSAGE, false],
-            [LONG_USER_MESSAGE, true], [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
         ]);
         // Budget = exact total tokens (402). Accumulation gathers all 6 msgs,
         // snaps to 3 complete turns. Trim removes last turn → turns 1+2 only.
@@ -502,9 +526,12 @@ describe('getNextBatch swipe protection', () => {
 
     it('does not trim when isEmergencyCut is true', () => {
         const chat = makeChat([
-            [LONG_USER_MESSAGE, true], [LONG_BOT_MESSAGE, false],
-            [LONG_USER_MESSAGE, true], [LONG_BOT_MESSAGE, false],
-            [LONG_USER_MESSAGE, true], [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
         ]);
         const batch = getNextBatch(chat, {}, 1, true);
         // Emergency Cut: no trimming, should get all messages
@@ -514,7 +541,8 @@ describe('getNextBatch swipe protection', () => {
 
     it('returns the single turn when only 1 turn exists (trimTailTurns protects it)', () => {
         const chat = makeChat([
-            [LONG_USER_MESSAGE, true], [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
         ]);
         // Budget = exact total tokens for 1 turn. Accumulation gets both msgs,
         // snaps to 1 turn. Trim would empty → helper returns original.
@@ -527,9 +555,12 @@ describe('getNextBatch swipe protection', () => {
 describe('getBackfillMessageIds swipe protection', () => {
     it('excludes the last turn from backfill', () => {
         const chat = makeChat([
-            ['u1', true], ['b1', false],
-            ['u2', true], ['b2', false],
-            ['u3', true], ['b3', false],
+            ['u1', true],
+            ['b1', false],
+            ['u2', true],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
         ]);
         // Budget of 1 token means each message completes a batch.
         // After incomplete-last-batch trim, all messages remain.
@@ -542,9 +573,12 @@ describe('getBackfillMessageIds swipe protection', () => {
 
     it('does not trim when isEmergencyCut is true', () => {
         const chat = makeChat([
-            ['u1', true], ['b1', false],
-            ['u2', true], ['b2', false],
-            ['u3', true], ['b3', false],
+            ['u1', true],
+            ['b1', false],
+            ['u2', true],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
         ]);
         const result = getBackfillMessageIds(chat, {}, 1, true);
         // Emergency Cut: no trimming

@@ -106,7 +106,7 @@ export function trimTailTurns(chat, messageIds, turnsToTrim) {
                 cutIndex = i;
                 for (let j = i - 1; j >= 0; j--) {
                     const prevMsg = chat[messageIds[j]];
-                    if (prevMsg && prevMsg.is_user) {
+                    if (prevMsg?.is_user) {
                         cutIndex = j;
                     } else {
                         break;
