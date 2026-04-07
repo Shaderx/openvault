@@ -359,8 +359,9 @@ export async function deleteCurrentChatData() {
     const chat = context.chat || [];
     let unhiddenCount = 0;
     for (const msg of chat) {
-        if (msg.is_system) {
+        if (msg.openvault_hidden && msg.is_system) {
             msg.is_system = false;
+            delete msg.openvault_hidden;
             unhiddenCount++;
         }
     }

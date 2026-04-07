@@ -157,6 +157,7 @@ export async function hideExtractedMessages() {
         const msg = chat[i];
         if (processedFps.has(getFingerprint(msg)) && !msg.is_system) {
             msg.is_system = true;
+            msg.openvault_hidden = true;
             hiddenCount++;
         }
     }

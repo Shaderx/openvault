@@ -89,6 +89,7 @@ export async function autoHideOldMessages() {
         // Hide
         for (const idx of snapped) {
             chat[idx].is_system = true;
+            chat[idx].openvault_hidden = true;
         }
 
         await getDeps().saveChatConditional();

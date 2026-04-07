@@ -401,6 +401,33 @@ describe('store/chat-data', () => {
                 expect.any(Error)
             );
         });
+
+        it('only unhides messages tagged by OpenVault, preserves ST-native hidden messages', async () => {
+            mockContext.chatMetadata[METADATA_KEY] = {
+                [MEMORIES_KEY]: [{ id: '1' }],
+            };
+            mockContext.chat = [
+                { is_system: false },                         // visible — no change
+                { is_system: true, is_user: true },            // ST-native hidden (e.g. Author's Note)
+                { is_system: true, openvault_hidden: true },  // OpenVault hidden — should unhide
+                { is_system: true },                           // ST-native hidden — should stay hidden
+            ];
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: { debugMode: true },
+                }),
+                saveChatConditional: vi.fn().mockResolvedValue(undefined),
+            });
+
+            await deleteCurrentChatData();
+
+            expect(mockContext.chat[0].is_system).toBe(false);   // unchanged
+            expect(mockContext.chat[1].is_system).toBe(true);     // ST-native preserved
+            expect(mockContext.chat[2].is_system).toBe(false);    // OV-hidden unhid
+            expect(mockContext.chat[3].is_system).toBe(true);     // ST-native preserved
+        });
     });
 
     describe('addMemories', () => {
