@@ -304,21 +304,49 @@ export const InsightExtractionSchema = z.object({
 // --- Unified Reflection Schema ---
 
 /**
- * Schema for unified reflection (single-call: question + insight combined)
- * 1-3 reflections, each with question, insight, and evidence_ids
+ * Regex matching memory/event IDs that should not appear in prose text.
+ * Matches: event_1234_0, ref_5678_1, and variants in parentheses or brackets.
  */
-export const UnifiedReflectionSchema = z.object({
-    reflections: z
-        .array(
-            z.object({
-                question: z.string().min(1, 'Question is required'),
-                insight: z.string().min(1, 'Insight is required'),
-                evidence_ids: z.array(z.string()).default([]),
-            })
-        )
-        .min(1, 'At least 1 reflection required')
-        .max(3, 'Maximum 3 reflections'),
-});
+const MEMORY_ID_PATTERN = /\s*[(（[]?(?:event|ref)_[^\s)）\]]+[)）\]]?/g;
+
+/**
+ * Strip leaked memory/event IDs from reflection prose fields.
+ * Catches patterns like "отказ Артёму (event_1775677567032_0)" and removes the ID part.
+ * @param {string} text - Text that may contain leaked IDs
+ * @returns {string} Cleaned text with IDs removed
+ */
+function stripLeakedIds(text) {
+    return text
+        .replace(MEMORY_ID_PATTERN, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
+/**
+ * Schema for unified reflection (single-call: question + insight combined)
+ * 1-3 reflections, each with question, insight, and evidence_ids.
+ * Question and insight text are post-processed to strip any leaked memory/event IDs.
+ */
+export const UnifiedReflectionSchema = z
+    .object({
+        reflections: z
+            .array(
+                z.object({
+                    question: z.string().min(1, 'Question is required'),
+                    insight: z.string().min(1, 'Insight is required'),
+                    evidence_ids: z.array(z.string()).default([]),
+                })
+            )
+            .min(1, 'At least 1 reflection required')
+            .max(3, 'Maximum 3 reflections'),
+    })
+    .transform((data) => ({
+        reflections: data.reflections.map((r) => ({
+            ...r,
+            question: stripLeakedIds(r.question),
+            insight: stripLeakedIds(r.insight),
+        })),
+    }));
 
 /**
  * Get jsonSchema for unified reflection
