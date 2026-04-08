@@ -434,10 +434,12 @@ export function cleanupCharacterStates(data, validCharNames = []) {
  * @param {Object} _graphNodes - Graph nodes keyed by normalized name (unused, for API compatibility)
  */
 export function updateIDFCache(data, _graphNodes = {}) {
-    const memories = data[MEMORIES_KEY] || [];
+    const allMemories = data[MEMORIES_KEY] || [];
+    // Only include active (non-archived) memories in IDF calculation
+    const memories = allMemories.filter((m) => !m.archived);
     if (memories.length === 0) return;
 
-    // Build tokenized corpus from memory tokens
+    // Build tokenized corpus from active memory tokens
     const tokenizedMemories = new Map();
     for (let i = 0; i < memories.length; i++) {
         const m = memories[i];
@@ -445,7 +447,7 @@ export function updateIDFCache(data, _graphNodes = {}) {
         tokenizedMemories.set(i, m.tokens || tokenize(m.summary || ''));
     }
 
-    // Calculate IDF from memories only (graph descriptions don't have tokens stored)
+    // Calculate IDF from active memories only
     const { idfMap, avgDL } = calculateIDF(memories, tokenizedMemories);
 
     // Convert Map to plain object for JSON serialization
@@ -457,7 +459,7 @@ export function updateIDFCache(data, _graphNodes = {}) {
     };
 
     data.idf_cache = idfCache;
-    logDebug(`IDF cache updated: ${memories.length} memories, avgDL=${avgDL.toFixed(2)}`);
+    logDebug(`IDF cache updated: ${memories.length} active memories, avgDL=${avgDL.toFixed(2)}`);
 }
 
 /**
