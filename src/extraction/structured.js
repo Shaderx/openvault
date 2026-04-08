@@ -325,28 +325,20 @@ function stripLeakedIds(text) {
 /**
  * Schema for unified reflection (single-call: question + insight combined)
  * 1-3 reflections, each with question, insight, and evidence_ids.
- * Question and insight text are post-processed to strip any leaked memory/event IDs.
+ * ID stripping is applied in parseUnifiedReflectionResponse after validation.
  */
-export const UnifiedReflectionSchema = z
-    .object({
-        reflections: z
-            .array(
-                z.object({
-                    question: z.string().min(1, 'Question is required'),
-                    insight: z.string().min(1, 'Insight is required'),
-                    evidence_ids: z.array(z.string()).default([]),
-                })
-            )
-            .min(1, 'At least 1 reflection required')
-            .max(3, 'Maximum 3 reflections'),
-    })
-    .transform((data) => ({
-        reflections: data.reflections.map((r) => ({
-            ...r,
-            question: stripLeakedIds(r.question),
-            insight: stripLeakedIds(r.insight),
-        })),
-    }));
+export const UnifiedReflectionSchema = z.object({
+    reflections: z
+        .array(
+            z.object({
+                question: z.string().min(1, 'Question is required'),
+                insight: z.string().min(1, 'Insight is required'),
+                evidence_ids: z.array(z.string()).default([]),
+            })
+        )
+        .min(1, 'At least 1 reflection required')
+        .max(3, 'Maximum 3 reflections'),
+});
 
 /**
  * Get jsonSchema for unified reflection
@@ -362,7 +354,14 @@ export function getUnifiedReflectionJsonSchema() {
  * @returns {Object} Validated unified reflection with reflections array
  */
 export function parseUnifiedReflectionResponse(content) {
-    return parseStructuredResponse(content, UnifiedReflectionSchema);
+    const result = parseStructuredResponse(content, UnifiedReflectionSchema);
+    return {
+        reflections: result.reflections.map((r) => ({
+            ...r,
+            question: stripLeakedIds(r.question),
+            insight: stripLeakedIds(r.insight),
+        })),
+    };
 }
 
 // --- Community Summary Schema ---
