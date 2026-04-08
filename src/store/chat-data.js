@@ -432,7 +432,7 @@ export function incrementGraphMessageCount(count) {
  * @param {string} sourceKey - Entity to absorb (will be deleted)
  * @param {string} targetKey - Entity that survives
  * @param {Object} graph - The graph object (defaults to current graph from deps)
- * @returns {Promise<{ success: boolean, stChanges?: { toDelete: { hash: number }[] } }>}
+ * @returns {Promise<{ success: boolean, stChanges?: { toDelete: { hash: number }[], toSync?: { hash: number, text: string, item: any }[] } }>}
  */
 export async function mergeEntities(sourceKey, targetKey, graph = null) {
     const { saveChatConditional } = getDeps();
@@ -456,6 +456,7 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
     }
 
     const toDelete = [];
+    const toSync = [];
 
     // 1. Combine node data onto target
     targetNode.mentions += sourceNode.mentions;
@@ -563,11 +564,18 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
     // Invalidate target embedding since description changed
     deleteEmbedding(targetNode);
 
+    // If source or target was synced, queue target for sync
+    // (absorbing a synced entity or updating an already-synced one)
+    if (sourceNode._st_synced || targetNode._st_synced) {
+        const text = `[OV_ID:${targetKey}] ${targetNode.description}`;
+        toSync.push({ hash: cyrb53(text), text, item: targetNode });
+    }
+
     // 5. Save
     await saveChatConditional();
 
     return {
         success: true,
-        stChanges: { toDelete },
+        stChanges: { toDelete, toSync },
     };
 }
