@@ -46,17 +46,19 @@ describe('st-helpers', () => {
         });
 
         it('should clear timeout when promise rejects before timeout', async () => {
+            vi.useRealTimers();
             const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
 
-            // Create a promise that rejects, but catch the rejection to prevent unhandled warning
-            const error = new Error('test error');
-            const rejectingPromise = new Promise((_, reject) => reject(error));
-            rejectingPromise.catch(() => {}); // Prevent unhandled rejection
+            // Defer rejection so it fires after withTimeout sets up its handlers
+            let rejectFn;
+            const rejectingPromise = new Promise((_, reject) => {
+                rejectFn = reject;
+            });
 
             const resultPromise = withTimeout(rejectingPromise, 5000, 'Test');
 
-            // Fast-forward but not enough to trigger timeout
-            await vi.advanceTimersByTimeAsync(100);
+            // Now trigger the rejection — handlers are already attached
+            rejectFn(new Error('test error'));
 
             await expect(resultPromise).rejects.toThrow('test error');
             expect(clearTimeoutSpy).toHaveBeenCalled();

@@ -366,14 +366,14 @@ describe('migration', () => {
                 graph: {
                     nodes: {},
                     edges: {
-                        'edge1': {
+                        edge1: {
                             source: 'A',
                             target: 'B',
                             description: 'Test edge',
                             embedding_b64: 'base64encodedembedding',
                             embedding: [0.1, 0.2, 0.3],
                         },
-                        'edge2': {
+                        edge2: {
                             source: 'B',
                             target: 'C',
                             description: 'Another edge',
@@ -391,10 +391,10 @@ describe('migration', () => {
             expect(result).toBe(2);
 
             // Edge embeddings should be removed
-            expect(data.graph.edges['edge1'].embedding_b64).toBeUndefined();
-            expect(data.graph.edges['edge1'].embedding).toBeUndefined();
-            expect(data.graph.edges['edge2'].embedding_b64).toBeUndefined();
-            expect(data.graph.edges['edge2'].embedding).toBeUndefined();
+            expect(data.graph.edges.edge1.embedding_b64).toBeUndefined();
+            expect(data.graph.edges.edge1.embedding).toBeUndefined();
+            expect(data.graph.edges.edge2.embedding_b64).toBeUndefined();
+            expect(data.graph.edges.edge2.embedding).toBeUndefined();
         });
 
         it('should clear edge embeddings along with other embeddings', async () => {
@@ -414,9 +414,9 @@ describe('migration', () => {
             expect(result).toBe(4);
 
             expect(data.memories[0].embedding_b64).toBeUndefined();
-            expect(data.graph.nodes['Alice'].embedding_b64).toBeUndefined();
-            expect(data.graph.edges['edge1'].embedding_b64).toBeUndefined();
-            expect(data.communities['C1'].embedding_b64).toBeUndefined();
+            expect(data.graph.nodes.Alice.embedding_b64).toBeUndefined();
+            expect(data.graph.edges.edge1.embedding_b64).toBeUndefined();
+            expect(data.communities.C1.embedding_b64).toBeUndefined();
         });
 
         it('should handle empty or missing edges gracefully', async () => {

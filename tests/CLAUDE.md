@@ -19,6 +19,7 @@
 - **Use Factory Builders.** Import `buildMockMemory()` and `buildMockGraphNode()` from `tests/factories.js`. Do not use messy inline objects for structural tests.
 - **Use inline objects for math tests.** When testing scoring logic, inline objects are preferred so the specific numbers being tested are overtly visible.
 - **Use `vi.useFakeTimers()`.** Never wait for real `setTimeout` delays in test suites.
+- **Fake timers + promise rejection = flaky.** Vitest flags unhandled rejections when a promise rejects before `.rejects` can attach a handler under fake timers. Use `vi.useRealTimers()` for tests that don't need timer mocking, or defer rejection via a `rejectFn` callback.
 
 ## STORE TESTS (chat-data)
 - **Always provide `saveChatConditional` in deps.** `setupTestContext({ deps: { saveChatConditional: vi.fn() } })` — updateEntity/deleteEntity call this.

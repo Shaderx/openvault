@@ -564,9 +564,9 @@ describe('getNextBatch swipe protection', () => {
 describe('getNextBatch with all-User messages', () => {
     it('should extract User-only messages during Emergency Cut', () => {
         const chat = makeChat([
-            ['u1', true],   // User
-            ['u2', true],   // User
-            ['u3', true],   // User
+            ['u1', true], // User
+            ['u2', true], // User
+            ['u3', true], // User
         ]);
         const data = makeData();
         const tokenBudget = 100;
@@ -581,8 +581,8 @@ describe('getNextBatch with all-User messages', () => {
 
     it('should handle queue with only User messages gracefully', () => {
         const chat = makeChat([
-            ['u1', true],   // User
-            ['u2', true],   // User
+            ['u1', true], // User
+            ['u2', true], // User
         ]);
         const data = makeData();
         // Set high token count to force extraction

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 describe('selectMemoriesWithSoftBalance', () => {
     it('should select top-scoring memories first (Phase 1)', async () => {
@@ -139,7 +139,7 @@ describe('ST Vector retrieval with graph nodes', () => {
             chatLength: 1000,
             finalTokens: 500,
             graphNodes: {
-                'Alice': { name: 'Alice', description: 'A brave warrior', type: 'PERSON', mentions: 5 },
+                Alice: { name: 'Alice', description: 'A brave warrior', type: 'PERSON', mentions: 5 },
             },
             graphEdges: {},
             allAvailableMemories: memories,

@@ -40,9 +40,7 @@ describe('detectPresentCharactersFromMessages Cyrillic support', () => {
     });
 
     it('should detect Cyrillic character names in messages', () => {
-        mockContext.chat = [
-            { name: 'User', is_user: true, mes: 'Привет Сузи, как дела?', is_system: false }
-        ];
+        mockContext.chat = [{ name: 'User', is_user: true, mes: 'Привет Сузи, как дела?', is_system: false }];
         mockContext.chatMetadata.openvault = {
             [MEMORIES_KEY]: [{ characters_involved: ['Сузи', 'Анна'] }],
             [CHARACTERS_KEY]: { Сузи: { name: 'Сузи' }, Анна: { name: 'Анна' } },
@@ -54,9 +52,7 @@ describe('detectPresentCharactersFromMessages Cyrillic support', () => {
     });
 
     it('should detect Cyrillic names at start of message', () => {
-        mockContext.chat = [
-            { name: 'User', is_user: true, mes: 'Сузи, ты здесь?', is_system: false }
-        ];
+        mockContext.chat = [{ name: 'User', is_user: true, mes: 'Сузи, ты здесь?', is_system: false }];
         mockContext.chatMetadata.openvault = {
             [MEMORIES_KEY]: [{ characters_involved: ['Сузи'] }],
             [CHARACTERS_KEY]: { Сузи: { name: 'Сузи' } },
@@ -68,9 +64,7 @@ describe('detectPresentCharactersFromMessages Cyrillic support', () => {
     });
 
     it('should detect Cyrillic names at end of message', () => {
-        mockContext.chat = [
-            { name: 'User', is_user: true, mes: 'Я говорю с Анна', is_system: false }
-        ];
+        mockContext.chat = [{ name: 'User', is_user: true, mes: 'Я говорю с Анна', is_system: false }];
         mockContext.chatMetadata.openvault = {
             [MEMORIES_KEY]: [{ characters_involved: ['Анна'] }],
             [CHARACTERS_KEY]: { Анна: { name: 'Анна' } },
@@ -82,9 +76,7 @@ describe('detectPresentCharactersFromMessages Cyrillic support', () => {
     });
 
     it('should still work with ASCII names', () => {
-        mockContext.chat = [
-            { name: 'User', is_user: true, mes: 'Hello Alice, how are you?', is_system: false }
-        ];
+        mockContext.chat = [{ name: 'User', is_user: true, mes: 'Hello Alice, how are you?', is_system: false }];
         mockContext.chatMetadata.openvault = {
             [MEMORIES_KEY]: [{ characters_involved: ['Alice', 'Bob'] }],
             [CHARACTERS_KEY]: { Alice: { name: 'Alice' }, Bob: { name: 'Bob' } },

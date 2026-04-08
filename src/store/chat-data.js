@@ -432,7 +432,7 @@ export function incrementGraphMessageCount(count) {
  * @param {string} sourceKey - Entity to absorb (will be deleted)
  * @param {string} targetKey - Entity that survives
  * @param {Object} graph - The graph object (defaults to current graph from deps)
- * @returns {Promise<{ success: boolean, stChanges?: { toDelete: string[] } }>}
+ * @returns {Promise<{ success: boolean, stChanges?: { toDelete: { hash: number }[] } }>}
  */
 export async function mergeEntities(sourceKey, targetKey, graph = null) {
     const { saveChatConditional } = getDeps();

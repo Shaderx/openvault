@@ -4,10 +4,10 @@
  * Retrieves relevant community summaries for injection into the prompt.
  */
 
+import { getSettings } from '../settings.js';
 import { getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { countTokens } from '../utils/tokens.js';
 import { cosineSimilarity } from './math.js';
-import { getSettings } from '../settings.js';
 
 /**
  * Multilingual regex for macro-intent detection.

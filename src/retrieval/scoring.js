@@ -190,26 +190,16 @@ async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemor
         scoringConfig.vectorSimilarityThreshold
     );
 
-    // Build lookup maps for all item types
+    // Build lookup map for memories
     const memoriesById = new Map(memories.map((m) => [m.id, m]));
-    const nodesById = new Map(Object.entries(ctx.graphNodes || {}));
 
     if (stResults && stResults.length > 0) {
         const candidates = [];
         for (let i = 0; i < stResults.length; i++) {
             const result = stResults[i];
-            let item = memoriesById.get(result.id);
-            let itemType = 'memory';
-
-            if (!item) {
-                item = nodesById.get(result.id);
-                itemType = 'node';
-            }
+            const item = memoriesById.get(result.id);
 
             if (!item) continue;
-
-            // Only memories can be scored with BM25 + forgetfulness
-            if (itemType !== 'memory') continue;
 
             item._proxyVectorScore = rankToProxyScore(i, stResults.length);
             candidates.push(item);

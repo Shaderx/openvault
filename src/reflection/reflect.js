@@ -296,12 +296,13 @@ export async function generateReflections(characterName, allMemories, characterS
             level: hasReflectionEvidence
                 ? Math.min(
                       defaultSettings.maxReflectionLevel,
-                      1 + Math.max(
-                          ...reflectionEvidenceIds.map((id) => {
-                              const parent = candidateSet.find((r) => r.id === id);
-                              return parent?.level || 1;
-                          })
-                      )
+                      1 +
+                          Math.max(
+                              ...reflectionEvidenceIds.map((id) => {
+                                  const parent = candidateSet.find((r) => r.id === id);
+                                  return parent?.level || 1;
+                              })
+                          )
                   )
                 : 1,
             witnesses: [characterName],

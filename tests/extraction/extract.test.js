@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../../src/constants.js';
 import { resetDeps } from '../../src/deps.js';
-import { extractAllMessages, extractMemories, runPhase2Enrichment, synthesizeReflections } from '../../src/extraction/extract.js';
+import {
+    extractAllMessages,
+    extractMemories,
+    runPhase2Enrichment,
+    synthesizeReflections,
+} from '../../src/extraction/extract.js';
 
 /**
  * Standard LLM response data for extraction tests.
@@ -447,14 +452,14 @@ describe('synthesizeReflections accumulator reset', () => {
     it('should reset importance_sum even when LLM fails', async () => {
         const data = {
             reflection_state: {
-                'TestCharacter': { importance_sum: 45 }
+                TestCharacter: { importance_sum: 45 },
             },
             memories: [],
-            characters: {}
+            characters: {},
         };
         const settings = {
             reflectionThreshold: 40,
-            maxConcurrency: 1
+            maxConcurrency: 1,
         };
 
         // Mock generateReflections to fail
@@ -483,20 +488,20 @@ describe('synthesizeReflections accumulator reset', () => {
         await synthesizeReflections(data, ['TestCharacter'], settings);
 
         // importance_sum should be reset even though LLM failed
-        expect(data.reflection_state['TestCharacter'].importance_sum).toBe(0);
+        expect(data.reflection_state.TestCharacter.importance_sum).toBe(0);
     });
 
     it('should not retry failed reflection on next call', async () => {
         const data = {
             reflection_state: {
-                'TestCharacter': { importance_sum: 45 }
+                TestCharacter: { importance_sum: 45 },
             },
             memories: [],
-            characters: {}
+            characters: {},
         };
         const settings = {
             reflectionThreshold: 40,
-            maxConcurrency: 1
+            maxConcurrency: 1,
         };
 
         // Mock generateReflections to fail
