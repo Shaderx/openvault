@@ -157,7 +157,7 @@ export function getNextBatch(chat, data, tokenBudget, isEmergencyCut = false) {
     }
 
     // Snap to turn boundary
-    let snapped = snapToTurnBoundary(chat, accumulated);
+    let snapped = snapToTurnBoundary(chat, accumulated, isEmergencyCut);
 
     // If snapping resulted in empty, we need to extend forward through the full turn
     // then re-snap. This handles the edge case where a single huge user message
@@ -172,7 +172,7 @@ export function getNextBatch(chat, data, tokenBudget, isEmergencyCut = false) {
             if (chat[i].is_user) break;
         }
 
-        snapped = snapToTurnBoundary(chat, extended);
+        snapped = snapToTurnBoundary(chat, extended, isEmergencyCut);
     }
 
     // Swipe protection: exclude recent turns from extraction (bypassed for Emergency Cut)

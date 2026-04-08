@@ -29,6 +29,15 @@ function makeChat(messages) {
     return messages.map(([text, isUser]) => makeMessage(isUser, text));
 }
 
+// Helper: create data object with processed messages
+function makeData(overrides = {}) {
+    return {
+        [PROCESSED_MESSAGES_KEY]: [],
+        [MEMORIES_KEY]: [],
+        ...overrides,
+    };
+}
+
 beforeEach(async () => {
     const { clearTokenCache } = await import('../src/utils/tokens.js');
     clearTokenCache();
@@ -549,6 +558,41 @@ describe('getNextBatch swipe protection', () => {
         const batch = getNextBatch(chat, {}, 134);
         expect(batch).not.toBeNull();
         expect(batch).toEqual([0, 1]);
+    });
+});
+
+describe('getNextBatch with all-User messages', () => {
+    it('should extract User-only messages during Emergency Cut', () => {
+        const chat = makeChat([
+            ['u1', true],   // User
+            ['u2', true],   // User
+            ['u3', true],   // User
+        ]);
+        const data = makeData();
+        const tokenBudget = 100;
+        const isEmergencyCut = true;
+
+        const result = getNextBatch(chat, data, tokenBudget, isEmergencyCut);
+
+        // Should return all messages during Emergency Cut, even without Bot messages
+        expect(result).not.toBeNull();
+        expect(result.length).toBe(3);
+    });
+
+    it('should handle queue with only User messages gracefully', () => {
+        const chat = makeChat([
+            ['u1', true],   // User
+            ['u2', true],   // User
+        ]);
+        const data = makeData();
+        // Set high token count to force extraction
+        data.processedFingerprints = new Set();
+
+        const result = getNextBatch(chat, data, 10, false);
+
+        // Should not stall - either return messages or null, not empty array
+        // that causes infinite loop
+        expect(result === null || result.length > 0).toBe(true);
     });
 });
 

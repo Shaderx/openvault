@@ -71,9 +71,10 @@ export function getTokenSum(chat, indices) {
  * Trims backward until a valid boundary is found. Returns [] if none found.
  * @param {Array<{is_user?: boolean}>} chat - Full chat array
  * @param {number[]} messageIds - Ordered message indices to snap
+ * @param {boolean} [allowUserOnly=false] - If true, return accumulated messages even if no Bot→User boundary found (prevents stall)
  * @returns {number[]} Snapped message indices
  */
-export function snapToTurnBoundary(chat, messageIds) {
+export function snapToTurnBoundary(chat, messageIds, allowUserOnly = false) {
     if (messageIds.length === 0) return [];
 
     // Walk backward from the end of the list
@@ -87,6 +88,12 @@ export function snapToTurnBoundary(chat, messageIds) {
         if (lastMsg && !lastMsg.is_user && (!nextInChat || nextInChat.is_user)) {
             return messageIds.slice(0, i + 1);
         }
+    }
+
+    // Fallback: if no Bot→User boundary found and we allow user-only batches,
+    // return the accumulated messages anyway (prevents stall)
+    if (allowUserOnly) {
+        return messageIds;
     }
 
     return [];
