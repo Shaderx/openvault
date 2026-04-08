@@ -94,8 +94,8 @@ describe('selectRelevantMemories with soft balance', () => {
 
         // Mock dependencies - this test verifies structure, actual scoring is mocked
         const result = await selectRelevantMemories([], mockCtx);
-        expect(Array.isArray(result)).toBe(true);
-        expect(result.length).toBe(0); // Empty input = empty output
+        expect(Array.isArray(result.memories)).toBe(true);
+        expect(result.memories.length).toBe(0); // Empty input = empty output
     });
 
     it('should call selectMemoriesWithSoftBalance with scoredResults', async () => {
@@ -119,7 +119,7 @@ describe('selectRelevantMemories with soft balance', () => {
         };
 
         const result = await selectRelevantMemories(memories, mockCtx);
-        expect(Array.isArray(result)).toBe(true);
+        expect(Array.isArray(result.memories)).toBe(true);
     });
 });
 
@@ -179,8 +179,8 @@ describe('ST Vector retrieval with graph nodes', () => {
         // Verify ST Vector was called
         expect(mockStrategy.searchItems).toHaveBeenCalled();
         // Verify memory was retrieved (graph nodes are looked up but not returned in memory results)
-        expect(result.length).toBe(1);
-        expect(result[0].id).toBe('memory1');
+        expect(result.memories.length).toBe(1);
+        expect(result.memories[0].id).toBe('memory1');
 
         vi.restoreAllMocks();
     });

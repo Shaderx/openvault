@@ -38,9 +38,17 @@ export function detectMacroIntent(userMessagesString) {
  * @param {string} userMessagesString - Concatenated user messages for intent detection
  * @param {Float32Array} queryEmbedding - Embedding of current context
  * @param {number} tokenBudget - Max tokens for world context (default: 2000)
+ * @param {string[]|null} stCommunityIds - Pre-selected community IDs from ST Vector scoring
  * @returns {{ text: string, communityIds: string[], isMacroIntent: boolean }}
  */
-export function retrieveWorldContext(communities, globalState, userMessagesString, queryEmbedding, tokenBudget = 2000) {
+export function retrieveWorldContext(
+    communities,
+    globalState,
+    userMessagesString,
+    queryEmbedding,
+    tokenBudget = 2000,
+    stCommunityIds = null
+) {
     // Intent-based routing: check for macro intent first
     if (detectMacroIntent(userMessagesString) && globalState?.summary) {
         return {
@@ -50,18 +58,36 @@ export function retrieveWorldContext(communities, globalState, userMessagesStrin
         };
     }
 
-    // Fall back to existing vector search logic
-    if (!communities || !queryEmbedding) {
+    if (!communities) {
         return { text: '', communityIds: [], isMacroIntent: false };
     }
 
-    // Check if using ST Vector mode - if so, skip local retrieval to avoid duplicate processing
+    // ST Vector mode: use pre-selected community IDs from scoring layer
     const settings = getSettings();
     const isStVectorMode = settings?.embeddingSource === 'st_vector';
 
-    if (isStVectorMode) {
-        // In ST Vector mode, communities are retrieved via the scoring layer
-        // Return empty here to avoid duplicate processing
+    if (isStVectorMode && stCommunityIds && stCommunityIds.length > 0) {
+        const selected = [];
+        let usedTokens = 0;
+        for (const id of stCommunityIds) {
+            const community = communities[id];
+            if (!community?.summary) continue;
+            const entry = formatCommunityEntry(community);
+            const tokens = countTokens(entry);
+            if (usedTokens + tokens > tokenBudget) break;
+            selected.push(entry);
+            usedTokens += tokens;
+        }
+        if (selected.length === 0) return { text: '', communityIds: stCommunityIds, isMacroIntent: false };
+        return {
+            text: '<world_context>\n' + selected.join('\n\n') + '\n</world_context>',
+            communityIds: stCommunityIds,
+            isMacroIntent: false,
+        };
+    }
+
+    // Local mode: requires queryEmbedding for cosine similarity
+    if (!queryEmbedding) {
         return { text: '', communityIds: [], isMacroIntent: false };
     }
 

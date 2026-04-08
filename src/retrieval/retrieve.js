@@ -226,7 +226,8 @@ export function injectContext(contextText, worldText = '') {
 async function selectFormatAndInject(memoriesToUse, data, ctx) {
     const { primaryCharacter, activeCharacters, headerName, finalTokens, chatLength, userMessages } = ctx;
 
-    const relevantMemories = await selectRelevantMemories(memoriesToUse, ctx);
+    const selectionResult = await selectRelevantMemories(memoriesToUse, ctx);
+    const relevantMemories = selectionResult.memories;
 
     if (!relevantMemories || relevantMemories.length === 0) {
         // Clear cachedContent and world context if no memories found
@@ -271,7 +272,8 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
             data.global_world_state || null,
             userMessages || '',
             worldQueryEmbedding, // May be null for st_vector
-            ctx.worldContextBudget
+            ctx.worldContextBudget,
+            selectionResult.communityIds || null // ST Vector community IDs from scoring
         );
         worldText = worldResult.text || '';
         // Cache world context result for debug export

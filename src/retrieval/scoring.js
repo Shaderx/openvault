@@ -93,7 +93,7 @@ async function scoreMemoriesDirect(
  * @param {number} limit - Maximum memories to return
  * @param {Memory[]} [allHiddenMemories] - All hidden memories for IDF corpus
  * @param {IDFCache|null} [idfCache] - Pre-computed IDF cache
- * @returns {Promise<{memories: Memory[], scoredResults: ScoredMemory[]}>}
+ * @returns {Promise<{memories: Memory[], scoredResults: ScoredMemory[], communityIds?: string[]}>}
  */
 async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemories = [], idfCache = null) {
     const { recentContext, userMessages, activeCharacters, chatLength, scoringConfig, queryConfig } = ctx;
@@ -383,10 +383,10 @@ export function selectMemoriesWithSoftBalance(scoredMemories, tokenBudget, chatL
  * Select relevant memories using scoring and token budget
  * @param {Memory[]} memories - Available memories
  * @param {RetrievalContext} ctx - Retrieval context object
- * @returns {Promise<Memory[]>} Selected memories
+ * @returns {Promise<{memories: Memory[], communityIds?: string[]}>} Selected memories and optional community IDs
  */
 export async function selectRelevantMemories(memories, ctx) {
-    if (!memories || memories.length === 0) return [];
+    if (!memories || memories.length === 0) return { memories: [] };
     // Skip archived reflections in retrieval
     const activeMemories = memories.filter((m) => !m.archived);
     const { finalTokens } = ctx;
@@ -395,13 +395,11 @@ export async function selectRelevantMemories(memories, ctx) {
     const candidateIds = new Set(activeMemories.map((m) => m.id));
     const hiddenMemories = (ctx.allAvailableMemories || []).filter((m) => !m.archived && !candidateIds.has(m.id));
 
-    const { memories: scoredMemories, scoredResults } = await selectRelevantMemoriesSimple(
-        activeMemories,
-        ctx,
-        1000,
-        hiddenMemories,
-        ctx.idfCache || null
-    );
+    const {
+        memories: scoredMemories,
+        scoredResults,
+        communityIds,
+    } = await selectRelevantMemoriesSimple(activeMemories, ctx, 1000, hiddenMemories, ctx.idfCache || null);
     const finalResults = selectMemoriesWithSoftBalance(scoredResults, finalTokens, ctx.chatLength);
     const selectedIds = new Set(finalResults.map((m) => m.id));
 
@@ -453,5 +451,5 @@ export async function selectRelevantMemories(memories, ctx) {
     logDebug(
         `Retrieval: ${activeMemories.length} active memories -> ${scoredMemories.length} scored -> ${finalResults.length} after token filter (${finalTokens} budget)`
     );
-    return finalResults;
+    return { memories: finalResults, communityIds };
 }

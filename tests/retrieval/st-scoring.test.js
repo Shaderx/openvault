@@ -181,3 +181,25 @@ describe('selectRelevantMemoriesWithST community routing', () => {
         vi.doUnmock('../../src/services/st-vector.js');
     });
 });
+
+describe('ST Vector world context integration', () => {
+    it('ST Vector community IDs get formatted into world context', async () => {
+        // Set up test context with ST Vector mode
+        setupTestContext({ settings: { embeddingSource: 'st_vector' } });
+
+        const { retrieveWorldContext } = await import('../../src/retrieval/world-context.js');
+
+        const communities = {
+            C0: { title: 'The Castle', summary: 'An ancient fortress on the hill.', findings: ['old'] },
+            C1: { title: 'The Village', summary: 'A peaceful farming community.', findings: [] },
+        };
+
+        // Simulate: scoring layer returned these community IDs from ST Vector
+        const result = retrieveWorldContext(communities, null, 'test query', null, 2000, ['C0', 'C1']);
+
+        expect(result.text).toContain('world_context');
+        expect(result.text).toContain('Castle');
+        expect(result.text).toContain('Village');
+        expect(result.communityIds).toEqual(['C0', 'C1']);
+    });
+});
