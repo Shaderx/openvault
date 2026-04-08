@@ -1,0 +1,48 @@
+<div id="openvault_side_panel" class="openvault-side-panel">
+    <div class="openvault-side-panel-header">
+        <div class="openvault-side-panel-tabs">
+            <button class="openvault-side-tab active" data-side-tab="memories">
+                <i class="fa-solid fa-brain"></i> Memories
+            </button>
+            <button class="openvault-side-tab" data-side-tab="communities">
+                <i class="fa-solid fa-circle-nodes"></i> Communities
+            </button>
+            <button class="openvault-side-tab" data-side-tab="entities">
+                <i class="fa-solid fa-diagram-project"></i> Entities
+            </button>
+            <button class="openvault-side-tab" data-side-tab="characters">
+                <i class="fa-solid fa-masks-theater"></i> Characters
+            </button>
+        </div>
+        <button id="openvault_side_panel_close" class="openvault-side-panel-close" title="Close panel">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+    </div>
+
+    <div class="openvault-side-tab-content active" data-side-tab-content="memories">
+        <div id="openvault_side_memories" class="openvault-side-scroll"></div>
+    </div>
+
+    <div class="openvault-side-tab-content" data-side-tab-content="communities">
+        <div id="openvault_side_communities" class="openvault-side-scroll"></div>
+    </div>
+
+    <div class="openvault-side-tab-content" data-side-tab-content="entities">
+        <div class="openvault-side-entity-filters">
+            <input type="text" id="openvault_side_entity_search" class="openvault-side-search" placeholder="Search entities..." />
+            <select id="openvault_side_entity_type" class="openvault-side-select">
+                <option value="">All</option>
+                <option value="PERSON">Person</option>
+                <option value="PLACE">Place</option>
+                <option value="ORGANIZATION">Org</option>
+                <option value="OBJECT">Object</option>
+                <option value="CONCEPT">Concept</option>
+            </select>
+        </div>
+        <div id="openvault_side_entities" class="openvault-side-scroll"></div>
+    </div>
+
+    <div class="openvault-side-tab-content" data-side-tab-content="characters">
+        <div id="openvault_side_characters" class="openvault-side-scroll"></div>
+    </div>
+</div>

@@ -35,3 +35,6 @@
 
 /* Performance metrics table */
 @import url("css/perf.css");
+
+/* Side panel (persistent memory viewer) */
+@import url("css/side-panel.css");

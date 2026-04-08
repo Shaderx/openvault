@@ -21,7 +21,6 @@ import {
     getEmbeddingStatus,
     getStrategy,
     isEmbeddingsEnabled,
-    preloadCurrentModel,
     setEmbeddingStatusCallback,
     testOllamaConnection,
 } from '../embeddings.js';
@@ -848,9 +847,10 @@ function bindUIElements() {
         $('#openvault_ollama_settings').toggle(value === 'ollama');
         updateEmbeddingStatusDisplay(getEmbeddingStatus());
 
-        // Eagerly preload the new model (downloads if not in browser cache)
+        // Reset strategy so the new model loads on next embed
         if (value !== 'ollama') {
-            preloadCurrentModel();
+            const strategy = getStrategy(value);
+            if (typeof strategy.reset === 'function') strategy.reset();
         }
     });
 
@@ -905,10 +905,6 @@ function bindUIElements() {
     $('#openvault_delete_chat_btn').on('click', handleDeleteChatData);
     $('#openvault_reset_backfill_btn').on('click', handleResetAndBackfill);
     $('#openvault_export_debug_btn').on('click', exportToClipboard);
-
-    // Memory browser pagination
-    $('#openvault_prev_page').on('click', () => prevPage());
-    $('#openvault_next_page').on('click', () => nextPage());
 
     // Memory browser filters
     $('#openvault_filter_type').on('change', function () {

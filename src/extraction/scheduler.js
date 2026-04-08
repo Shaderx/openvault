@@ -34,13 +34,18 @@ export function getProcessedFingerprints(data) {
 /**
  * Get array of message indices that have not been extracted yet.
  * Now uses fingerprint matching and filters out system messages.
+ * Excludes the latest message to avoid extracting content the user
+ * may still be regenerating.
  * @param {Object[]} chat - Chat messages array
  * @param {Set<string>} processedFps - Set of already processed fingerprint strings
+ * @param {Object} [opts] - Options
+ * @param {boolean} [opts.includeLatest=false] - Include the latest message (for backfill/emergency)
  * @returns {number[]} Array of unextracted message indices
  */
-export function getUnextractedMessageIds(chat, processedFps) {
+export function getUnextractedMessageIds(chat, processedFps, { includeLatest = false } = {}) {
     const unextractedIds = [];
-    for (let i = 0; i < chat.length; i++) {
+    const limit = includeLatest ? chat.length : Math.max(0, chat.length - 1);
+    for (let i = 0; i < limit; i++) {
         const msg = chat[i];
         if (msg.is_system) continue;
         if (!processedFps.has(getFingerprint(msg))) {
@@ -88,7 +93,7 @@ export function isBatchReady(chat, data, tokenBudget) {
  */
 export function getNextBatch(chat, data, tokenBudget, isEmergencyCut = false) {
     const processedFps = getProcessedFingerprints(data);
-    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps, { includeLatest: isEmergencyCut });
 
     const totalTokens = getTokenSum(chat, unextractedIds);
     // Emergency Cut bypasses token budget - extract all unextracted messages
@@ -141,7 +146,7 @@ export function getNextBatch(chat, data, tokenBudget, isEmergencyCut = false) {
  */
 export function getBackfillStats(chat, data, _tokenBudget) {
     const processedFps = getProcessedFingerprints(data);
-    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps, { includeLatest: true });
     const nonSystemCount = chat.filter((m) => !m.is_system).length;
 
     // Count visible processed messages (fingerprints that exist in current chat)
@@ -169,7 +174,7 @@ export function getBackfillStats(chat, data, _tokenBudget) {
  */
 export function getBackfillMessageIds(chat, data, tokenBudget, isEmergencyCut = false) {
     const processedFps = getProcessedFingerprints(data);
-    const allUnextracted = getUnextractedMessageIds(chat, processedFps);
+    const allUnextracted = getUnextractedMessageIds(chat, processedFps, { includeLatest: true });
     const totalTokens = getTokenSum(chat, allUnextracted);
 
     // Emergency Cut bypasses token budget - extract all unextracted messages

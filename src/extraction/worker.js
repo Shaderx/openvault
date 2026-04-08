@@ -22,6 +22,7 @@ import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled } from '../utils/st-helpers.js';
 import { extractMemories } from './extract.js';
 import { getNextBatch } from './scheduler.js';
+import { refreshAllUI } from '../ui/render.js';
 
 const BACKOFF_SCHEDULE_SECONDS = [1, 2, 3, 10, 20, 30, 30, 60, 60];
 const MAX_BACKOFF_TOTAL_MS = 15 * 60 * 1000;
@@ -125,6 +126,7 @@ async function runWorkerLoop() {
 
                 retryCount = 0;
                 cumulativeBackoffMs = 0;
+                refreshAllUI();
             } catch (err) {
                 // Fast-fail on abort or chat switch — don't retry, just stop
                 if (err.name === 'AbortError' || err.message === 'Chat changed during extraction') {

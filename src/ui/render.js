@@ -101,6 +101,7 @@ async function deleteMemory(id) {
         renderMemoryList();
         populateCharacterFilter();
         refreshStats();
+        refreshSidePanelLazy();
         showToast('success', 'Memory deleted');
     }
 }
@@ -109,7 +110,7 @@ function enterEditMode(id) {
     const memory = getMemoryById(id);
     if (!memory) return;
 
-    const $card = $(SELECTORS.MEMORY_LIST).find(`[data-id="${id}"]`);
+    const $card = $(`.openvault-memory-card[data-id="${id}"]`);
     $card.replaceWith(renderMemoryEdit(memory));
 }
 
@@ -117,12 +118,12 @@ function exitEditMode(id) {
     const memory = getMemoryById(id);
     if (!memory) return;
 
-    const $card = $(SELECTORS.MEMORY_LIST).find(`[data-id="${id}"]`);
+    const $card = $(`.openvault-memory-card[data-id="${id}"]`);
     $card.replaceWith(renderMemoryItem(memory));
 }
 
 async function saveEdit(id, btnElement) {
-    const $card = $(SELECTORS.MEMORY_LIST).find(`[data-id="${id}"]`);
+    const $card = $(btnElement).closest(`.openvault-memory-card[data-id="${id}"]`);
     const $btn = $(btnElement);
 
     const summary = $card.find('[data-field="summary"]').val().trim();
@@ -154,6 +155,7 @@ async function saveEdit(id, btnElement) {
         }
         showToast('success', 'Memory updated');
         refreshStats();
+        refreshSidePanelLazy();
     }
     $btn.prop('disabled', false);
 }
@@ -186,28 +188,22 @@ function populateCharacterFilter() {
 }
 
 function bindMemoryListEvents() {
-    const $container = $(SELECTORS.MEMORY_LIST);
-
-    $container.off('click', SELECTORS.DELETE_BTN);
-    $container.on('click', SELECTORS.DELETE_BTN, async (e) => {
+    $(document).on('click', SELECTORS.DELETE_BTN, async (e) => {
         const id = $(e.currentTarget).data('id');
         await deleteMemory(id);
     });
 
-    $container.off('click', SELECTORS.EDIT_BTN);
-    $container.on('click', SELECTORS.EDIT_BTN, (e) => {
+    $(document).on('click', SELECTORS.EDIT_BTN, (e) => {
         const id = $(e.currentTarget).data('id');
         enterEditMode(id);
     });
 
-    $container.off('click', SELECTORS.CANCEL_EDIT_BTN);
-    $container.on('click', SELECTORS.CANCEL_EDIT_BTN, (e) => {
+    $(document).on('click', SELECTORS.CANCEL_EDIT_BTN, (e) => {
         const id = $(e.currentTarget).data('id');
         exitEditMode(id);
     });
 
-    $container.off('click', SELECTORS.SAVE_EDIT_BTN);
-    $container.on('click', SELECTORS.SAVE_EDIT_BTN, async (e) => {
+    $(document).on('click', SELECTORS.SAVE_EDIT_BTN, async (e) => {
         const id = $(e.currentTarget).data('id');
         await saveEdit(id, e.currentTarget);
     });
@@ -425,7 +421,7 @@ function enterEntityEditMode(key) {
     const entity = getEntityByKey(key);
     if (!entity) return;
 
-    const $card = $('#openvault_entity_list').find(`[data-entity-key="${key}"]`);
+    const $card = $(`[data-entity-key="${key}"]`);
     $card.replaceWith(renderEntityEdit(entity));
 }
 
@@ -433,12 +429,12 @@ function exitEntityEditMode(key) {
     const entity = getEntityByKey(key);
     if (!entity) return;
 
-    const $card = $('#openvault_entity_list').find(`[data-entity-key="${key}"]`);
+    const $card = $(`[data-entity-key="${key}"]`);
     $card.replaceWith(renderEntityCard(entity));
 }
 
 async function saveEntityEdit(key, btnElement) {
-    const $card = $('#openvault_entity_list').find(`[data-entity-key="${key}"]`);
+    const $card = $(btnElement).closest(`[data-entity-key="${key}"]`);
     const $btn = $(btnElement);
 
     const name = $card.find('[data-field="name"]').val().trim();
@@ -469,20 +465,19 @@ async function saveEntityEdit(key, btnElement) {
         }
         showToast('success', 'Entity updated');
         refreshStats();
+        refreshSidePanelLazy();
     }
     $btn.prop('disabled', false);
 }
 
 function bindEntityEvents() {
-    const $container = $('#openvault_entity_list');
-
-    $container.on('click', '.openvault-edit-entity', (e) => {
+    $(document).on('click', '.openvault-edit-entity', (e) => {
         e.stopPropagation();
         const key = $(e.currentTarget).data('key');
         enterEntityEditMode(key);
     });
 
-    $container.on('click', '.openvault-delete-entity', async (e) => {
+    $(document).on('click', '.openvault-delete-entity', async (e) => {
         e.stopPropagation();
         const key = $(e.currentTarget).data('key');
         const deleted = await deleteEntityAction(key);
@@ -490,16 +485,17 @@ function bindEntityEvents() {
             renderEntityList();
             renderCommunityList();
             refreshStats();
+            refreshSidePanelLazy();
             showToast('success', 'Entity deleted');
         }
     });
 
-    $container.on('click', '.openvault-cancel-entity-edit', (e) => {
+    $(document).on('click', '.openvault-cancel-entity-edit', (e) => {
         const key = $(e.currentTarget).data('key');
         exitEntityEditMode(key);
     });
 
-    $container.on('click', '.openvault-save-entity-edit', async (e) => {
+    $(document).on('click', '.openvault-save-entity-edit', async (e) => {
         const key = $(e.currentTarget).data('key');
         await saveEntityEdit(key, e.currentTarget);
     });
@@ -518,7 +514,7 @@ function enterCommunityEditMode(id) {
     const community = getCommunityById(id);
     if (!community) return;
 
-    const $item = $('#openvault_community_list').find(`[data-community-id="${id}"]`);
+    const $item = $(`[data-community-id="${id}"]`);
     $item.replaceWith(renderCommunityEdit(id, community));
 }
 
@@ -526,12 +522,12 @@ function exitCommunityEditMode(id) {
     const community = getCommunityById(id);
     if (!community) return;
 
-    const $item = $('#openvault_community_list').find(`[data-community-id="${id}"]`);
+    const $item = $(`[data-community-id="${id}"]`);
     $item.replaceWith(renderCommunityAccordion(id, community));
 }
 
 async function saveCommunityEdit(id, btnElement) {
-    const $item = $('#openvault_community_list').find(`[data-community-id="${id}"]`);
+    const $item = $(btnElement).closest(`[data-community-id="${id}"]`);
     const $btn = $(btnElement);
 
     const title = $item.find('[data-field="title"]').val().trim();
@@ -563,21 +559,20 @@ async function saveCommunityEdit(id, btnElement) {
         }
         showToast('success', 'Community updated');
         refreshStats();
+        refreshSidePanelLazy();
     }
     $btn.prop('disabled', false);
 }
 
 function bindCommunityEvents() {
-    const $container = $('#openvault_community_list');
-
-    $container.on('click', '.openvault-edit-community', (e) => {
+    $(document).on('click', '.openvault-edit-community', (e) => {
         e.preventDefault();
         e.stopPropagation();
         const id = $(e.currentTarget).data('id');
         enterCommunityEditMode(id);
     });
 
-    $container.on('click', '.openvault-delete-community', async (e) => {
+    $(document).on('click', '.openvault-delete-community', async (e) => {
         e.preventDefault();
         e.stopPropagation();
         const id = $(e.currentTarget).data('id');
@@ -585,16 +580,17 @@ function bindCommunityEvents() {
         if (deleted) {
             renderCommunityList();
             refreshStats();
+            refreshSidePanelLazy();
             showToast('success', 'Community deleted');
         }
     });
 
-    $container.on('click', '.openvault-cancel-community-edit', (e) => {
+    $(document).on('click', '.openvault-cancel-community-edit', (e) => {
         const id = $(e.currentTarget).data('id');
         exitCommunityEditMode(id);
     });
 
-    $container.on('click', '.openvault-save-community-edit', async (e) => {
+    $(document).on('click', '.openvault-save-community-edit', async (e) => {
         const id = $(e.currentTarget).data('id');
         await saveCommunityEdit(id, e.currentTarget);
     });
@@ -633,6 +629,12 @@ export function refreshAllUI() {
     updateBudgetIndicators();
     renderPerfTab();
     renderErrorLog();
+
+    refreshSidePanelLazy();
+}
+
+function refreshSidePanelLazy() {
+    import('./side-panel.js').then(({ refreshSidePanel }) => refreshSidePanel()).catch(() => {});
 }
 
 // =============================================================================

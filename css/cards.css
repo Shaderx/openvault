@@ -80,6 +80,34 @@
     color: var(--SmartThemeEmColor, #888);
 }
 
+.openvault-memory-card-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.openvault-memory-card-actions i {
+    font-size: 0.7em;
+    cursor: pointer;
+    opacity: 0;
+    color: var(--SmartThemeEmColor, #888);
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.openvault-memory-card:hover .openvault-memory-card-actions i {
+    opacity: 0.6;
+}
+
+.openvault-memory-card-actions i:hover {
+    opacity: 1 !important;
+    color: var(--SmartThemeBodyColor, #ccc);
+}
+
+.openvault-memory-card-actions .openvault-delete-memory:hover {
+    color: var(--error-color, #c44) !important;
+}
+
 .openvault-memory-card-summary {
     font-size: 0.95em;
     line-height: 1.4;

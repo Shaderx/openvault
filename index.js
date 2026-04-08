@@ -148,6 +148,15 @@ jQuery(() => {
         await loadSettings();
         registerCommands();
 
+        // Initialize side panel and bind toggle button
+        const { initSidePanel, openSidePanel, toggleSidePanel } = await import('./src/ui/side-panel.js');
+        await initSidePanel();
+        $('#openvault_side_panel_toggle').off('click').on('click', (e) => {
+            e.stopPropagation();
+            toggleSidePanel();
+        });
+        openSidePanel();
+
         // Load perf data from current chat into memory store
         const { loadFromChat } = await import('./src/perf/store.js');
         loadFromChat();
@@ -159,9 +168,9 @@ jQuery(() => {
         setStatus('ready');
         logInfo('Extension initialized successfully');
 
-        // Eagerly preload the configured embedding model on startup
-        import('./src/embeddings.js').then(({ preloadCurrentModel }) => {
-            preloadCurrentModel().catch(() => {});
+        // Trigger a test embed to eagerly warm the pipeline cache
+        import('./src/embeddings.js').then(({ getDocumentEmbedding }) => {
+            getDocumentEmbedding('warmup').catch(() => {});
         });
     });
 });

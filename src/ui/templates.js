@@ -84,16 +84,21 @@ function buildCharacterTags(characters) {
  * Build card header HTML
  */
 function buildCardHeader(memory) {
+    const id = escapeHtml(memory.id);
     const date = formatMemoryDate(memory.created_at);
     const anchorHtml = memory.temporal_anchor
         ? `<span class="openvault-memory-card-date" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-clock"></i> ${escapeHtml(memory.temporal_anchor)}</span>`
-        : '';
+        : '<span></span>';
 
     return `
         <div class="openvault-memory-card-header">
             <div class="openvault-memory-card-meta">
                 ${anchorHtml}
                 <span class="openvault-memory-card-date">${escapeHtml(date)}</span>
+            </div>
+            <div class="openvault-memory-card-actions">
+                <i class="fa-solid fa-pen openvault-edit-memory" data-id="${id}" title="Edit"></i>
+                <i class="fa-solid fa-trash openvault-delete-memory" data-id="${id}" title="Delete"></i>
             </div>
         </div>
     `;
@@ -103,19 +108,10 @@ function buildCardHeader(memory) {
  * Build card footer HTML
  */
 function buildCardFooter(memory, badges) {
-    const id = escapeHtml(memory.id);
     return `
         <div class="openvault-memory-card-footer">
             <div class="openvault-memory-card-badges">
                 ${badges}
-            </div>
-            <div>
-                <button class="menu_button openvault-edit-memory" data-id="${id}" title="Edit memory">
-                    <i class="fa-solid fa-pen"></i>
-                </button>
-                <button class="menu_button openvault-delete-memory" data-id="${id}" title="Delete memory">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
             </div>
         </div>
     `;
