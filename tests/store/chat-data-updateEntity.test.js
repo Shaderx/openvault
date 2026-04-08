@@ -168,4 +168,44 @@ describe('updateEntity', () => {
         expect(result.key).toBe(key);
         expect(data.graph.nodes[key].aliases).toEqual(['masked figure', 'the stranger']);
     });
+
+    it('returns toSync when updating description without rename', async () => {
+        const saveFn = vi.fn(async () => true);
+        setupTestContext({
+            context: {
+                chatMetadata: {
+                    openvault: {
+                        schema_version: 3,
+                        memories: [],
+                        character_states: {},
+                        processed_message_ids: [],
+                        graph: {
+                            nodes: {
+                                alice: {
+                                    name: 'Alice',
+                                    type: 'PERSON',
+                                    description: 'Old description',
+                                    mentions: 1,
+                                    aliases: [],
+                                },
+                            },
+                            edges: {},
+                            _mergeRedirects: {},
+                        },
+                    },
+                },
+            },
+            deps: { saveChatConditional: saveFn },
+        });
+
+        const { updateEntity } = await import('../../src/store/chat-data.js');
+        const result = await updateEntity('alice', { description: 'New description' });
+
+        expect(result).not.toBeNull();
+        expect(result.key).toBe('alice');
+        // Bug: no stChanges returned for simple field update
+        expect(result.stChanges).toBeDefined();
+        expect(result.stChanges.toSync).toBeDefined();
+        expect(result.stChanges.toSync.length).toBeGreaterThan(0);
+    });
 });
