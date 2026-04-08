@@ -725,3 +725,58 @@ describe('synthesizeInChunks with queue', () => {
         expect(result).toBe('Final global summary');
     });
 });
+
+describe('updateCommunitySummaries — dissolved community toDelete', () => {
+    beforeEach(async () => {
+        await global.registerCdnOverrides();
+        setupTestContext();
+
+        mockCallLLM.mockResolvedValue(
+            JSON.stringify({
+                title: 'Survivor',
+                summary: 'A surviving community',
+                findings: [],
+            })
+        );
+    });
+
+    afterEach(() => {
+        resetDeps();
+        vi.clearAllMocks();
+    });
+
+    it('generates toDelete for communities that dissolved after re-detection', async () => {
+        // existingCommunities has C0 and C1, both previously synced
+        const existingCommunities = {
+            C0: {
+                nodeKeys: ['a', 'b'],
+                title: 'Old Community 0',
+                summary: 'Summary for community 0',
+                _st_synced: true,
+            },
+            C1: {
+                nodeKeys: ['c', 'd'],
+                title: 'Old Community 1',
+                summary: 'Summary for community 1',
+                _st_synced: true,
+            },
+        };
+
+        // communityGroups only has C0 now — C1 dissolved
+        const communityGroups = {
+            0: { nodeKeys: ['a', 'b', 'e'], nodeLines: ['a line', 'b line', 'e line'], edgeLines: [] },
+        };
+
+        const result = await updateCommunitySummaries(
+            { nodes: { a: {}, b: {}, e: {} } },
+            communityGroups,
+            existingCommunities,
+            100,
+            1 // staleness threshold = 1 so it triggers
+        );
+
+        // C1 should appear in toDelete
+        expect(result.stChanges.toDelete).toBeDefined();
+        expect(result.stChanges.toDelete.length).toBeGreaterThanOrEqual(1);
+    });
+});
