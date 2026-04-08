@@ -198,7 +198,7 @@ describe('store/chat-data', () => {
                 saveChatConditional: mockSave,
             });
             const result = await updateMemory('mem1', { importance: 5 });
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(mockContext.chatMetadata[METADATA_KEY][MEMORIES_KEY][0].importance).toBe(5);
         });
 
@@ -229,7 +229,8 @@ describe('store/chat-data', () => {
                     [extensionName]: { debugMode: true },
                 }),
             });
-            expect(await updateMemory('nonexistent', { summary: 'x' })).toBe(false);
+            const result = await updateMemory('nonexistent', { summary: 'x' });
+            expect(result.success).toBe(false);
         });
 
         it('should allow updating temporal_anchor field', async () => {
@@ -245,7 +246,7 @@ describe('store/chat-data', () => {
                 saveChatConditional: vi.fn().mockResolvedValue(undefined),
             });
             const result = await updateMemory('mem1', { temporal_anchor: 'Monday, Jan 1, 12:00 PM' });
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(mockContext.chatMetadata[METADATA_KEY][MEMORIES_KEY][0].temporal_anchor).toBe(
                 'Monday, Jan 1, 12:00 PM'
             );
@@ -264,7 +265,7 @@ describe('store/chat-data', () => {
                 saveChatConditional: vi.fn().mockResolvedValue(undefined),
             });
             const result = await updateMemory('mem1', { is_transient: true });
-            expect(result).toBe(true);
+            expect(result.success).toBe(true);
             expect(mockContext.chatMetadata[METADATA_KEY][MEMORIES_KEY][0].is_transient).toBe(true);
         });
     });
@@ -282,7 +283,8 @@ describe('store/chat-data', () => {
                 }),
                 saveChatConditional: vi.fn().mockResolvedValue(undefined),
             });
-            expect(await deleteMemory('mem1')).toBe(true);
+            const result = await deleteMemory('mem1');
+            expect(result.success).toBe(true);
             expect(mockContext.chatMetadata[METADATA_KEY][MEMORIES_KEY]).toHaveLength(1);
             expect(mockContext.chatMetadata[METADATA_KEY][MEMORIES_KEY][0].id).toBe('mem2');
         });

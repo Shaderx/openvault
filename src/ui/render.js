@@ -98,7 +98,7 @@ function filterBySearch(memories, query) {
 
 async function deleteMemory(id) {
     const deleted = await deleteMemoryAction(id);
-    if (deleted) {
+    if (deleted.success) {
         renderMemoryList();
         populateCharacterFilter();
         refreshStats();
@@ -139,7 +139,7 @@ async function saveEdit(id, btnElement) {
     $btn.prop('disabled', true);
 
     const updated = await updateMemoryAction(id, { summary, importance, temporal_anchor, is_transient });
-    if (updated) {
+    if (updated.success) {
         const memory = getMemoryById(id);
         if (memory && !hasEmbedding(memory) && isEmbeddingsEnabled()) {
             const embedding = await getDocumentEmbedding(summary);

@@ -104,19 +104,19 @@ export function generateId() {
  * Update a memory by ID.
  * @param {string} id - Memory ID to update
  * @param {MemoryUpdate} updates - Fields to update
- * @returns {Promise<boolean>} True if updated, false otherwise
+ * @returns {Promise<{success: boolean, stChanges?: {toSync?: {hash: number, text: string, item: Memory}[]}}>} Result with success flag and optional ST Vector changes
  */
 export async function updateMemory(id, updates) {
     const data = getOpenVaultData();
     if (!data) {
         showToast('warning', 'No chat loaded');
-        return false;
+        return { success: false };
     }
 
     const memory = data[MEMORIES_KEY]?.find((/** @type {Memory} */ m) => m.id === id);
     if (!memory) {
         logDebug(`Memory ${id} not found`);
-        return false;
+        return { success: false };
     }
 
     // Track if summary changed (requires re-embedding)
@@ -130,38 +130,57 @@ export async function updateMemory(id, updates) {
         }
     }
 
-    // If summary changed, invalidate embedding so it can be regenerated
+    const stChanges = {};
+
+    // If summary changed, invalidate embedding and queue for re-sync
     if (summaryChanged) {
         deleteEmbedding(memory);
+        const text = memory.summary || '';
+        stChanges.toSync = [{ hash: cyrb53(text), text, item: memory }];
     }
 
     await getDeps().saveChatConditional();
     logDebug(`Updated memory ${id}${summaryChanged ? ' (embedding invalidated)' : ''}`);
-    return true;
+    return {
+        success: true,
+        stChanges: Object.keys(stChanges).length > 0 ? stChanges : undefined,
+    };
 }
 
 /**
  * Delete a memory by ID.
  * @param {string} id - Memory ID to delete
- * @returns {Promise<boolean>} True if deleted, false otherwise
+ * @returns {Promise<{success: boolean, stChanges?: {toDelete: {hash: number}[]}}>} Result with success flag and optional ST Vector changes
  */
 export async function deleteMemory(id) {
     const data = getOpenVaultData();
     if (!data) {
         showToast('warning', 'No chat loaded');
-        return false;
+        return { success: false };
     }
 
     const idx = data[MEMORIES_KEY]?.findIndex((/** @type {Memory} */ m) => m.id === id);
     if (idx === -1) {
         logDebug(`Memory ${id} not found`);
-        return false;
+        return { success: false };
+    }
+
+    const memory = data[MEMORIES_KEY][idx];
+    const stChanges = {};
+
+    // Queue for ST Vector deletion if previously synced
+    if (memory._st_synced) {
+        const text = memory.summary || '';
+        stChanges.toDelete = [{ hash: cyrb53(text) }];
     }
 
     data[MEMORIES_KEY].splice(idx, 1);
     await getDeps().saveChatConditional();
     logDebug(`Deleted memory ${id}`);
-    return true;
+    return {
+        success: true,
+        stChanges: Object.keys(stChanges).length > 0 ? stChanges : undefined,
+    };
 }
 
 /**
