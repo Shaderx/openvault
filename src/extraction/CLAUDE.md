@@ -20,6 +20,7 @@ For event dedup thresholds (cross-batch/intra-batch Jaccard) see `include/DATA_S
 ## BACKFILL OPTIMIZATION
 - **Defer Phase 2 enrichment during manual backfills.** Pass `{ isBackfill: true }` to `extractMemories` to skip reflections and communities.
 - **Run Phase 2 once at the end.** Execute `runPhase2Enrichment()` over all accumulated data to save API calls and UI lockups.
+- **Max-backoff `break` is intentional, not a bug.** When `cumulativeBackoffMs >= MAX_BACKOFF_TOTAL_MS`, `break` exits the retry loop. Phase 2 then runs as best-effort enrichment on already-saved data (has its own guard: `if (!data.memories?.length) return`). This is by design — partial Phase 1 data is valuable and Phase 2 failure does not throw.
 
 ## IDF CACHE
 - **Filter archived memories before IDF calculation.** `updateIDFCache` must use `memories.filter(m => !m.archived)` — the raw array includes archived items, producing stale IDF values and causing BM25 score mismatches.

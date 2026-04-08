@@ -17,6 +17,7 @@ Every store mutation that touches embeddings must return `{ toSync?, toDelete? }
 - **Affected functions:** `updateEntity`, `mergeEntities`/`mergeOrInsertEntity`, `updateMemory`, `deleteMemory`, `consolidateEdges`.
 - **Check all early-return paths.** Most leaks come from `return` statements before sync logic runs. Use a local `stChanges` object initialized at function top and returned at every exit.
 - **Use `syncNode(key)` helper** (from `graph.js`) to avoid duplicating the `[OV_ID:${key}] ${description}` + `cyrb53` boilerplate in every merge path.
+- **Queue edges for re-sync after merge rewriting.** Both collision and rewrite branches in `mergeEntities` must push modified edges to `toSync` after calling `deleteEmbedding()`. Follow the same `[OV_ID:edge_{source}_{target}] ${description}` + `cyrb53` pattern as `consolidateEdges`.
 - **Filter archived memories before cache operations.** `updateIDFCache` must count only `!m.archived` memories.
 
 ## ENTITY GRAPH MUTATIONS

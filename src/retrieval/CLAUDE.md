@@ -15,8 +15,8 @@ For event dedup thresholds see `src/extraction/CLAUDE.md`.
   - *Phase 2:* Remaining 40% allocated purely by score regardless of bucket.
 
 ### ST Vector Retrieval
-- **`selectRelevantMemoriesWithST` returns all item types.** Build lookup maps for memories, graph nodes (`graphNodes`), AND communities. Results include `itemType` field for downstream routing.
-- **Community retrieval skips local embeddings in ST Vector mode.** `retrieveWorldContext` returns `null` when `embeddingMode === 'st_vector'` — communities already retrieved via scoring layer.
+- **`selectRelevantMemoriesWithST` returns all item types.** Build lookup maps for memories, graph nodes (`graphNodes`), AND communities. Results include `communityIds` field for downstream world context injection.
+- **Community retrieval uses scoring-layer IDs in ST Vector mode.** `retrieveWorldContext` accepts `stCommunityIds` parameter — communities pre-selected by the scoring layer. Returns empty when no IDs provided (avoids duplicate local embedding computation).
 
 ### Query Building
 - **Prepend entity anchors before truncation.** In `buildEmbeddingQuery()`, prepend `topEntities` before slicing to `chunkSize`. Entities survive budget cuts; appended text gets chopped.
