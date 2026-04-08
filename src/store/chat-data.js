@@ -168,7 +168,7 @@ export async function deleteMemory(id) {
  * Update an entity's fields. Handles rename by rewriting edges and merge redirects.
  * @param {string} key - Current normalized entity key
  * @param {Object} updates - { name?, type?, description?, aliases? }
- * @returns {Promise<{key: string, stChanges?: {toDelete: {hash: number}[]}}|null>} Result with new key and optional ST Vector changes, null on failure
+ * @returns {Promise<{key: string, stChanges?: {toDelete?: {hash: number}[], toSync?: {hash: number, text: string, item: any}[]}}|null>} Result with new key and optional ST Vector changes, null on failure
  */
 export async function updateEntity(key, updates) {
     const { saveChatConditional } = getDeps();
@@ -283,7 +283,15 @@ export async function updateEntity(key, updates) {
         }
 
         await saveChatConditional();
-        return { key };
+
+        // Return stChanges for ST Vector sync if description changed
+        const toSync = [];
+        if (updates.description !== undefined) {
+            const text = `[OV_ID:${key}] ${node.description}`;
+            toSync.push({ hash: cyrb53(text), text, item: node });
+        }
+
+        return { key, stChanges: toSync.length > 0 ? { toSync } : undefined };
     }
 }
 
