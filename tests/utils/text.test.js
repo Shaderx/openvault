@@ -367,74 +367,41 @@ describe('text', () => {
     });
 
     describe('normalizeText', () => {
-        it('returns unchanged valid text', () => {
-            expect(normalizeText('{"key": "value"}')).toBe('{"key": "value"}');
-        });
-
-        it('replaces smart double quotes with standard quotes', () => {
-            expect(normalizeText('{"key": "value"}')).toBe('{"key": "value"}');
-        });
-
-        it('replaces smart single quotes with standard single quotes', () => {
-            expect(normalizeText("{'key': 'value'}")).toBe("{'key': 'value'}");
-        });
-
-        it('strips Unicode line separator (U+2028)', () => {
-            expect(normalizeText('{"key": "value\u2028more"}')).toBe('{"key": "valuemore"}');
-        });
-
-        it('strips Unicode paragraph separator (U+2029)', () => {
-            expect(normalizeText('{"key": "value\u2029more"}')).toBe('{"key": "valuemore"}');
-        });
-
-        it('preserves valid escape sequences (\\n, \\r, \\t)', () => {
-            expect(normalizeText('{"key": "line1\\nline2"}')).toBe('{"key": "line1\\nline2"}');
-        });
-
-        it('strips unescaped control characters (\\x00-\\x1F) except \\n \\r \\t', () => {
-            expect(normalizeText('{"key": "value\x00\x01\x02"}')).toBe('{"key": "value"}');
-        });
-
-        it('handles empty string', () => {
-            expect(normalizeText('')).toBe('');
+        it.each([
+            ['preserves valid text unchanged', '{"key": "value"}', '{"key": "value"}'],
+            ['replaces smart double quotes', '{"key": "value"}', '{"key": "value"}'],
+            ['replaces smart single quotes', "{'key': 'value'}", "{'key': 'value'}"],
+            ['strips Unicode line separator (U+2028)', '{"key": "value\u2028more"}', '{"key": "valuemore"}'],
+            ['strips Unicode paragraph separator (U+2029)', '{"key": "value\u2029more"}', '{"key": "valuemore"}'],
+            [
+                'preserves valid escape sequences (\\n, \\r, \\t)',
+                '{"key": "line1\\nline2"}',
+                '{"key": "line1\\nline2"}',
+            ],
+            ['strips unescaped control characters', '{"key": "value\x00\x01\x02"}', '{"key": "value"}'],
+            ['handles empty string', '', ''],
+        ])('$desc', (_, input, expected) => {
+            expect(normalizeText(input)).toBe(expected);
         });
     });
 
     describe('stripMarkdownFences', () => {
-        it('strips complete ```json fence', () => {
-            expect(stripMarkdownFences('```json\n{"key": "value"}\n```')).toBe('{"key": "value"}');
-        });
-
-        it('strips complete ``` fence without language', () => {
-            expect(stripMarkdownFences('```\n{"key": "value"}\n```')).toBe('{"key": "value"}');
-        });
-
-        it('strips unclosed opening fence', () => {
-            expect(stripMarkdownFences('```json\n{"key": "value"}')).toBe('{"key": "value"}');
-        });
-
-        it('strips orphan closing fence', () => {
-            expect(stripMarkdownFences('{"key": "value"}\n```')).toBe('{"key": "value"}');
-        });
-
-        it('handles fence with uppercase JSON', () => {
-            expect(stripMarkdownFences('```JSON\n{"key": "value"}\n```')).toBe('{"key": "value"}');
-        });
-
-        it('handles fence with leading/trailing whitespace', () => {
-            expect(stripMarkdownFences('  ```json  \n  {"key": "value"}  \n  ```  ')).toBe('{"key": "value"}');
-        });
-
-        it('returns unchanged text without fences', () => {
-            expect(stripMarkdownFences('{"key": "value"}')).toBe('{"key": "value"}');
-        });
-
-        it('handles tilde fences (~~~)', () => {
-            expect(stripMarkdownFences('~~~json\n{"key": "value"}\n~~~')).toBe('{"key": "value"}');
-        });
-
-        it('handles empty string', () => {
-            expect(stripMarkdownFences('')).toBe('');
+        it.each([
+            ['strips complete ```json fence', '```json\n{"key": "value"}\n```', '{"key": "value"}'],
+            ['strips complete ``` fence without language', '```\n{"key": "value"}\n```', '{"key": "value"}'],
+            ['strips unclosed opening fence', '```json\n{"key": "value"}', '{"key": "value"}'],
+            ['strips orphan closing fence', '{"key": "value"}\n```', '{"key": "value"}'],
+            ['handles fence with uppercase JSON', '```JSON\n{"key": "value"}\n```', '{"key": "value"}'],
+            [
+                'handles fence with leading/trailing whitespace',
+                '  ```json  \n  {"key": "value"}  \n  ```  ',
+                '{"key": "value"}',
+            ],
+            ['returns unchanged text without fences', '{"key": "value"}', '{"key": "value"}'],
+            ['handles tilde fences (~~~)', '~~~json\n{"key": "value"}\n~~~', '{"key": "value"}'],
+            ['handles empty string', '', ''],
+        ])('$desc', (_, input, expected) => {
+            expect(stripMarkdownFences(input)).toBe(expected);
         });
     });
 
@@ -514,49 +481,24 @@ describe('text', () => {
     });
 
     describe('scrubConcatenation', () => {
-        it('fixes simple string concatenation', () => {
-            expect(scrubConcatenation('{"a": "hello" + "world"}')).toBe('{"a": "helloworld"}');
-        });
-
-        it('fixes concatenation with spaces', () => {
-            expect(scrubConcatenation('{"a": "hello" + "world"}')).toBe('{"a": "helloworld"}');
-        });
-
-        it('fixes concatenation across newlines', () => {
-            expect(scrubConcatenation('{"a": "hello"\n+\n"world"}')).toBe('{"a": "helloworld"}');
-        });
-
-        it('fixes concatenation with CRLF', () => {
-            expect(scrubConcatenation('{"a": "hello"\r\n+\r\n"world"}')).toBe('{"a": "helloworld"}');
-        });
-
-        it('fixes dangling plus before punctuation', () => {
-            expect(scrubConcatenation('{"a": "text" + , "b": 1}')).toBe('{"a": "text", "b": 1}');
-        });
-
-        it('fixes dangling plus at EOF', () => {
-            expect(scrubConcatenation('{"a": "text" +')).toBe('{"a": "text"');
-        });
-
-        it('fixes full-width plus (＋)', () => {
-            expect(scrubConcatenation('{"a": "hello"＋"world"}')).toBe('{"a": "helloworld"}');
-        });
-
-        it('preserves plus signs inside strings', () => {
-            expect(scrubConcatenation('{"math": "1 + 2 = 3"}')).toBe('{"math": "1 + 2 = 3"}');
-        });
-
-        it('handles multiple concatenations', () => {
-            expect(scrubConcatenation('{"a": "x" + "y", "b": "p" + "q"}')).toBe('{"a": "xy", "b": "pq"}');
-        });
-
-        it('handles empty string', () => {
-            expect(scrubConcatenation('')).toBe('');
-        });
-
-        it('does not match variable interpolations', () => {
-            // Variable interpolations should NOT be fixed - they're a different error
-            expect(scrubConcatenation('{"a": "hello" + var + "world"}')).toBe('{"a": "hello" + var + "world"}');
+        it.each([
+            ['fixes simple string concatenation', '{"a": "hello" + "world"}', '{"a": "helloworld"}'],
+            ['fixes concatenation with spaces', '{"a": "hello" + "world"}', '{"a": "helloworld"}'],
+            ['fixes concatenation across newlines', '{"a": "hello"\n+\n"world"}', '{"a": "helloworld"}'],
+            ['fixes concatenation with CRLF', '{"a": "hello"\r\n+\r\n"world"}', '{"a": "helloworld"}'],
+            ['fixes dangling plus before punctuation', '{"a": "text" + , "b": 1}', '{"a": "text", "b": 1}'],
+            ['fixes dangling plus at EOF', '{"a": "text" +', '{"a": "text"'],
+            ['fixes full-width plus (＋)', '{"a": "hello"＋"world"}', '{"a": "helloworld"}'],
+            ['preserves plus signs inside strings', '{"math": "1 + 2 = 3"}', '{"math": "1 + 2 = 3"}'],
+            ['handles multiple concatenations', '{"a": "x" + "y", "b": "p" + "q"}', '{"a": "xy", "b": "pq"}'],
+            ['handles empty string', '', ''],
+            [
+                'does not match variable interpolations',
+                '{"a": "hello" + var + "world"}',
+                '{"a": "hello" + var + "world"}',
+            ],
+        ])('$desc', (_, input, expected) => {
+            expect(scrubConcatenation(input)).toBe(expected);
         });
     });
 
