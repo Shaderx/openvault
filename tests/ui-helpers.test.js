@@ -624,29 +624,16 @@ describe('ui/helpers', () => {
     });
 
     describe('formatMemoryImportance', () => {
-        it('formats importance 1 as one filled star and four empty', () => {
-            expect(formatMemoryImportance(1)).toBe('\u2605\u2606\u2606\u2606\u2606');
-        });
-
-        it('formats importance 5 as five filled stars', () => {
-            expect(formatMemoryImportance(5)).toBe('\u2605\u2605\u2605\u2605\u2605');
-        });
-
-        it('formats importance 3 as three filled and two empty', () => {
-            expect(formatMemoryImportance(3)).toBe('\u2605\u2605\u2605\u2606\u2606');
-        });
-
-        it('defaults to 3 when undefined', () => {
-            expect(formatMemoryImportance(undefined)).toBe('\u2605\u2605\u2605\u2606\u2606');
-        });
-
-        it('clamps values below 1 to 1', () => {
-            expect(formatMemoryImportance(0)).toBe('\u2605\u2606\u2606\u2606\u2606');
-            expect(formatMemoryImportance(-5)).toBe('\u2605\u2606\u2606\u2606\u2606');
-        });
-
-        it('clamps values above 5 to 5', () => {
-            expect(formatMemoryImportance(10)).toBe('\u2605\u2605\u2605\u2605\u2605');
+        it.each([
+            ['importance 1', 1, '\u2605\u2606\u2606\u2606\u2606'],
+            ['importance 5', 5, '\u2605\u2605\u2605\u2605\u2605'],
+            ['importance 3', 3, '\u2605\u2605\u2605\u2606\u2606'],
+            ['undefined', undefined, '\u2605\u2605\u2605\u2606\u2606'],
+            ['zero', 0, '\u2605\u2606\u2606\u2606\u2606'],
+            ['negative', -5, '\u2605\u2606\u2606\u2606\u2606'],
+            ['above 5', 10, '\u2605\u2605\u2605\u2605\u2605'],
+        ])('formats $desc correctly', (_, importance, expected) => {
+            expect(formatMemoryImportance(importance)).toBe(expected);
         });
     });
 
@@ -659,16 +646,12 @@ describe('ui/helpers', () => {
             expect(result).toContain('2024');
         });
 
-        it('returns Unknown for null timestamp', () => {
-            expect(formatMemoryDate(null)).toBe('Unknown');
-        });
-
-        it('returns Unknown for undefined timestamp', () => {
-            expect(formatMemoryDate(undefined)).toBe('Unknown');
-        });
-
-        it('returns Unknown for zero timestamp', () => {
-            expect(formatMemoryDate(0)).toBe('Unknown');
+        it.each([
+            ['null timestamp', null],
+            ['undefined timestamp', undefined],
+            ['zero timestamp', 0],
+        ])('returns Unknown for $desc', (_, timestamp) => {
+            expect(formatMemoryDate(timestamp)).toBe('Unknown');
         });
     });
 
@@ -681,34 +664,23 @@ describe('ui/helpers', () => {
             expect(formatWitnesses(['Alice'])).toBe('Witnesses: Alice');
         });
 
-        it('returns empty string for empty array', () => {
-            expect(formatWitnesses([])).toBe('');
-        });
-
-        it('returns empty string for undefined', () => {
-            expect(formatWitnesses(undefined)).toBe('');
-        });
-
-        it('returns empty string for null', () => {
-            expect(formatWitnesses(null)).toBe('');
+        it.each([
+            ['empty array', []],
+            ['undefined', undefined],
+            ['null', null],
+        ])('returns empty string for $desc', (_, witnesses) => {
+            expect(formatWitnesses(witnesses)).toBe('');
         });
     });
 
     describe('getStatusText', () => {
-        it('returns Ready for ready status', () => {
-            expect(getStatusText('ready')).toBe('Ready');
-        });
-
-        it('returns Extracting... for extracting status', () => {
-            expect(getStatusText('extracting')).toBe('Extracting...');
-        });
-
-        it('returns Retrieving... for retrieving status', () => {
-            expect(getStatusText('retrieving')).toBe('Retrieving...');
-        });
-
-        it('returns Error for error status', () => {
-            expect(getStatusText('error')).toBe('Error');
+        it.each([
+            ['ready status', 'ready', 'Ready'],
+            ['extracting status', 'extracting', 'Extracting...'],
+            ['retrieving status', 'retrieving', 'Retrieving...'],
+            ['error status', 'error', 'Error'],
+        ])('returns correct text for $desc', (_, status, expected) => {
+            expect(getStatusText(status)).toBe(expected);
         });
 
         it('returns input as-is for unknown status', () => {
@@ -725,12 +697,11 @@ describe('ui/helpers', () => {
             expect(formatEmotionSource({ min: 10, max: 15 })).toBe(' (msgs 10-15)');
         });
 
-        it('returns empty string for undefined', () => {
-            expect(formatEmotionSource(undefined)).toBe('');
-        });
-
-        it('returns empty string for null', () => {
-            expect(formatEmotionSource(null)).toBe('');
+        it.each([
+            ['undefined', undefined],
+            ['null', null],
+        ])('returns empty string for $desc', (_, source) => {
+            expect(formatEmotionSource(source)).toBe('');
         });
     });
 
@@ -739,12 +710,11 @@ describe('ui/helpers', () => {
             expect(formatHiddenMessagesText(5)).toBe(' (5 hidden)');
         });
 
-        it('returns empty string for zero', () => {
-            expect(formatHiddenMessagesText(0)).toBe('');
-        });
-
-        it('returns empty string for negative', () => {
-            expect(formatHiddenMessagesText(-1)).toBe('');
+        it.each([
+            ['zero', 0],
+            ['negative', -1],
+        ])('returns empty string for $desc', (_, count) => {
+            expect(formatHiddenMessagesText(count)).toBe('');
         });
     });
 
