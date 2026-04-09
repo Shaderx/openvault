@@ -206,91 +206,109 @@ describe('buildGraphExtractionPrompt', () => {
     });
 });
 
-describe('buildGraphExtractionPrompt prefill parameter', () => {
-    it('returns only 2 messages when prefill is empty', () => {
-        const result = buildGraphExtractionPrompt({
-            messages: '[A]: test',
-            names: { char: 'A', user: 'B' },
-            prefill: '',
-        });
-        expect(result).toHaveLength(2);
+describe('prefill parameter', () => {
+    it.each([
+        [
+            'buildGraphExtractionPrompt',
+            (prefill) =>
+                buildGraphExtractionPrompt({
+                    messages: '[A]: test',
+                    names: { char: 'A', user: 'B' },
+                    prefill,
+                }),
+        ],
+        [
+            'buildUnifiedReflectionPrompt',
+            (prefill) => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', prefill),
+        ],
+        [
+            'buildCommunitySummaryPrompt',
+            (prefill) => buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', prefill),
+        ],
+        [
+            'buildGlobalSynthesisPrompt',
+            (prefill) => buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', prefill),
+        ],
+        [
+            'buildEdgeConsolidationPrompt',
+            (prefill) =>
+                buildEdgeConsolidationPrompt(
+                    { source: 'A', target: 'B', description: 'Test', weight: 1 },
+                    'auto',
+                    'auto',
+                    prefill
+                ),
+        ],
+    ])('%s returns 2 messages when prefill is empty', (_, buildPrompt) => {
+        expect(buildPrompt('')).toHaveLength(2);
     });
 
-    it('uses provided prefill in assistant message', () => {
-        const result = buildGraphExtractionPrompt({
-            messages: '[A]: test',
-            names: { char: 'A', user: 'B' },
-            prefill: '<thinking>',
-        });
-        expect(result[2].content).toBe('<thinking>');
-    });
-});
-
-describe('GRAPH_SCHEMA think tag support', () => {
-    it('allows think tags before JSON', () => {
-        const result = buildGraphExtractionPrompt({
-            messages: '[A]: test',
-            names: { char: 'A', user: 'B' },
-            prefill: '{',
-        });
-        const user = result[1].content;
-        expect(user).toContain('reasoning');
-        expect(user).toContain('OUTPUT FORMAT');
-    });
-});
-
-describe('CONSOLIDATION_SCHEMA think tag support', () => {
-    it('allows think tags before JSON', () => {
-        const edge = { source: 'A', target: 'B', description: 'Test', weight: 1 };
-        const result = buildEdgeConsolidationPrompt(edge, 'auto', 'auto', '{');
-        const user = result[1].content;
-        expect(user).toContain('reasoning');
-    });
-});
-
-describe('UNIFIED_REFLECTION_SCHEMA think tag support', () => {
-    it('allows think tags before JSON', () => {
-        const result = buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', '{');
-        const user = result[1].content;
-        expect(user).toContain('reasoning');
-    });
-});
-
-describe('buildUnifiedReflectionPrompt prefill parameter', () => {
-    it('returns only 2 messages when prefill is empty', () => {
-        const result = buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', '');
-        expect(result).toHaveLength(2);
-    });
-
-    it('uses provided prefill in assistant message', () => {
-        const result = buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', '<thinking>');
-        expect(result[2].content).toBe('<thinking>');
-    });
-});
-
-describe('COMMUNITY_SCHEMA think tag support', () => {
-    it('allows think tags before JSON', () => {
-        const result = buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', '{');
-        const user = result[1].content;
-        expect(user).toContain('reasoning');
-    });
-});
-
-describe('buildCommunitySummaryPrompt prefill parameter', () => {
-    it('returns only 2 messages when prefill is empty', () => {
-        const result = buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', '');
-        expect(result).toHaveLength(2);
-    });
-
-    it('uses provided prefill in assistant message', () => {
-        const result = buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', '<thinking>');
-        expect(result[2].content).toBe('<thinking>');
+    it.each([
+        [
+            'buildGraphExtractionPrompt',
+            (prefill) =>
+                buildGraphExtractionPrompt({
+                    messages: '[A]: test',
+                    names: { char: 'A', user: 'B' },
+                    prefill,
+                }),
+        ],
+        [
+            'buildUnifiedReflectionPrompt',
+            (prefill) => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', prefill),
+        ],
+        [
+            'buildCommunitySummaryPrompt',
+            (prefill) => buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', prefill),
+        ],
+        [
+            'buildGlobalSynthesisPrompt',
+            (prefill) => buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', prefill),
+        ],
+        [
+            'buildEdgeConsolidationPrompt',
+            (prefill) =>
+                buildEdgeConsolidationPrompt(
+                    { source: 'A', target: 'B', description: 'Test', weight: 1 },
+                    'auto',
+                    'auto',
+                    prefill
+                ),
+        ],
+    ])('%s uses provided prefill in assistant message', (_, buildPrompt) => {
+        expect(buildPrompt('<thinking>')[2].content).toBe('<thinking>');
     });
 });
 
-describe('GLOBAL_SYNTHESIS_SCHEMA think tag support', () => {
-    it('allows think tags before JSON', () => {
-        const result = buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', '{');
+describe('think tag support', () => {
+    it.each([
+        [
+            'GRAPH_SCHEMA',
+            () =>
+                buildGraphExtractionPrompt({
+                    messages: '[A]: test',
+                    names: { char: 'A', user: 'B' },
+                    prefill: '{',
+                }),
+        ],
+        [
+            'CONSOLIDATION_SCHEMA',
+            () =>
+                buildEdgeConsolidationPrompt(
+                    { source: 'A', target: 'B', description: 'Test', weight: 1 },
+                    'auto',
+                    'auto',
+                    '{'
+                ),
+        ],
+        ['UNIFIED_REFLECTION_SCHEMA', () => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', '{')],
+        ['COMMUNITY_SCHEMA', () => buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', '{')],
+        [
+            'GLOBAL_SYNTHESIS_SCHEMA',
+            () => buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', '{'),
+        ],
+    ])('%s allows think tags before JSON', (_, buildPrompt) => {
+        const result = buildPrompt();
         const user = result[1].content;
         expect(user).toContain('reasoning');
     });
@@ -343,19 +361,6 @@ describe('CN preamble and assistant prefill', () => {
 });
 
 describe('preamble and prefill exports', () => {
-    it('exports SYSTEM_PREAMBLE_CN as a non-empty string', () => {
-        expect(typeof SYSTEM_PREAMBLE_CN).toBe('string');
-        expect(SYSTEM_PREAMBLE_CN.length).toBeGreaterThan(0);
-        expect(SYSTEM_PREAMBLE_CN).toContain('<system_config>');
-    });
-
-    it('exports SYSTEM_PREAMBLE_EN as a non-empty string', () => {
-        expect(typeof SYSTEM_PREAMBLE_EN).toBe('string');
-        expect(SYSTEM_PREAMBLE_EN.length).toBeGreaterThan(0);
-        expect(SYSTEM_PREAMBLE_EN).toContain('<system_config>');
-        expect(SYSTEM_PREAMBLE_EN).toContain('EXTRACT');
-    });
-
     it('exports PREFILL_PRESETS with all 6 keys', () => {
         const keys = Object.keys(PREFILL_PRESETS);
         expect(keys).toContain('cn_compliance');
@@ -748,20 +753,6 @@ describe('buildEdgeConsolidationPrompt', () => {
     });
 });
 
-describe('buildEdgeConsolidationPrompt prefill parameter', () => {
-    it('returns only 2 messages when prefill is empty', () => {
-        const edge = { source: 'A', target: 'B', description: 'Test', weight: 1 };
-        const result = buildEdgeConsolidationPrompt(edge, 'auto', 'auto', '');
-        expect(result).toHaveLength(2);
-    });
-
-    it('uses provided prefill in assistant message', () => {
-        const edge = { source: 'A', target: 'B', description: 'Test', weight: 1 };
-        const result = buildEdgeConsolidationPrompt(edge, 'auto', 'auto', '<thinking>');
-        expect(result[2].content).toBe('<thinking>');
-    });
-});
-
 describe('buildGlobalSynthesisPrompt', () => {
     it('should build prompt as message array', () => {
         const communities = [
@@ -792,18 +783,6 @@ describe('buildGlobalSynthesisPrompt', () => {
         const result = buildGlobalSynthesisPrompt(communities, SYSTEM_PREAMBLE_EN, 'auto', '{');
 
         expect(result[0].content).toContain('SYSTEM: Interactive Fiction Archival Database');
-    });
-});
-
-describe('buildGlobalSynthesisPrompt prefill parameter', () => {
-    it('returns only 2 messages when prefill is empty', () => {
-        const result = buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', '');
-        expect(result).toHaveLength(2);
-    });
-
-    it('uses provided prefill in assistant message', () => {
-        const result = buildGlobalSynthesisPrompt([{ title: 'C1', summary: 'S1' }], 'auto', 'auto', '<thinking>');
-        expect(result[2].content).toBe('<thinking>');
     });
 });
 
