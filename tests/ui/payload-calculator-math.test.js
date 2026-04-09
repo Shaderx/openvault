@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PAYLOAD_CALC } from '../src/constants.js';
+import { PAYLOAD_CALC } from '../../src/constants.js';
 
 /**
  * Test the pure calculation logic that updatePayloadCalculator() uses.

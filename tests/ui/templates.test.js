@@ -7,13 +7,13 @@ import {
     renderEntityCard,
     renderMemoryItem,
     renderReflectionProgress,
-} from '../src/ui/templates.js';
+} from '../../src/ui/templates.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Read settings panel HTML for template validation
-const settingsPanelHtml = readFileSync(join(__dirname, '../templates/settings_panel.html'), 'utf-8');
+const settingsPanelHtml = readFileSync(join(__dirname, '../../templates/settings_panel.html'), 'utf-8');
 
 describe('ui/templates', () => {
     describe('renderMemoryItem', () => {

@@ -20,7 +20,7 @@ import {
     getStatusText,
     sortMemoriesByDate,
     validateRPM,
-} from '../src/ui/helpers.js';
+} from '../../src/ui/helpers.js';
 
 describe('ui/helpers', () => {
     describe('filterMemories', () => {
