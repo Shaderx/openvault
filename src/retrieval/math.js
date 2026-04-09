@@ -573,10 +573,12 @@ export async function scoreMemories(
 
         // If we have a pre-computed vector similarity, override the vectorBonus
         if (vectorSimilarity !== null) {
-            const threshold = settings.vectorSimilarityThreshold;
+            const threshold = Math.min(Math.max(settings.vectorSimilarityThreshold || 0, 0), 0.99);
+            const alpha = Math.min(Math.max(settings.alpha || 0, 0), 1);
+            const boostWeight = Math.max(settings.combinedBoostWeight || 0, 0);
             if (vectorSimilarity > threshold) {
                 const normalizedSim = (vectorSimilarity - threshold) / (1 - threshold);
-                breakdown.vectorBonus = settings.alpha * settings.combinedBoostWeight * normalizedSim;
+                breakdown.vectorBonus = alpha * boostWeight * normalizedSim;
                 breakdown.vectorSimilarity = vectorSimilarity;
                 breakdown.total = breakdown.baseAfterFloor + breakdown.vectorBonus + breakdown.bm25Bonus;
                 breakdown.total *= breakdown.frequencyFactor;

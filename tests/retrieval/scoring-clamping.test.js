@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateScore } from '../../src/retrieval/math.js';
+import { calculateScore, scoreMemories } from '../../src/retrieval/math.js';
 
 const BASE_CONSTANTS = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 5, reflectionDecayThreshold: 750 };
 
@@ -112,5 +112,75 @@ describe('calculateScore - settings clamping defense', () => {
         const breakdown = calculateScore(memory, null, 100, BASE_CONSTANTS, settings, 0);
         expect(breakdown.total).toBeGreaterThan(0);
         expect(breakdown.base).toBeGreaterThan(0);
+    });
+});
+
+describe('calculateScore - slow-pass vector override clamping', () => {
+    it('should not produce NaN in the two-pass vector re-scoring path', async () => {
+        const memories = [
+            {
+                id: 'm1',
+                summary: 'A memory about a forest',
+                importance: 3,
+                message_ids: [50],
+                tokens: ['memori', 'forest'],
+                embedding: new Float32Array([1, 0, 0]),
+            },
+            {
+                id: 'm2',
+                summary: 'A memory about the ocean',
+                importance: 3,
+                message_ids: [60],
+                tokens: ['memori', 'ocean'],
+                embedding: new Float32Array([0, 1, 0]),
+            },
+        ];
+
+        const contextEmbedding = new Float32Array([1, 0, 0]);
+        const constants = { ...BASE_CONSTANTS };
+        const settings = {
+            vectorSimilarityThreshold: 0.999, // Just below 1.0, similarity can exceed this
+            alpha: 0.7,
+            combinedBoostWeight: 15,
+            transientDecayMultiplier: 5.0,
+        };
+
+        const result = await scoreMemories(memories, contextEmbedding, 100, constants, settings, 'forest');
+        for (const scored of result) {
+            expect(Number.isFinite(scored.score)).toBe(true);
+            expect(Number.isFinite(scored.breakdown.vectorBonus)).toBe(true);
+        }
+    });
+
+    it('should clamp settings to prevent NaN when threshold is exactly 1.0', async () => {
+        const memories = [
+            {
+                id: 'm1',
+                summary: 'A memory about a forest',
+                importance: 3,
+                message_ids: [50],
+                tokens: ['memori', 'forest'],
+                embedding: new Float32Array([1, 0, 0]),
+            },
+        ];
+
+        const contextEmbedding = new Float32Array([1, 0, 0]);
+        const constants = { ...BASE_CONSTANTS };
+        const settings = {
+            vectorSimilarityThreshold: 1.0, // Division by zero
+            alpha: 0.7,
+            combinedBoostWeight: 15,
+            transientDecayMultiplier: 5.0,
+        };
+
+        // Manually compute similarity to be > threshold (which would be clamped)
+        // Since threshold is 1.0, and cosine similarity is at most 1.0,
+        // with exact match we'd get similarity=1.0, threshold=1.0, so 1.0 > 1.0 is false
+        // Let's test that the clamping prevents issues when similarity equals threshold
+        const result = await scoreMemories(memories, contextEmbedding, 100, constants, settings, 'forest');
+        for (const scored of result) {
+            expect(Number.isFinite(scored.score)).toBe(true);
+            expect(Number.isFinite(scored.breakdown.vectorBonus)).toBe(true);
+        }
     });
 });
