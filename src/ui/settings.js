@@ -31,7 +31,7 @@ import { getSettings, setSetting } from '../settings.js';
 import { clearErrorLog, getErrorLog, logError, logInfo, logWarn } from '../utils/logging.js';
 import { exportToClipboard } from './export-debug.js';
 import { validateRPM } from './helpers.js';
-import { initBrowser, nextPage, prevPage, refreshAllUI, resetAndRender } from './render.js';
+import { initBrowser, refreshAllUI, resetAndRender } from './render.js';
 import { setStatus, updateEmbeddingStatusDisplay } from './status.js';
 
 // =============================================================================

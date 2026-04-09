@@ -196,7 +196,13 @@ describe('logging', () => {
                 getExtensionSettings: () => ({ [extensionName]: { requestLogging: true } }),
             });
             const err = new Error('boom');
-            logRequest('Extraction', { messages: ['m1'], maxTokens: 100, profileId: 'p1', response: 'bad output', error: err });
+            logRequest('Extraction', {
+                messages: ['m1'],
+                maxTokens: 100,
+                profileId: 'p1',
+                response: 'bad output',
+                error: err,
+            });
             expect(groupCollapsed).toHaveBeenCalledWith('[OpenVault] ❌ Extraction — FAILED');
             expect(mockConsole.log).toHaveBeenCalledWith('Profile:', 'p1');
             expect(mockConsole.log).toHaveBeenCalledWith('Messages:', ['m1']);

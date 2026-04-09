@@ -2,9 +2,9 @@ import { EMBEDDING_SOURCES, extensionName } from './constants.js';
 import { getDeps } from './deps.js';
 import { record } from './perf/store.js';
 import { getSessionSignal } from './state.js';
+import { cdnImport } from './utils/cdn.js';
 import { hasEmbedding, setEmbedding } from './utils/embedding-codec.js';
 import { logDebug, logError, logInfo } from './utils/logging.js';
-import { cdnImport } from './utils/cdn.js';
 
 // =============================================================================
 // Strategy Classes (from src/embeddings/strategies.js)

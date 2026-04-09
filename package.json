@@ -6,10 +6,9 @@
     "scripts": {
         "clear": "node -e \"process.stdout.write('\\u001B[2J\\u001B[0;0f')\"",
         "prepare": "git config core.hooksPath .githooks",
-        "lint": "biome check .",
+        "lint": "npm run lint:fix && npm run lint:jsdoc",
         "lint:fix": "biome check --write --unsafe .",
         "lint:jsdoc": "node scripts/check-jsdoc.mjs",
-        "format": "biome format --write .",
         "test": "node scripts/test.js",
         "test:run": "vitest run",
         "test:related": "vitest --run --reporter=dot related",

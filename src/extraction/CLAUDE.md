@@ -1,73 +1,33 @@
-# Memory Extraction Subsystem
+# Extraction, GraphRAG, and Reflection
 
-## WHAT
-Background pipeline converting raw messages -> structured JSON -> Deduplicated Memories + Knowledge Graph -> Reflections + Communities.
+## WORKER LIFECYCLE
+- **Trigger via fire-and-forget.** Call `wakeUpBackgroundWorker()` on message receive. Ensure singleton execution via `isWorkerRunning()`.
+- **Interrupt sleep dynamically.** Use an interruptible sleep loop that checks `wakeGeneration` every 500ms. Abort sleep if new messages arrive.
+- **Use the 6-stage extraction pipeline:** 
+  1. `fetchEventsFromLLM`
+  2. `fetchGraphFromLLM`
+  3. `enrichAndDedupEvents`
+  4. `processGraphUpdates`
+  5. `synthesizeReflections` (Deferred on backfill)
+  6. `synthesizeCommunities` (Deferred on backfill)
 
-## WORKER LIFECYCLE (`worker.js`)
-- **Entry**: `wakeUpBackgroundWorker()` (Fire-and-forget, called by `onMessageReceived`).
-- **Singleton**: Protected by `isWorkerRunning()` from `state.js`. Multiple calls just increment `wakeGeneration`.
-- **Interruptible Sleep**: Backoff sleep checks `wakeGeneration` every 500ms. New messages cut sleep short.
-- **Guards**: Halts immediately on chat switch, disabled state, or `operationState.extractionInProgress` (manual backfill).
-- **Backoff Schedule**: `[1, 2, 3, 10, 20, 30, 30, 60, 60]` sec. Caps at 15m. Only Phase 1 failures trigger retries.
+## BACKFILL OPTIMIZATION
+- **Defer Phase 2 enrichment during manual backfills.** Pass `{ isBackfill: true }` to `extractMemories` to skip reflections and communities. 
+- **Run Phase 2 once at the end.** Execute `runPhase2Enrichment()` over all accumulated data to save API calls and UI lockups.
 
-## EXTRACTION PIPELINE (`extract.js`)
+## GRAPH & COMMUNITIES
+- **Apply `.max(5)` to Graph Zod schemas.** Force the LLM to extract deltas (new entities/changes) rather than re-evaluating the whole world.
+- **Merge PERSON entities on high cosine similarity.** Names are unique identifiers. 
+- **Require token-overlap for OBJECT/CONCEPT/PLACE.** Prevent false merges caused by similar contextual embeddings.
+- **Transliterate for cross-script merges.** Match Cyrillic to Latin character nodes using `levenshteinDistance <= 2` on transliterated names.
+- **Consolidate bloated edges.** Track `_descriptionTokens`. Trigger LLM consolidation when tokens `> 150`.
+- **Prevent Louvain hairballs.** Attenuate edges involving User/Char by 95% (`MAIN_CHARACTER_ATTENUATION`) to allow secondary clusters to form without breaking hub-and-spoke RP structures.
 
-### 6 Internal Stage Functions (PR4 deconstruction)
-1. **Stage 1 - fetchEventsFromLLM**: Prompt building + LLM call + response parsing for events. Returns `{ events }`.
-2. **Stage 2 - fetchGraphFromLLM**: Prompt building + LLM call + response parsing for graph. Returns `{ entities, relationships }`. Graceful degradation on failure.
-3. **Stage 3 - enrichAndDedupEvents**: Metadata stamping, embedding generation, deduplication. Returns `{ events }`.
-4. **Stage 4 - processGraphUpdates**: Entity upserts, relationship upserts, merge redirect cleanup. Returns `{ graphSyncChanges }`.
-5. **Stage 5 - synthesizeReflections**: Per-character reflection trigger, LLM generation, push to memories. Mutates `data[MEMORIES_KEY]`.
-6. **Stage 6 - synthesizeCommunities**: Louvain detection, edge consolidation, community summarization. Mutates `data.communities`, `data.global_world_state`.
-
-### Phase 1 (Critical - gates UI auto-hide)
-1. **Batching**: `scheduler.js` determines unextracted batches via token budget + turn boundaries.
-2. **Stage A (Events)**: `fetchEventsFromLLM` called with `contextParams` (messagesText, names, charDesc, personaDesc, preamble, prefill, outputLanguage). Returns `EventExtractionSchema`.
-3. **RPM Delay**: Evaluates `lastApiCallTime` and sleeps remaining delta dynamically.
-4. **Stage B (Graph)**: `fetchGraphFromLLM` contextualized by Stage A. Returns `GraphExtractionSchema`. **Schema enforces `.max(5)`**.
-5. **Graph Upsert**: `processGraphUpdates` calls `mergeOrInsertEntity()` (returns `{ key, stChanges }`) and `upsertRelationship()`. Collects `stChanges` for sync.
-6. **Commit**: Pre-computes BM25 `tokens` (stemmed), uses repository methods (`addMemories`, `markMessagesProcessed`, `incrementGraphMessageCount`).
-7. **IDF Cache Update**: Calls `updateIDFCache()` to pre-compute BM25 IDF map from all memories. Stored in `chatMetadata.openvault.idf_cache` for O(1) retrieval lookup.
-8. **Intermediate Save**: Persists Phase 1 to disk.
-
-### Phase 2 (Enrichment - Non-critical, errors swallowed)
-8. **Reflection**: `synthesizeReflections` accumulates `importance_sum`. Triggers at 40. Returns `{ reflections, stChanges }`.
-9. **Communities**: `synthesizeCommunities` runs Louvain every 50 extracted messages. Returns `stChanges`.
-10. **Final Save**.
-
-## BACKFILL OPTIMIZATION: Phase 2 Defer
-**Problem**: Backfilling 1000+ messages triggers reflection/community LLM calls 20+ times, incurring:
-- 20+ API calls (vs 1 at end)
-- Stalled UI during intermediate synthesis
-- Redundant work (re-synthesizing communities as graph grows)
-
-**Solution** (`isBackfill` option):
-- **During Batches**: `extractMemories([batch], null, { isBackfill: true })` skips Phase 2 entirely. State accumulation (`importance_sum`, graph nodes/edges) still runs.
-- **After Backfill**: Single call to `runPhase2Enrichment(data, settings, targetChatId)` processes ALL accumulated characters' reflections + communities once.
-
-**Key Functions**:
-- `extractMemories(..., { isBackfill: true })`: Returns early after `accumulateImportance()` (line ~380).
-- `runPhase2Enrichment(data, settings, targetChatId)`: Standalone Phase 2 runner. Guards: returns immediately if `memories.length === 0`. Processes all characters in `reflection_state` that exceed threshold.
-
-**Integration**:
-- `extractAllMessages()`: Passes `{ isBackfill: true, silent: true }` in the while loop. After loop, calls `runPhase2Enrichment()` with "Synthesizing..." toast.
-- **Emergency Cut**: Passes `{ isEmergencyCut: true, progressCallback, abortSignal, onPhase2Start }` for UI-driven extraction with cancel support.
-- Worker: Unchanged. Calls `extractMemories(batch, chatId, { silent: true })` (no `isBackfill`, normal flow for incremental extractions).
-
-## GOTCHAS & RULES
-- **Split Schemas**: Events, Graph, Community Summary, and Global Synthesis each have separate Zod schemas. No unified schema. Lowers LLM cognitive load.
-- **Graph Schema Limits**: `GraphExtractionSchema` uses `.max(5)` on entities and relationships arrays. Prompt instructs LLM to focus on NEW entities or CHANGES to existing ones, not re-describe static relationships.
-- **GlobalSynthesisSchema**: `global_summary` field, min 50 chars, max ~300 tokens. Map-reduce output over all communities.
-- **JSON Array Recovery**: If LLM forgets object wrapper and returns a bare array, `safeParseJSON` wraps it automatically.
-- **Markdown Stripping**: `_testStripMarkdown` handles open/close orphans (```json\n{...}```).
-- **Event Summary Min**: Enforced 30 characters in Zod.
-- **Entity Keys**: Always pass through `normalizeKey()` (lowercase, strip possessives) before Graph CRUD.
-- **Token Caching**: Events/Reflections store pre-computed `m.tokens` at creation.
-- **Two-Phase Dedup**: `filterSimilarEvents` (async):
-  1. Cosine vs existing memories.
-  2. Jaccard token overlap for intra-batch duplicates (requires `await yieldToMain()` every 10 loops).
-- **Testing**: Worker tests MUST use `vi.resetModules()` to reset state. Heavily test parsers in `structured.test.js`.
-- **stChanges Pattern**: `mergeOrInsertEntity`, `generateReflections`, `updateCommunitySummaries`, `consolidateEdges` return `{ ..., stChanges: { toSync: [], toDelete: [] } }`. Orchestrator collects and applies via `applySyncChanges`.
-- **Repository Methods**: Use `addMemories()`, `markMessagesProcessed()`, `incrementGraphMessageCount()` from `store/chat-data.js` instead of direct array pushes.
-- **Callback Injection**: `extractAllMessages` and `executeEmergencyCut` accept callbacks (`onStart`, `onProgress`, `onComplete`, `onError`). UI (`settings.js`) provides jQuery/toast wiring.
-- **Emergency Cut**: Domain logic (`executeEmergencyCut`, `hideExtractedMessages`) moved from `ui/settings.js` to `extract.js`. UI handlers are thin wrappers.
+## REFLECTION ENGINE
+- **Trigger at importance >= 40.** Accumulate `importance_sum` per character from both `characters_involved` and `witnesses`.
+- **Gate reflections via similarity.** Skip generation if recent events overlap `> 85%` with existing reflections.
+- **Apply 3-Tier Deduplication:** 
+  - `>= 90%`: Reject (Concept exists)
+  - `80-89%`: Replace (Archive old, add new for fresher evidence)
+  - `< 80%`: Add (Genuinely novel)
+- **Maintain POV strictness.** Feed `filterMemoriesByPOV()` into the reflection prompt. Characters can only reflect on what they know.
