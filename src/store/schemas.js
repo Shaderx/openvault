@@ -125,8 +125,8 @@ export const EventSchema = z.object({
     is_secret: z.boolean().default(false),
     temporal_anchor: z.string().nullable().optional().default(null),
     is_transient: z.boolean().optional().default(false),
-    emotional_impact: z.record(z.string().trim(), z.any()).optional().default({}),
-    relationship_impact: z.record(z.string().trim(), z.any()).optional().default({}),
+    emotional_impact: z.record(z.string().trim(), z.string()).optional().default({}),
+    relationship_impact: z.record(z.string().trim(), z.string()).optional().default({}),
 });
 
 export const EventExtractionSchema = z.object({

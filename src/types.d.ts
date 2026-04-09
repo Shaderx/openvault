@@ -157,10 +157,10 @@ export type ExtractedEvent = {
     temporal_anchor: (string | null) | undefined;
     is_transient: boolean | undefined;
     emotional_impact: {
-        [key: string]: any;
+        [key: string]: string;
     } | undefined;
     relationship_impact: {
-        [key: string]: any;
+        [key: string]: string;
     } | undefined;
 };
 
@@ -175,10 +175,10 @@ export type EventExtraction = {
         temporal_anchor: (string | null) | undefined;
         is_transient: boolean | undefined;
         emotional_impact: {
-            [key: string]: any;
+            [key: string]: string;
         } | undefined;
         relationship_impact: {
-            [key: string]: any;
+            [key: string]: string;
         } | undefined;
     }[];
 };
