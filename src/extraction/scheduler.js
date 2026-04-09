@@ -7,6 +7,7 @@
 
 import { PROCESSED_MESSAGES_KEY, SWIPE_PROTECTION_TAIL_MESSAGES } from '../constants.js';
 import { cyrb53 } from '../utils/embedding-codec.js';
+import { logDebug } from '../utils/logging.js';
 import { getMessageTokenCount, getTokenSum, snapToTurnBoundary } from '../utils/tokens.js';
 
 /**
@@ -233,7 +234,7 @@ export function getBackfillMessageIds(chat, data, tokenBudget, isEmergencyCut = 
 
     // Emergency Cut bypasses token budget - extract all unextracted messages
     if (!isEmergencyCut && totalTokens < tokenBudget) {
-        console.log(`getBackfillMessageIds: no messages to extract (token budget not met)`);
+        logDebug('getBackfillMessageIds: no messages to extract (token budget not met)');
         return { messageIds: [], batchCount: 0 };
     }
 

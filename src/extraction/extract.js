@@ -922,7 +922,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Defensive: use scheduler to get next batch if no IDs provided
         const batch = getNextBatch(chat, data, settings?.extractionTokenBudget || 2000);
         if (!batch) {
-            console.log('[extract] No messages to extract (scheduler returned empty batch)');
+            logDebug('No messages to extract (scheduler returned empty batch)');
             return { status: 'skipped', reason: 'no_new_messages' };
         }
         messagesToExtract = batch.map((id) => ({ id, ...chat[id] }));
