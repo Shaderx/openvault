@@ -277,9 +277,11 @@ export async function onChatChanged() {
         if (wiped > 0) {
             await saveOpenVaultData();
             // Auto-trigger comprehensive re-embedding in background (fire-and-forget)
-            import('./embeddings.js').then(({ backfillAllEmbeddings }) => {
-                backfillAllEmbeddings({ silent: true }).catch(() => {});
-            });
+            import('./embeddings.js')
+                .then(({ backfillAllEmbeddings }) => {
+                    backfillAllEmbeddings({ silent: true }).catch(() => {});
+                })
+                .catch(() => {});
         }
     }
 

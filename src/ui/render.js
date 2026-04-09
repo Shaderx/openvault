@@ -886,10 +886,13 @@ function initPositionBadges() {
     $(document).on('click', '.openvault-position-badge.custom', function () {
         const macro = $(this).data('macro');
         const macroText = `{{${macro}}}`;
-        navigator.clipboard.writeText(macroText).then(
-            () => showToast('success', `Copied {{${macro}}} to clipboard`),
-            () => showToast('error', 'Failed to copy')
-        );
+        navigator.clipboard
+            .writeText(macroText)
+            .then(
+                () => showToast('success', `Copied {{${macro}}} to clipboard`),
+                () => showToast('error', 'Failed to copy')
+            )
+            .catch(() => {});
     });
 }
 
