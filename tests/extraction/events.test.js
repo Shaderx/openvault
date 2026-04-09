@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetDeps } from '../src/deps.js';
+import { resetDeps } from '../../src/deps.js';
 
 describe('autoHideOldMessages (token-based)', () => {
     let mockChat;
@@ -12,7 +12,7 @@ describe('autoHideOldMessages (token-based)', () => {
         saveFn = vi.fn(async () => true);
 
         // Import token functions for pre-seeding cache
-        const tokensModule = await import('../src/utils/tokens.js');
+        const tokensModule = await import('../../src/utils/tokens.js');
         _getMessageTokenCount = tokensModule.getMessageTokenCount;
         clearTokenCache = tokensModule.clearTokenCache;
 
@@ -72,7 +72,7 @@ describe('autoHideOldMessages (token-based)', () => {
 
     it('hides oldest extracted messages to bring visible tokens under budget', async () => {
         // Import after setup so deps are injected
-        const { autoHideOldMessages } = await import('../src/events.js');
+        const { autoHideOldMessages } = await import('../../src/events.js');
 
         await autoHideOldMessages();
 
@@ -111,7 +111,7 @@ describe('autoHideOldMessages (token-based)', () => {
             },
         });
 
-        const { autoHideOldMessages } = await import('../src/events.js');
+        const { autoHideOldMessages } = await import('../../src/events.js');
         await autoHideOldMessages();
 
         // Nothing hidden
@@ -126,7 +126,7 @@ describe('autoHideOldMessages (token-based)', () => {
         mockData.processed_message_ids = ['1000000', '1000001', '1000004', '1000005', '1000006', '1000007'];
         mockData.memories = [];
 
-        const { autoHideOldMessages } = await import('../src/events.js');
+        const { autoHideOldMessages } = await import('../../src/events.js');
         await autoHideOldMessages();
 
         // excess = 8 tokens. Hide 0,1 (extracted, 4 tokens), skip 2,3 (unextracted),
@@ -162,7 +162,7 @@ describe('autoHideOldMessages (token-based)', () => {
             },
         });
 
-        const { autoHideOldMessages } = await import('../src/events.js');
+        const { autoHideOldMessages } = await import('../../src/events.js');
         await autoHideOldMessages();
 
         expect(mockChat[0].is_system).toBe(true);
@@ -177,7 +177,7 @@ describe('onBeforeGeneration pending message source', () => {
     beforeEach(async () => {
         originalDollar = global.$;
         // Reset operation state to prevent leaks between tests
-        const { operationState } = await import('../src/state.js');
+        const { operationState } = await import('../../src/state.js');
         operationState.generationInProgress = false;
         operationState.retrievalInProgress = false;
         operationState.extractionInProgress = false;
@@ -220,7 +220,7 @@ describe('onBeforeGeneration pending message source', () => {
             },
         });
 
-        const { onBeforeGeneration } = await import('../src/events.js');
+        const { onBeforeGeneration } = await import('../../src/events.js');
 
         await onBeforeGeneration('normal', {});
 
@@ -261,7 +261,7 @@ describe('onBeforeGeneration pending message source', () => {
             },
         });
 
-        const { onBeforeGeneration } = await import('../src/events.js');
+        const { onBeforeGeneration } = await import('../../src/events.js');
 
         await onBeforeGeneration('regenerate', {});
 
@@ -294,8 +294,8 @@ describe('onChatChanged resets session controller', () => {
     });
 
     it('aborts the previous session signal on chat change', async () => {
-        const { getSessionSignal } = await import('../src/state.js');
-        const { onChatChanged } = await import('../src/events.js');
+        const { getSessionSignal } = await import('../../src/state.js');
+        const { onChatChanged } = await import('../../src/events.js');
 
         const oldSignal = getSessionSignal();
         expect(oldSignal.aborted).toBe(false);
@@ -311,7 +311,7 @@ describe('onChatChanged resets session controller', () => {
 
     it('resets session controller even when extension is disabled', async () => {
         // Set up a session controller that we can observe
-        const { resetSessionController, getSessionSignal } = await import('../src/state.js');
+        const { resetSessionController, getSessionSignal } = await import('../../src/state.js');
         resetSessionController(); // fresh controller
         const oldSignal = getSessionSignal();
         expect(oldSignal.aborted).toBe(false);
@@ -327,7 +327,7 @@ describe('onChatChanged resets session controller', () => {
         });
 
         // Switch chat while extension is disabled
-        const { onChatChanged } = await import('../src/events.js');
+        const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
         // The old signal should have been aborted regardless of extension state
@@ -370,7 +370,7 @@ describe('onChatChanged embedding model mismatch detection', () => {
     });
 
     it('wipes stale embeddings on model mismatch during chat change', async () => {
-        const { onChatChanged } = await import('../src/events.js');
+        const { onChatChanged } = await import('../../src/events.js');
 
         await onChatChanged();
 
@@ -384,7 +384,7 @@ describe('onChatChanged embedding model mismatch detection', () => {
     it('does not wipe when model matches', async () => {
         mockData.embedding_model_id = 'bge-small-en-v1.5';
 
-        const { onChatChanged } = await import('../src/events.js');
+        const { onChatChanged } = await import('../../src/events.js');
 
         await onChatChanged();
 
@@ -418,7 +418,7 @@ describe('onBeforeGeneration AbortError handling', () => {
             settings: { enabled: true },
         });
 
-        const { onBeforeGeneration } = await import('../src/events.js');
+        const { onBeforeGeneration } = await import('../../src/events.js');
 
         // We need to verify that after AbortError, status is NOT set to 'error'.
         // Since updateInjection is dynamically imported, this is hard to mock
@@ -463,7 +463,7 @@ describe('onChatChanged migration', () => {
     });
 
     it('migrates v1 data and shows toast', async () => {
-        const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../src/constants.js');
+        const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 
         // v1 data with index-based processed_message_ids
         mockContext.chatMetadata[METADATA_KEY] = {
@@ -472,7 +472,7 @@ describe('onChatChanged migration', () => {
         };
         mockContext.chat = [{ mes: 'Hello', is_user: true, send_date: '1000000' }];
 
-        const { onChatChanged } = await import('../src/events.js');
+        const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
         // Should have migrated through v2 and v3
@@ -482,7 +482,7 @@ describe('onChatChanged migration', () => {
     });
 
     it('rolls back on migration failure and sets session disabled', async () => {
-        const { METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../src/constants.js');
+        const { METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 
         // Create v1 data with index that will be out of bounds
         mockContext.chatMetadata[METADATA_KEY] = {
@@ -490,13 +490,13 @@ describe('onChatChanged migration', () => {
         };
         mockContext.chat = [{ mes: 'Hello', is_user: true, send_date: '1000000' }];
 
-        const { onChatChanged } = await import('../src/events.js');
+        const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
         // Migration should have succeeded (the v2 migration handles missing messages gracefully)
         // So we test a different scenario: data that causes actual failure
         // Let's test that session disabled flag works correctly
-        const { setSessionDisabled } = await import('../src/state.js');
+        const { setSessionDisabled } = await import('../../src/state.js');
 
         // Manually set session disabled and verify onChatChanged respects it
         setSessionDisabled(true);
@@ -512,7 +512,7 @@ describe('onChatChanged migration', () => {
     });
 
     it('skips migration when schema_version is already 2', async () => {
-        const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../src/constants.js');
+        const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 
         // v2 data already
         mockContext.chatMetadata[METADATA_KEY] = {
@@ -521,7 +521,7 @@ describe('onChatChanged migration', () => {
             [MEMORIES_KEY]: [],
         };
 
-        const { onChatChanged } = await import('../src/events.js');
+        const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
         // Should still be v2
@@ -549,7 +549,7 @@ describe('session disabled guards', () => {
             name2: 'Assistant',
         };
 
-        const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../src/constants.js');
+        const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
         mockContext.chatMetadata[METADATA_KEY] = {
             schema_version: 2,
             [PROCESSED_MESSAGES_KEY]: ['1000000'],
@@ -573,10 +573,10 @@ describe('session disabled guards', () => {
     });
 
     it('onBeforeGeneration returns early when session disabled', async () => {
-        const { setSessionDisabled } = await import('../src/state.js');
+        const { setSessionDisabled } = await import('../../src/state.js');
         setSessionDisabled(true);
 
-        const { onBeforeGeneration } = await import('../src/events.js');
+        const { onBeforeGeneration } = await import('../../src/events.js');
         await onBeforeGeneration('normal', {});
 
         // Should have logged that it's skipping due to session disabled
@@ -588,10 +588,10 @@ describe('session disabled guards', () => {
     });
 
     it('onMessageReceived returns early when session disabled', async () => {
-        const { setSessionDisabled } = await import('../src/state.js');
+        const { setSessionDisabled } = await import('../../src/state.js');
         setSessionDisabled(true);
 
-        const { onMessageReceived } = await import('../src/events.js');
+        const { onMessageReceived } = await import('../../src/events.js');
         await onMessageReceived(0);
 
         // Should have logged that it's skipping due to session disabled

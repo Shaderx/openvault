@@ -2,15 +2,15 @@
  * Tests for src/pov.js
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CHARACTERS_KEY, MEMORIES_KEY } from '../src/constants.js';
-import { resetDeps } from '../src/deps.js';
+import { CHARACTERS_KEY, MEMORIES_KEY } from '../../src/constants.js';
+import { resetDeps } from '../../src/deps.js';
 import {
     detectPresentCharactersFromMessages,
     filterMemoriesByPOV,
     getActiveCharacters,
     getPOVContext,
-} from '../src/pov.js';
-import { buildMockMemory } from './factories.js';
+} from '../../src/pov.js';
+import { buildMockMemory } from '../factories.js';
 
 describe('detectPresentCharactersFromMessages Cyrillic support', () => {
     let mockContext;

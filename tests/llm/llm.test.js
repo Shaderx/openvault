@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resetDeps } from '../src/deps.js';
-import { callLLM, LLM_CONFIGS } from '../src/llm.js';
+import { resetDeps } from '../../src/deps.js';
+import { callLLM, LLM_CONFIGS } from '../../src/llm.js';
 
 describe('LLM_CONFIGS after smart retrieval removal', () => {
     it('does not have a retrieval config', () => {

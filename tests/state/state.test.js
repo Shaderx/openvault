@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetDeps, setDeps } from '../src/deps.js';
+import { resetDeps, setDeps } from '../../src/deps.js';
 import {
     clearAllLocks,
     getSessionSignal,
@@ -10,7 +10,7 @@ import {
     resetSessionController,
     setSessionDisabled,
     setWorkerRunning,
-} from '../src/state.js';
+} from '../../src/state.js';
 
 describe('Session AbortController', () => {
     it('getSessionSignal returns an AbortSignal', () => {
