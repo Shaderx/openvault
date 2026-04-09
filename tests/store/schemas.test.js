@@ -9,10 +9,6 @@ describe('schemas', () => {
     });
 
     describe('MemorySchema', () => {
-        it('should export MemorySchema', () => {
-            expect(schemas.MemorySchema).toBeDefined();
-        });
-
         it('should validate a valid memory object', () => {
             const validMemory = {
                 id: 'abc123',
@@ -43,10 +39,6 @@ describe('schemas', () => {
     });
 
     describe('GraphNodeSchema', () => {
-        it('should export GraphNodeSchema', () => {
-            expect(schemas.GraphNodeSchema).toBeDefined();
-        });
-
         it('should validate a valid graph node', () => {
             const validNode = {
                 name: 'Alice',
@@ -61,10 +53,6 @@ describe('schemas', () => {
     });
 
     describe('GraphEdgeSchema', () => {
-        it('should export GraphEdgeSchema', () => {
-            expect(schemas.GraphEdgeSchema).toBeDefined();
-        });
-
         it('should validate a valid graph edge', () => {
             const validEdge = {
                 source: 'alice',
@@ -79,10 +67,6 @@ describe('schemas', () => {
     });
 
     describe('BaseEntitySchema', () => {
-        it('should export BaseEntitySchema', () => {
-            expect(schemas.BaseEntitySchema).toBeDefined();
-        });
-
         it('should validate a valid entity without .catch fallbacks', () => {
             const validEntity = {
                 name: 'Castle',
@@ -107,10 +91,6 @@ describe('schemas', () => {
     });
 
     describe('BaseRelationshipSchema', () => {
-        it('should export BaseRelationshipSchema', () => {
-            expect(schemas.BaseRelationshipSchema).toBeDefined();
-        });
-
         it('should validate a valid relationship without .catch fallbacks', () => {
             const validRel = {
                 source: 'Alice',

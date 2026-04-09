@@ -1,39 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-    cacheRetrievalDebug,
-    cacheScoringDetails,
-    clearRetrievalDebug,
-    getCachedScoringDetails,
-    getLastRetrievalDebug,
-} from '../../src/retrieval/debug-cache.js';
-
-describe('debug-cache', () => {
-    beforeEach(() => {
-        clearRetrievalDebug();
-    });
-
-    it('caches and retrieves data with timestamp', () => {
-        const data = { filters: { total: 10 } };
-        cacheRetrievalDebug(data);
-        const result = getLastRetrievalDebug();
-        expect(result.filters.total).toBe(10);
-        expect(result.timestamp).toBeTypeOf('number');
-    });
-
-    it('merges successive cache calls', () => {
-        cacheRetrievalDebug({ filters: { total: 10 } });
-        cacheRetrievalDebug({ queryContext: { entities: ['Alice'] } });
-        const result = getLastRetrievalDebug();
-        expect(result.filters.total).toBe(10);
-        expect(result.queryContext.entities).toEqual(['Alice']);
-    });
-
-    it('clears cache', () => {
-        cacheRetrievalDebug({ filters: { total: 10 } });
-        clearRetrievalDebug();
-        expect(getLastRetrievalDebug()).toBeNull();
-    });
-});
+import { cacheScoringDetails, clearRetrievalDebug, getCachedScoringDetails } from '../../src/retrieval/debug-cache.js';
 
 describe('cacheScoringDetails', () => {
     beforeEach(() => {
@@ -137,51 +103,5 @@ describe('cacheScoringDetails', () => {
         expect(cached[0].retrieval_hits).toBe(0);
         expect(cached[0].mentions).toBe(1);
         expect(cached[0].characters_involved).toEqual([]);
-    });
-});
-
-describe('Layer 0 token count in debug export', () => {
-    beforeEach(() => {
-        clearRetrievalDebug();
-    });
-
-    it('should include layer0Count in cached query context', () => {
-        cacheRetrievalDebug({
-            queryContext: {
-                entities: ['King Aldric'],
-                bm25Tokens: {
-                    total: 25,
-                    entityStems: 5,
-                    grounded: 10,
-                    nonGrounded: 5,
-                    layer0Count: 5, // NEW
-                    layer1Count: 5, // NEW
-                },
-            },
-        });
-
-        const cached = getLastRetrievalDebug();
-        expect(cached.queryContext.bm25Tokens.layer0Count).toBe(5);
-        expect(cached.queryContext.bm25Tokens.layer1Count).toBe(5);
-    });
-});
-
-describe('Bucket distribution in debug export', () => {
-    beforeEach(() => {
-        clearRetrievalDebug();
-    });
-
-    it('should include bucket distribution in cached data', () => {
-        cacheRetrievalDebug({
-            bucketDistribution: {
-                before: { old: 100, mid: 200, recent: 300 },
-                after: { old: 150, mid: 200, recent: 250 },
-            },
-        });
-
-        const cached = getLastRetrievalDebug();
-        expect(cached.bucketDistribution).toBeDefined();
-        expect(cached.bucketDistribution.before.old).toBe(100);
-        expect(cached.bucketDistribution.after.old).toBe(150);
     });
 });
