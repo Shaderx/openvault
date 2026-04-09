@@ -191,18 +191,10 @@ export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = nu
         const nonGrounded = msgStems.filter((t) => !corpusVocab.has(t));
 
         if (msgStems.length > 0) {
-            logDebug('Three-tier BM25:', {
-                msgStems: msgStems.slice(0, 20),
-                groundedCount: grounded.length,
-                nonGroundedCount: nonGrounded.length,
-                sampleGrounded: grounded.slice(0, 10),
-                sampleNonGrounded: nonGrounded.slice(0, 10),
+            logDebug('[BM25] Three-tier grounding:', {
+                grounded: grounded.length,
+                nonGrounded: nonGrounded.length,
                 vocabSize: corpusVocab.size,
-                weights: {
-                    layer1: `${settings.entityBoostWeight}x (entities)`,
-                    layer2: `${Math.ceil(settings.entityBoostWeight * CORPUS_GROUNDED_BOOST_RATIO)}x (grounded)`,
-                    layer3: `${Math.ceil(settings.entityBoostWeight * NON_GROUNDED_BOOST_RATIO)}x (non-grounded)`,
-                },
             });
         }
 

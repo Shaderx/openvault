@@ -250,9 +250,9 @@ export const ExtractionOptionsSchema = z.object({
     isBackfill: z.boolean().optional(),
     isEmergencyCut: z.boolean().optional(),
     silent: z.boolean().optional(),
-    abortSignal: z.any().optional(),
-    progressCallback: z.any().optional(),
-    onPhase2Start: z.any().optional(),
+    abortSignal: z.unknown().optional(),
+    progressCallback: z.unknown().optional(),
+    onPhase2Start: z.unknown().optional(),
 });
 
 // IDF cache object
@@ -276,7 +276,7 @@ export const ExtractionContextParamsSchema = z.object({
 // LLM call options for structured extraction
 export const ExtractionLLMOptionsSchema = z.object({
     structured: z.boolean(),
-    signal: z.any().optional(),
+    signal: z.unknown().optional(),
 });
 
 // Return value from generateReflections
@@ -321,7 +321,7 @@ export const LLMConfigSchema = z.object({
 // LLM call options
 export const LLMCallOptionsSchema = z.object({
     structured: z.boolean().optional(),
-    signal: z.any().optional(),
+    signal: z.unknown().optional(),
     profileId: z.string().optional(),
     backupProfileId: z.string().optional(),
 });

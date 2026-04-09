@@ -160,8 +160,8 @@ async function generateTypes() {
     // Apply type overrides
     for (const [_typeName, overrides] of Object.entries(typeOverrides)) {
         for (const [fieldName, typeName] of Object.entries(overrides)) {
-            // Replace patterns like `fieldName?: any | undefined` with `fieldName?: typeName | undefined`
-            const pattern = new RegExp(`(${fieldName}\\?:) any (\\| undefined)`, 'g');
+            // Replace patterns like `fieldName?: unknown | undefined` with `fieldName?: typeName | undefined`
+            const pattern = new RegExp(`(${fieldName}\\?:) unknown (\\| undefined)`, 'g');
             typeContent = typeContent.replace(pattern, `$1 ${typeName} $2`);
         }
     }
