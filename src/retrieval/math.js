@@ -247,6 +247,15 @@ export function calculateScore(
     /** @type {number} */ bm25Score = 0,
     /** @type {Map<string, number>|null} */ chatFingerprintMap = null
 ) {
+    // === Settings Clamping (Defense-in-Depth) ===
+    // Prevents NaN, Infinity, and division-by-zero from corrupted/tampered settings.
+    // Zod schemas provide schema-level validation; this is the runtime safety net.
+    const clampedThreshold = Math.min(Math.max(settings.vectorSimilarityThreshold || 0, 0), 0.99);
+    const clampedAlpha = Math.min(Math.max(settings.alpha || 0, 0), 1);
+    const clampedBoostWeight = Math.max(settings.combinedBoostWeight || 0, 0);
+    const clampedTransientMultiplier = Math.max(settings.transientDecayMultiplier || 5.0, 0.01);
+    const clampedBaseLambda = Math.max(constants.BASE_LAMBDA || 0.001, 0.001);
+
     // === Forgetfulness Curve ===
     // Resolve message positions using fingerprints when available,
     // falling back to raw indices for backward compatibility
@@ -276,11 +285,11 @@ export function calculateScore(
     // Access-reinforced decay: dampen lambda by retrieval history
     const hits = memory.retrieval_hits || 0;
     const hitDamping = Math.max(0.5, 1 / (1 + hits * 0.1));
-    let lambda = (constants.BASE_LAMBDA / (importance * importance)) * hitDamping;
+    let lambda = (clampedBaseLambda / (importance * importance)) * hitDamping;
 
     // Apply transient multiplier for short-term memories (faster decay)
     if (memory.is_transient) {
-        const multiplier = settings.transientDecayMultiplier || 5.0;
+        const multiplier = clampedTransientMultiplier;
         lambda *= multiplier;
     }
 
@@ -296,8 +305,8 @@ export function calculateScore(
     const recencyPenalty = baseAfterFloor - base;
 
     // === Alpha-Blend Scoring ===
-    const alpha = settings.alpha;
-    const boostWeight = settings.combinedBoostWeight;
+    const alpha = clampedAlpha;
+    const boostWeight = clampedBoostWeight;
 
     // === Vector Similarity Bonus (alpha-blend) ===
     let vectorBonus = 0;
@@ -306,14 +315,14 @@ export function calculateScore(
     // ST Vector Storage branch: use pre-assigned proxy score (no local embeddings)
     if (!contextEmbedding && memory._proxyVectorScore != null) {
         vectorSimilarity = memory._proxyVectorScore;
-        const threshold = settings.vectorSimilarityThreshold;
+        const threshold = clampedThreshold;
         if (vectorSimilarity > threshold) {
             const normalizedSim = (vectorSimilarity - threshold) / (1 - threshold);
             vectorBonus = alpha * boostWeight * normalizedSim;
         }
     } else if (contextEmbedding && hasEmbedding(memory)) {
         vectorSimilarity = cosineSimilarity(contextEmbedding, getEmbedding(memory));
-        const threshold = settings.vectorSimilarityThreshold;
+        const threshold = clampedThreshold;
 
         if (vectorSimilarity > threshold) {
             // Scale similarity above threshold to bonus points
