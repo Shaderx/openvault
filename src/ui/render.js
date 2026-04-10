@@ -27,7 +27,7 @@ import {
     getPaginationInfo,
     sortMemoriesByDate,
 } from './helpers.js';
-import { renderErrorLog, renderPerfTab, updateBudgetIndicators } from './settings.js';
+import { renderPerfTab, updateBudgetIndicators } from './settings.js';
 import { refreshStats } from './status.js';
 import {
     renderCharacterState,
@@ -628,7 +628,6 @@ export function refreshAllUI() {
     renderWorldTab();
     updateBudgetIndicators();
     renderPerfTab();
-    renderErrorLog();
 
     refreshSidePanelLazy();
 }

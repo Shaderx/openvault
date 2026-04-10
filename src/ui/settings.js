@@ -28,7 +28,7 @@ import { updateEventListeners } from '../events.js';
 import { executeEmergencyCut } from '../extraction/extract.js';
 import { formatForClipboard, getAll as getPerfData } from '../perf/store.js';
 import { getSettings, setSetting } from '../settings.js';
-import { clearErrorLog, getErrorLog, logError, logInfo, logWarn } from '../utils/logging.js';
+import { logError, logInfo, logWarn } from '../utils/logging.js';
 import { exportToClipboard } from './export-debug.js';
 import { validateRPM } from './helpers.js';
 import { initBrowser, refreshAllUI, resetAndRender } from './render.js';
@@ -432,7 +432,7 @@ async function handleResetAndBackfill() {
     }
 
     const { extractAllMessages } = await import('../extraction/extract.js');
-    const { isWorkerRunning } = await import('../extraction/worker.js');
+    const { isWorkerRunning } = await import('../state.js');
     if (isWorkerRunning()) {
         showToast('warning', 'Background extraction in progress. Please wait.', 'OpenVault');
         return;
@@ -934,22 +934,6 @@ function bindUIElements() {
         );
     });
 
-    // Error log buttons
-    $('#openvault_copy_errors_btn').on('click', () => {
-        const entries = getErrorLog();
-        const text = entries.map((e) => `[${e.level}] ${e.ts} ${e.msg}${e.detail ? ' | ' + e.detail : ''}`).join('\n');
-        navigator.clipboard.writeText(text || '(empty)').then(
-            () => showToast('success', 'Error log copied to clipboard'),
-            () => showToast('error', 'Failed to copy')
-        );
-    });
-
-    $('#openvault_clear_errors_btn').on('click', () => {
-        clearErrorLog();
-        renderErrorLog();
-        showToast('info', 'Error log cleared');
-    });
-
     // Injection settings bindings
     bindInjectionSettings();
 }
@@ -1254,32 +1238,6 @@ export function renderPerfTab() {
         </tr>`);
     }
     tbody.innerHTML = rows.join('');
-}
-
-// =============================================================================
-// Error Log Panel
-// =============================================================================
-
-/**
- * Render the captured error log into the Perf tab panel.
- */
-export function renderErrorLog() {
-    const $log = $('#openvault_error_log');
-    if (!$log.length) return;
-
-    const entries = getErrorLog();
-    if (entries.length === 0) {
-        $log.html('<span class="openvault-placeholder">No errors captured</span>');
-        return;
-    }
-
-    const lines = entries.map((e) => {
-        const color = e.level === 'ERROR' ? 'var(--error-color, #c44)' : 'orange';
-        const detail = e.detail ? `\n   ${e.detail}` : '';
-        return `<div style="margin-bottom:4px;"><span style="color:${color};font-weight:bold;">[${e.level}]</span> <span style="color:var(--SmartThemeEmColor,#888);">${e.ts}</span> ${e.msg}${detail}</div>`;
-    });
-    $log.html(lines.join(''));
-    $log.scrollTop($log[0].scrollHeight);
 }
 
 // =============================================================================

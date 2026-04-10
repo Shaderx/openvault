@@ -1,37 +1,6 @@
 import { extensionName } from '../constants.js';
 import { getDeps } from '../deps.js';
 
-// =============================================================================
-// Error Ring Buffer — captured in memory for the Error Log UI panel
-// =============================================================================
-const MAX_ERROR_LOG = 50;
-const errorLog = [];
-
-function pushError(level, msg, detail) {
-    let detailStr;
-    if (detail instanceof Error) {
-        detailStr = `${detail.name}: ${detail.message}`;
-    } else if (typeof detail === 'string') {
-        detailStr = detail;
-    } else if (detail !== undefined && detail !== null) {
-        try { detailStr = JSON.stringify(detail); } catch { detailStr = String(detail); }
-    } else {
-        detailStr = '';
-    }
-    errorLog.push({ ts: new Date().toLocaleTimeString(), level, msg, detail: detailStr });
-    if (errorLog.length > MAX_ERROR_LOG) errorLog.shift();
-}
-
-/** Get snapshot of the error ring buffer (newest last). */
-export function getErrorLog() {
-    return errorLog;
-}
-
-/** Clear all captured errors. */
-export function clearErrorLog() {
-    errorLog.length = 0;
-}
-
 /**
  * Debug-only log. Hidden unless settings.debugMode is true.
  * @param {string} msg
@@ -74,7 +43,6 @@ export function logWarn(msg, data) {
     } else {
         c.warn(`[OpenVault] ${msg}`);
     }
-    pushError('WARN', msg, data);
 }
 
 /**
@@ -96,31 +64,6 @@ export function logError(msg, error, context) {
         c.log(context);
         groupEnd();
     }
-    const detail = stringifyError(error, context);
-    pushError('ERROR', msg, detail);
-}
-
-/**
- * Robust error stringifier — handles Error objects, strings, plain objects,
- * and anything else thrown by third-party code (e.g. Transformers.js).
- */
-function stringifyError(error, context) {
-    if (!error && !context) return '';
-    let parts = [];
-    if (error) {
-        if (error instanceof Error) {
-            parts.push(`${error.name}: ${error.message}`);
-            if (error.stack) parts.push(error.stack.split('\n').slice(0, 3).join('\n'));
-        } else if (typeof error === 'string') {
-            parts.push(error);
-        } else {
-            try { parts.push(JSON.stringify(error)); } catch { parts.push(String(error)); }
-        }
-    }
-    if (context) {
-        try { parts.push('ctx: ' + JSON.stringify(context)); } catch { parts.push('ctx: [unserializable]'); }
-    }
-    return parts.join(' | ');
 }
 
 /**
