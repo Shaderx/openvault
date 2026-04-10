@@ -120,6 +120,14 @@ These are fork-only features. Isolate in dedicated files where possible.
   4. Doubles `extraction_graph` maxTokens from 8000 → 16000 so reasoning models have headroom for both CoT and structured output
 - **Merge strategy:** Touches `src/llm.js` only. Could be PR'd — benefits all reasoning model users.
 
+### FEAT-10: Extraction Message Sanitization (Think Blocks + Outgoing Regex)
+- **Files:** `src/extraction/extract.js`
+- **What it does:** Cleans message content before sending to the extraction LLM:
+  1. Strips thinking/reasoning tags (`<think>`, `[THINK]`, `*thinks:*`, etc.) via `stripThinkingTags()` — safety net for cases where SillyTavern's reasoning parser didn't catch them
+  2. Applies SillyTavern's outgoing-prompt regex scripts (`isPrompt: true`) using the appropriate placement (`AI_OUTPUT` for bot messages, `USER_INPUT` for user messages). This respects user-configured regex rules that strip OOC commands, fix formatting, reduce tokens, etc.
+  3. Lazily imports ST's regex engine (`extensions/regex/engine.js`) at module init — fails silently if unavailable
+- **Merge strategy:** Touches `src/extraction/extract.js`. Could be PR'd — all users benefit from cleaner extraction input.
+
 ---
 
 ## Preferences (fork-only defaults)
@@ -157,4 +165,5 @@ After every `git merge upstream/master`, verify:
 7. [ ] `src/state.js` still has `lastApiCallTime` exports
 8. [ ] `src/llm.js` still calls `setLastApiCallTime` after responses
 9. [ ] No duplicate function declarations (check `git diff --check` for conflict markers)
-10. [ ] Extension loads without console errors
+10. [ ] `src/extraction/extract.js` still has `stripThinkingTags` + `applyOutgoingRegex` in message formatting
+11. [ ] Extension loads without console errors
