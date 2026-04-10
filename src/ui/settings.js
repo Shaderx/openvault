@@ -774,6 +774,9 @@ function bindUIElements() {
     // Feature settings
     bindSetting('reflection_threshold', 'reflectionThreshold');
     bindSetting('max_insights', 'maxInsightsPerReflection');
+    // NEW: Reflection control toggles
+    bindSetting('reflection_generation', 'reflectionGenerationEnabled', 'bool');
+    bindSetting('reflection_injection', 'reflectionInjectionEnabled', 'bool');
     bindSetting('world_context_budget', 'worldContextBudget', 'int', (v) =>
         updateWordsDisplay(v, 'openvault_world_context_budget_words')
     );
@@ -1001,6 +1004,10 @@ export function updateUI() {
 
     $('#openvault_max_insights').val(settings.maxInsightsPerReflection);
     $('#openvault_max_insights_value').text(settings.maxInsightsPerReflection);
+
+    // NEW: Reflection control toggles
+    $('#openvault_reflection_generation').prop('checked', settings.reflectionGenerationEnabled);
+    $('#openvault_reflection_injection').prop('checked', settings.reflectionInjectionEnabled);
 
     $('#openvault_world_context_budget').val(settings.worldContextBudget);
     $('#openvault_world_context_budget_value').text(settings.worldContextBudget);
