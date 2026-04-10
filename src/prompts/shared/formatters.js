@@ -17,7 +17,11 @@ import { MIRROR_LANGUAGE_RULES } from './rules.js';
  * Positive output format instruction placed at the end of every user prompt.
  * Replaces negative "do not use tool calls" constraints with affirmative framing.
  */
-export const EXECUTION_TRIGGER = `OUTPUT FORMAT: Write your reasoning in plain text inside <think> tags, then output a single raw JSON object immediately after. No tool calls, no function wrappers, no markdown code blocks.`;
+export const EXECUTION_TRIGGER = `OUTPUT FORMAT:
+Step 1: Write your reasoning in plain text inside <think/> tags.
+Step 2: You MUST close the reasoning block with exactly </think>.
+Step 3: Output ONLY a single raw JSON object immediately after the closing tag.
+CRITICAL: Do NOT put the JSON inside the think tags. The JSON must follow AFTER .vn.`;
 
 // =============================================================================
 // LANGUAGE RESOLUTION
