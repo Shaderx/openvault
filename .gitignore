@@ -24,6 +24,4 @@
 /.claude/
 /.wolf/
 
-# Local sync script
-sync-upstream.bat
 nul
