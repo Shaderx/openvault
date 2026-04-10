@@ -145,17 +145,31 @@ export async function callLLM(messages, config, options = {}) {
 
         const result = await raceAbort(withTimeout(requestPromise, timeoutMs || 120000, `${errorContext} API`), signal);
         setLastApiCallTime(Date.now());
-        // Extract content from result object, preserving empty strings as valid (not falsy)
-        const content = result && typeof result === 'object' && 'content' in result ? result.content : result || '';
+
+        // Extract content from result object.
+        let content = result && typeof result === 'object' && 'content' in result ? result.content : result || '';
+
+        // Reasoning models (DeepSeek, Kimi, etc.) may return the actual output in
+        // the `reasoning` field while leaving `content` empty. Try to recover:
+        // 1. Look for a JSON object/array in the reasoning text (structured calls)
+        // 2. Fall back to the full reasoning text (unstructured calls)
+        if (!content && result && typeof result === 'object' && result.reasoning) {
+            logDebug(`Content empty but reasoning field has ${result.reasoning.length} chars — attempting recovery`);
+
+            const jsonMatch = result.reasoning.match(/(\{[\s\S]*\}|\[[\s\S]*\])\s*$/);
+            if (jsonMatch) {
+                logDebug('Recovered JSON block from end of reasoning field');
+                content = jsonMatch[1];
+            } else {
+                content = result.reasoning;
+            }
+        }
 
         logDebug(`LLM response received (${content.length} chars)`);
         logRequest(errorContext, { messages, maxTokens, profileId: targetProfileId, response: content });
 
-        if (content.length === 0) {
-            logDebug(`ERROR: Empty LLM response! Full result: ${JSON.stringify(result).substring(0, 200)}`);
-        }
-
         if (!content) {
+            logDebug(`ERROR: Empty LLM response! Full result: ${JSON.stringify(result).substring(0, 200)}`);
             throw new Error('Empty response from LLM');
         }
 
