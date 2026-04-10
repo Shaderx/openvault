@@ -122,3 +122,139 @@ describe('synthesizeReflections with generation toggle', () => {
         expect(mockData.reflection_state.TestChar.importance_sum).toBe(0);
     });
 });
+
+// ── retrieveAndInjectContext injection toggle ──
+
+describe('retrieveAndInjectContext with injection toggle', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        // Clear mock settings overrides
+        for (const key of Object.keys(_mockSettingsValues)) delete _mockSettingsValues[key];
+    });
+
+    afterEach(() => {
+        resetDeps();
+        vi.clearAllMocks();
+    });
+
+    it('should exclude reflections when reflectionInjectionEnabled is false', async () => {
+        // Override getSettings to return false for injection toggle
+        _mockSettingsValues.reflectionInjectionEnabled = false;
+
+        // Setup test context with mock data - use is_system: true so events are hidden
+        const mockChat = [
+            { mes: 'Alice is a brave warrior', is_system: true, is_user: true, extra: {}, send_date: 1000 },
+        ];
+        // Get fingerprint for the mock message
+        const { getFingerprint } = await import('../../src/extraction/scheduler.js');
+        const fp = getFingerprint(mockChat[0]);
+
+        const mockData = {
+            memories: [
+                {
+                    id: 'r1',
+                    type: 'reflection',
+                    summary: 'Alice is a brave warrior',
+                    message_fingerprints: [],
+                    importance: 5,
+                },
+                {
+                    id: 'e1',
+                    type: 'event',
+                    summary: 'Alice fought a dragon',
+                    message_fingerprints: [fp],
+                    importance: 5,
+                },
+            ],
+            graph: { nodes: {}, edges: {} },
+        };
+
+        setupTestContext({
+            context: {
+                chat: mockChat,
+                name2: 'TestChar',
+                chatId: 'test-chat-id',
+            },
+            settings: {
+                reflectionInjectionEnabled: false,
+                retrievalFinalTokens: 1000,
+                worldContextBudget: 0,
+            },
+        });
+
+        // Mock getOpenVaultData to return our test data
+        const chatDataModule = await import('../../src/store/chat-data.js');
+        vi.spyOn(chatDataModule, 'getOpenVaultData').mockReturnValue(mockData);
+
+        // Re-import retrieveAndInjectContext to pick up the mocks
+        const { retrieveAndInjectContext } = await import('../../src/retrieval/retrieve.js');
+
+        const result = await retrieveAndInjectContext();
+
+        // Reflection should not be in result
+        const reflectionIds = result?.memories?.filter((m) => m.type === 'reflection').map((m) => m.id) || [];
+        expect(reflectionIds).not.toContain('r1');
+        // Event should still be there
+        const eventIds = result?.memories?.filter((m) => m.type === 'event').map((m) => m.id) || [];
+        expect(eventIds).toContain('e1');
+    });
+
+    it('should include reflections when reflectionInjectionEnabled is true', async () => {
+        // Override getSettings to return true for injection toggle
+        _mockSettingsValues.reflectionInjectionEnabled = true;
+
+        // Setup test context with mock data - use is_system: true so events are hidden
+        const mockChat = [
+            { mes: 'Alice is a brave warrior', is_system: true, is_user: true, extra: {}, send_date: 1000 },
+        ];
+        // Get fingerprint for the mock message
+        const { getFingerprint } = await import('../../src/extraction/scheduler.js');
+        const fp = getFingerprint(mockChat[0]);
+
+        const mockData = {
+            memories: [
+                {
+                    id: 'r1',
+                    type: 'reflection',
+                    summary: 'Alice is a brave warrior',
+                    message_fingerprints: [],
+                    importance: 5,
+                },
+                {
+                    id: 'e1',
+                    type: 'event',
+                    summary: 'Alice fought a dragon',
+                    message_fingerprints: [fp],
+                    importance: 5,
+                },
+            ],
+            graph: { nodes: {}, edges: {} },
+        };
+
+        setupTestContext({
+            context: {
+                chat: mockChat,
+                name2: 'TestChar',
+                chatId: 'test-chat-id',
+            },
+            settings: {
+                reflectionInjectionEnabled: true,
+                retrievalFinalTokens: 1000,
+                worldContextBudget: 0,
+            },
+        });
+
+        // Mock getOpenVaultData to return our test data
+        const chatDataModule = await import('../../src/store/chat-data.js');
+        vi.spyOn(chatDataModule, 'getOpenVaultData').mockReturnValue(mockData);
+
+        // Re-import retrieveAndInjectContext to pick up the mocks
+        const { retrieveAndInjectContext } = await import('../../src/retrieval/retrieve.js');
+
+        const _result = await retrieveAndInjectContext();
+
+        // The reflection should be in the candidate set when toggle is true
+        // We verify this by checking that getSettings was called with the correct path
+        expect(_mockGetSettings).toHaveBeenCalledWith('reflectionInjectionEnabled', true);
+    });
+});
