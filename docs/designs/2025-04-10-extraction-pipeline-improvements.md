@@ -143,27 +143,23 @@ Chat saves take 2-5 seconds, causing UI stuttering:
 ### Root Cause
 The entire `chatMetadata.openvault` object (memories, graph, embeddings) is serialized synchronously without yielding the main thread.
 
-### Solution: Cooperative Save Strategy
+### Solution: Cooperative Save Strategy (DRY)
 
 **File:** `src/store/chat-data.js`
 **Function:** `saveOpenVaultData()` (lines ~70-91)
 
-**Also:** `src/extraction/extract.js`
-**Locations:** Lines ~1033, ~1083, ~1131
-
-Add `yieldToMain()` calls before and after save operations:
+Add `yieldToMain()` calls **inside** the function to automatically protect all call sites:
 
 ```javascript
 // In src/store/chat-data.js
 export async function saveOpenVaultData(expectedChatId = null) {
-    await yieldToMain(); // ADD: Yield before heavy serialization
-    const t0 = performance.now();
-    // ... existing logic ...
+    // ... validation logic ...
+
     try {
+        await yieldToMain(); // ADD: Yield before ST's heavy synchronous save
         await getDeps().saveChatConditional();
-        record('chat_save', performance.now() - t0);
-        await yieldToMain(); // ADD: Yield after save completes
-        return true;
+        await yieldToMain(); // ADD: Yield after the thread-blocking operation
+        // ... logging and return ...
     } catch (error) {
         // ... existing error handling ...
     }
@@ -176,22 +172,10 @@ export async function saveOpenVaultData(expectedChatId = null) {
 import { yieldToMain } from '../utils/st-helpers.js';
 ```
 
-### Implementation Pattern
-
-For each `saveOpenVaultData()` call site:
-
-```javascript
-// Before
-await saveOpenVaultData();
-
-// After
-await yieldToMain();
-await saveOpenVaultData();
-await yieldToMain();
-```
+**Note:** Since all domain code calls this centralized repository method to persist data, modifying the function internally automatically protects all call sites (including those in `extract.js` and `communities.js`) without needing to touch them.
 
 ### Trade-offs
-- **Pros:** Immediate UI relief; minimal code change
+- **Pros:** Immediate UI relief; minimal code change; DRY (single point of modification)
 - **Cons:** Adds async overhead; doesn't reduce actual serialization time
 
 ---
@@ -201,8 +185,7 @@ await yieldToMain();
 - [ ] **Problem 1:** Add validation step to `GRAPH_RULES` in `src/prompts/graph/rules.js`
 - [ ] **Problem 2:** Add PROHIBITED list to `OBJECT` type in `src/prompts/graph/rules.js`
 - [ ] **Problem 3:** Update `EXECUTION_TRIGGER` in `src/prompts/shared/formatters.js`
-- [ ] **Problem 4:** Add `yieldToMain` import and calls in `src/store/chat-data.js`
-- [ ] **Problem 4:** Wrap `saveOpenVaultData()` calls in `src/extraction/extract.js` with `yieldToMain()`
+- [ ] **Problem 4:** Add `yieldToMain` import and calls **inside** `saveOpenVaultData()` in `src/store/chat-data.js`
 - [ ] Run `npm run check` to verify no regressions
 - [ ] Commit with message: `design: implement extraction pipeline improvements`
 
