@@ -24,6 +24,12 @@
 /* World view (entities, communities) */
 @import url("css/world.css");
 
+/* Entity cards and badges */
+@import url("css/entities.css");
+
+/* Entity CRUD (edit, merge, delete) */
+@import url("css/entity-crud.css");
+
 /* Collapsible details/summary sections */
 @import url("css/details.css");
 

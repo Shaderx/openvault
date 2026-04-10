@@ -839,6 +839,8 @@ export function refreshAllUI() {
     renderWorldTab();
     updateBudgetIndicators();
     renderPerfTab();
+
+    import('./side-panel.js').then(({ refreshSidePanel }) => refreshSidePanel());
 }
 
 // =============================================================================

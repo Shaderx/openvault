@@ -156,13 +156,11 @@ function renderSideEntities() {
         return;
     }
 
-    const nodes = data?.graph?.nodes || {};
-    const allEntities = Object.entries(nodes).map(([key, node]) => ({ ...node, _key: key }));
-
+    const graph = data?.graph || {};
     const typeFilter = $('#openvault_side_entity_type').val() || '';
     const searchQuery = ($('#openvault_side_entity_search').val() || '').toLowerCase().trim();
 
-    const filtered = filterEntities(allEntities, typeFilter, searchQuery);
+    const filtered = filterEntities(graph, searchQuery, typeFilter);
 
     if (filtered.length === 0) {
         const msg = searchQuery || typeFilter ? 'No entities match your filters' : 'No entities extracted yet';
@@ -170,7 +168,7 @@ function renderSideEntities() {
         return;
     }
 
-    const html = filtered.map(renderEntityCard).join('');
+    const html = filtered.map(([key, entity]) => renderEntityCard(entity, key)).join('');
     $container.html(html);
 }
 
