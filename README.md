@@ -102,7 +102,7 @@ Everything stays on your machine. The in-browser embedding model means no text g
 
 ## Version History
 
-- **22.00** - Bugfixes (about 20 of them)
+- **22.00** - Fixed a lot of bugs. Reduced tests count by 1/3. Tested on 3 RP (full json) ppl send me. I record all backfill log. Feed it o ai studio and modify prompt/code. It never be perfect but we can make it good enough
 - **21.00** - Provides a manual mechanism to merge two entities
 - **20.00** - Entity editing, deletion, and alias management with tab restructure from "World" to "Entities" + "Communities"
 - **19.00** - Exclude the last N complete turns from extraction batches so hallucinated/swiped AI responses dont enter the memory
