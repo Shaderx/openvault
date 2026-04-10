@@ -111,6 +111,15 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **What it does:** Calls `refreshAllUI()` after each successful worker extraction, so the main panel and sidebar update in real-time.
 - **Merge strategy:** 2 lines (import + call). Easy to re-add.
 
+### FEAT-9: Reasoning Model Recovery + Doubled Graph Token Budget
+- **Files:** `src/llm.js` (response recovery), `src/llm.js` (`LLM_CONFIGS.extraction_graph.maxTokens`)
+- **What it does:** Reasoning models (DeepSeek, Kimi, etc.) sometimes put all output in the `reasoning` field and leave `content` empty. This fix:
+  1. Detects empty `content` with populated `reasoning` field
+  2. Tries to extract a JSON block from the end of the reasoning text (for structured calls)
+  3. Falls back to the full reasoning text for downstream parsing
+  4. Doubles `extraction_graph` maxTokens from 8000 → 16000 so reasoning models have headroom for both CoT and structured output
+- **Merge strategy:** Touches `src/llm.js` only. Could be PR'd — benefits all reasoning model users.
+
 ---
 
 ## Preferences (fork-only defaults)
