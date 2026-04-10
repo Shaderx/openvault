@@ -444,8 +444,9 @@ async function handleResetAndBackfill() {
 
     let unhidden = 0;
     for (const msg of chat) {
-        if (msg.is_system && msg.mes) {
+        if (msg.openvault_hidden && msg.is_system) {
             msg.is_system = false;
+            delete msg.openvault_hidden;
             unhidden++;
         }
     }
@@ -459,7 +460,50 @@ async function handleResetAndBackfill() {
     refreshAllUI();
 
     showToast('info', `Un-hid ${unhidden} messages. Starting full backfill...`);
-    await extractAllMessages(updateEventListeners);
+    await extractAllMessages({
+        onComplete: updateEventListeners,
+        onStart: (batchCount) => {
+            setStatus('extracting');
+            toastr?.info(`Reset & Backfill: 0/${batchCount} batches (0%)`, 'OpenVault - Re-extracting', {
+                timeOut: 0,
+                extendedTimeOut: 0,
+                tapToDismiss: false,
+                toastClass: 'toast openvault-backfill-toast',
+            });
+        },
+        onProgress: (batchNum, totalBatches, _eventsCreated, retryText) => {
+            const progress = Math.round((batchNum / totalBatches) * 100);
+            $('.openvault-backfill-toast .toast-message').text(
+                `Reset & Backfill: ${batchNum}/${totalBatches} batches (${Math.min(progress, 100)}%) - Processing...${retryText}`
+            );
+        },
+        onBatchRetryWait: (batchNum, totalBatches, backoffSeconds, retryCount) => {
+            $('.openvault-backfill-toast .toast-message').text(
+                `Reset & Backfill: ${batchNum}/${totalBatches} batches - Waiting ${backoffSeconds}s before retry ${retryCount}...`
+            );
+        },
+        onPhase2Start: () => {
+            $('.openvault-backfill-toast .toast-message').text(
+                'Reset & Backfill: 100% - Synthesizing world state and reflections...'
+            );
+        },
+        onFinish: ({ messagesProcessed, eventsCreated }) => {
+            $('.openvault-backfill-toast').remove();
+            showToast('success', `Reset complete: ${eventsCreated} events from ${messagesProcessed} messages`);
+            refreshAllUI();
+            setStatus('ready');
+        },
+        onAbort: () => {
+            $('.openvault-backfill-toast').remove();
+            showToast('warning', 'Reset & Backfill aborted: chat changed', 'OpenVault');
+            setStatus('ready');
+        },
+        onError: (error) => {
+            $('.openvault-backfill-toast').remove();
+            showToast('warning', error.message, 'OpenVault');
+            setStatus('ready');
+        },
+    });
 }
 
 /**
