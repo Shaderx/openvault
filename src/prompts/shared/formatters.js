@@ -21,7 +21,7 @@ export const EXECUTION_TRIGGER = `OUTPUT FORMAT:
 Step 1: Write your reasoning in plain text inside <think/> tags.
 Step 2: You MUST close the reasoning block with exactly </think>.
 Step 3: Output ONLY a single raw JSON object immediately after the closing tag.
-CRITICAL: Do NOT put the JSON inside the think tags. The JSON must follow AFTER .vn.`;
+CRITICAL: Do NOT put the JSON inside the think tags. The JSON must follow AFTER think`;
 
 // =============================================================================
 // LANGUAGE RESOLUTION
