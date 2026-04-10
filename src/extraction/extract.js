@@ -67,39 +67,9 @@ import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '..
 import { logDebug, logError, logInfo } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
-import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence, stripThinkingTags } from '../utils/text.js';
+import { sanitizeMessageContent } from '../utils/message-sanitizer.js';
+import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 import { countTokens } from '../utils/tokens.js';
-
-/**
- * Lazily imported reference to SillyTavern's regex engine.
- * @type {{ getRegexedString: Function, regex_placement: Object } | null}
- */
-let _regexEngine = null;
-
-/**
- * Apply SillyTavern's outgoing-prompt regex scripts to a message.
- * Uses the appropriate placement (AI_OUTPUT for bot messages, USER_INPUT for user messages).
- * Only applies scripts marked as "alter outgoing prompt" (promptOnly) or universal scripts.
- * @param {string} text - Message content
- * @param {boolean} isUser - Whether the message is from the user
- * @returns {string} Regex-processed text
- */
-function applyOutgoingRegex(text, isUser) {
-    try {
-        if (!_regexEngine) return text;
-        const placement = isUser
-            ? _regexEngine.regex_placement.USER_INPUT
-            : _regexEngine.regex_placement.AI_OUTPUT;
-        return _regexEngine.getRegexedString(text, placement, { isPrompt: true });
-    } catch {
-        return text;
-    }
-}
-
-// Load regex engine at module init — non-blocking, fails silently
-import('../../../../regex/engine.js')
-    .then((mod) => { _regexEngine = mod; })
-    .catch(() => { logDebug('ST regex engine not available — skipping outgoing regex'); });
 import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
 import {
     getBackfillMessageIds,
@@ -999,9 +969,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         const messagesText = messages
             .map((m) => {
                 const speaker = m.is_user ? userName : m.name || characterName;
-                let text = stripThinkingTags(m.mes || '');
-                text = applyOutgoingRegex(text, !!m.is_user);
-                return `[${speaker}]: ${text}`;
+                return `[${speaker}]: ${sanitizeMessageContent(m.mes, !!m.is_user)}`;
             })
             .join('\n\n');
 

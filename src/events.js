@@ -227,6 +227,7 @@ export async function onChatChanged() {
     const { cleanupCharacterStates } = await import('./extraction/extract.js');
     const { clearRetrievalDebug } = await import('./retrieval/debug-cache.js');
     const { clearTokenCache } = await import('./utils/tokens.js');
+    const { clearSanitizedTokenCache } = await import('./utils/message-sanitizer.js');
 
     logDebug('Chat changed, clearing injection, cache and setting load cooldown');
 
@@ -285,8 +286,9 @@ export async function onChatChanged() {
         }
     }
 
-    // Clear token cache when switching chats
+    // Clear token caches when switching chats
     clearTokenCache();
+    clearSanitizedTokenCache();
 
     // Clear embedding cache to free memory when switching chats
     clearEmbeddingCache();

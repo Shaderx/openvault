@@ -121,12 +121,17 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **Merge strategy:** Touches `src/llm.js` only. Could be PR'd — benefits all reasoning model users.
 
 ### FEAT-10: Extraction Message Sanitization (Think Blocks + Outgoing Regex)
-- **Files:** `src/extraction/extract.js`
-- **What it does:** Cleans message content before sending to the extraction LLM:
-  1. Strips thinking/reasoning tags (`<think>`, `[THINK]`, `*thinks:*`, etc.) via `stripThinkingTags()` — safety net for cases where SillyTavern's reasoning parser didn't catch them
-  2. Applies SillyTavern's outgoing-prompt regex scripts (`isPrompt: true`) using the appropriate placement (`AI_OUTPUT` for bot messages, `USER_INPUT` for user messages). This respects user-configured regex rules that strip OOC commands, fix formatting, reduce tokens, etc.
-  3. Lazily imports ST's regex engine (`extensions/regex/engine.js`) at module init — fails silently if unavailable
-- **Merge strategy:** Touches `src/extraction/extract.js`. Could be PR'd — all users benefit from cleaner extraction input.
+- **New file (no merge conflict):** `src/utils/message-sanitizer.js` — all sanitization logic isolated here:
+  - `sanitizeMessageContent(mes, isUser)` — strips think blocks + applies outgoing regex
+  - `getSanitizedTokenCount(chat, index)` / `getSanitizedTokenSum(chat, indices)` — token counting on cleaned content (drop-in replacements for `tokens.js` functions)
+  - `clearSanitizedTokenCache()` — clears the sanitized token cache on chat switch
+  - Lazily imports ST's regex engine (`extensions/regex/engine.js`) — fails silently if unavailable
+- **Upstream file touches (minimal):**
+  - `src/extraction/extract.js` — 1 import + 1 call to `sanitizeMessageContent` in message formatting
+  - `src/extraction/scheduler.js` — 1 import line changed: aliases `getSanitizedTokenCount`/`Sum` as `getMessageTokenCount`/`getTokenSum` so batch sizing uses cleaned content
+  - `src/events.js` — 2 lines: import + call `clearSanitizedTokenCache()` alongside existing `clearTokenCache()`
+- **Why:** Raw `m.mes` may contain think blocks that inflate token counts, causing more batches than necessary. Outgoing-prompt regex scripts (OOC removal, formatting fixes, token reduction) should apply to extraction just like they do to the main AI.
+- **Merge strategy:** Core logic in new file. Only 3 upstream files touched with 1-2 line changes each.
 
 ---
 

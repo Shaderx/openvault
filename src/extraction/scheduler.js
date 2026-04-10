@@ -8,7 +8,8 @@
 import { PROCESSED_MESSAGES_KEY, SWIPE_PROTECTION_TAIL_MESSAGES } from '../constants.js';
 import { cyrb53 } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
-import { getMessageTokenCount, getTokenSum, snapToTurnBoundary } from '../utils/tokens.js';
+import { getSanitizedTokenCount as getMessageTokenCount, getSanitizedTokenSum as getTokenSum } from '../utils/message-sanitizer.js';
+import { snapToTurnBoundary } from '../utils/tokens.js';
 
 /**
  * Get a stable fingerprint for a message.
