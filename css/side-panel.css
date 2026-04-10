@@ -99,24 +99,52 @@
     flex-direction: column;
 }
 
-/* Memory items in side panel - compact */
-.openvault-side-scroll .openvault-memory-card {
+/* Sidebar memory cards — compact, buttons beside date */
+.openvault-side-mem {
     padding: 8px 10px;
     margin-bottom: 6px;
     font-size: 0.88em;
 }
 
-.openvault-side-scroll .openvault-memory-card-summary {
+.openvault-side-mem-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    gap: 6px;
+}
+
+.openvault-side-mem-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.openvault-side-mem-date {
+    font-size: 0.8em;
+    color: var(--SmartThemeEmColor, #888);
+    white-space: nowrap;
+}
+
+.openvault-side-mem-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.openvault-side-mem-actions .openvault-entity-action-btn {
+    padding: 2px 4px;
+    font-size: 0.85em;
+}
+
+.openvault-side-mem .openvault-memory-card-summary {
     font-size: 0.9em;
     line-height: 1.35;
-    margin-bottom: 6px;
 }
 
-.openvault-side-scroll .openvault-memory-card-footer {
-    gap: 4px;
-}
-
-.openvault-side-scroll .openvault-memory-card-badge {
+.openvault-side-mem .openvault-memory-card-badge {
     font-size: 0.65em;
     padding: 1px 6px;
 }

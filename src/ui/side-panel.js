@@ -8,12 +8,11 @@
 import { CHARACTERS_KEY, MEMORIES_KEY, extensionFolderPath } from '../constants.js';
 import { getOpenVaultData } from '../store/chat-data.js';
 import { escapeHtml } from '../utils/dom.js';
-import { buildCharacterStateData, filterEntities } from './helpers.js';
+import { buildCharacterStateData, filterEntities, formatMemoryDate, formatMemoryImportance } from './helpers.js';
 import {
     renderCharacterState,
     renderCommunityAccordion,
     renderEntityCard,
-    renderMemoryItem,
 } from './templates.js';
 
 let _initialized = false;
@@ -89,6 +88,40 @@ export function isSidePanelOpen() {
 }
 
 // =============================================================================
+// Sidebar-specific memory card (buttons beside date, compact layout)
+// =============================================================================
+
+function renderSideMemoryItem(memory) {
+    const id = escapeHtml(memory.id);
+    const date = formatMemoryDate(memory.created_at);
+    const stars = formatMemoryImportance(memory.importance || 3);
+    const anchorHtml = memory.temporal_anchor
+        ? `<span class="openvault-side-mem-date" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-clock"></i> ${escapeHtml(memory.temporal_anchor)}</span>`
+        : '';
+
+    return `
+        <div class="openvault-memory-card openvault-side-mem" data-id="${id}">
+            <div class="openvault-side-mem-header">
+                <div class="openvault-side-mem-meta">
+                    ${anchorHtml}
+                    <span class="openvault-side-mem-date">${escapeHtml(date)}</span>
+                    <span class="openvault-memory-card-badge importance">${stars}</span>
+                </div>
+                <div class="openvault-side-mem-actions">
+                    <button class="openvault-entity-action-btn openvault-edit-memory" data-id="${id}" title="Edit">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="openvault-entity-action-btn openvault-delete-memory" data-id="${id}" title="Delete">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="openvault-memory-card-summary">${escapeHtml(memory.summary || 'No summary')}</div>
+        </div>
+    `;
+}
+
+// =============================================================================
 // Rendering
 // =============================================================================
 
@@ -119,7 +152,7 @@ function renderSideMemories() {
 
     // Sort oldest first so latest is at the bottom (natural scroll)
     const sorted = [...memories].sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
-    const html = sorted.map(renderMemoryItem).join('');
+    const html = sorted.map(renderSideMemoryItem).join('');
     $container.html(html);
 
     // Auto-scroll to bottom (latest memories)
