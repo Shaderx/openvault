@@ -95,11 +95,11 @@ These are fork-only features. Isolate in dedicated files where possible.
 ### ~~FEAT-5: Generate Reflections Button~~ (REMOVED)
 - Removed — was broken dead code (wrong imports, missing HTML button).
 
-### FEAT-6: Post-History Prompt Injection (PARTIAL)
-- **Files:** `src/constants.js` (+`postHistoryPrompt` default), `src/retrieval/retrieve.js` (+injection logic), `src/ui/settings.js` (+binding + UI sync)
-- **What it does:** Injects a user-defined prompt after all chat messages (IN_CHAT position, depth 0).
-- **Status: PARTIAL** — Backend injection works but `#openvault_post_history_prompt` input field is missing from `settings_panel.html`. Settings binding and UI sync exist but have no visible UI element.
-- **Merge strategy:** Touches 3 upstream files. Changes are small and additive. Needs HTML input added to complete the feature.
+### FEAT-6: Post-History Prompt Injection
+- **Files:** `src/constants.js` (+`postHistoryPrompt` default), `src/retrieval/retrieve.js` (+injection logic), `src/ui/settings.js` (+binding + UI sync), `templates/settings_panel.html` (+textarea)
+- **What it does:** Injects a user-defined prompt after all chat messages (IN_CHAT position, depth 0). Useful for steering model behavior with providers that need a trailing instruction to stay in character.
+- **Status:** Complete. PR submitted upstream.
+- **Merge strategy:** Touches 4 upstream files. Changes are small and additive.
 
 ### FEAT-7: Embedding Model Reset on Source Switch
 - **Files:** `src/ui/settings.js`
@@ -130,9 +130,8 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **What it does:** Fires a dummy `getDocumentEmbedding('warmup')` call on extension init to eagerly load the transformers pipeline.
 - **Merge strategy:** 3 lines at end of init. Easy to re-add.
 
-### PREF-4: .gitignore additions
-- **Files:** `.gitignore`
-- **What it does:** Ignores `sync-upstream.bat` and `nul`.
+### ~~PREF-4: .gitignore additions~~ (REMOVED)
+- Reverted `.gitignore` to upstream defaults. Removed `sync-upstream.bat`.
 
 ---
 
