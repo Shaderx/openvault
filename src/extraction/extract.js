@@ -67,7 +67,7 @@ import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '..
 import { logDebug, logError, logInfo } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
-import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
+import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence, stripThinkingTags } from '../utils/text.js';
 import { countTokens } from '../utils/tokens.js';
 import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
 import {
@@ -968,7 +968,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         const messagesText = messages
             .map((m) => {
                 const speaker = m.is_user ? userName : m.name || characterName;
-                return `[${speaker}]: ${m.mes}`;
+                const cleanText = stripThinkingTags(m.mes || '');
+                return `[${speaker}]: ${cleanText}`;
             })
             .join('\n\n');
 
