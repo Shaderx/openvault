@@ -29,6 +29,7 @@ import {
 } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
+import { getFingerprint } from '../extraction/scheduler.js';
 import { cachedContent } from '../injection/macros.js';
 import { filterMemoriesByPOV, getActiveCharacters, getPOVContext } from '../pov.js';
 import { getOpenVaultData } from '../store/chat-data.js';
@@ -52,7 +53,28 @@ import { retrieveWorldContext } from './world-context.js';
  * @returns {Object[]} Memories whose oldest source message is hidden
  */
 function _getHiddenMemories(chat, memories) {
+    // Build fingerprint→index map for current chat
+    const fpMap = new Map();
+    for (let i = 0; i < chat.length; i++) {
+        const fp = getFingerprint(chat[i]);
+        fpMap.set(fp, i);
+    }
+
     return memories.filter((m) => {
+        // Prefer fingerprints (stable across chat mutations)
+        if (m.message_fingerprints?.length > 0) {
+            const resolvedIndices = m.message_fingerprints
+                .map((fp) => fpMap.get(fp))
+                .filter((idx) => idx !== undefined);
+            if (resolvedIndices.length > 0) {
+                const minId = Math.min(...resolvedIndices);
+                return chat[minId]?.is_system;
+            }
+            // Fingerprints exist but resolve to nothing — source messages were deleted.
+            // They are no longer visible, so the memory is injectable.
+            return true;
+        }
+        // Fall back to message_ids ONLY when fingerprints are absent (unmigrated v2 data)
         if (!m.message_ids?.length) return false;
         const minId = Math.min(...m.message_ids);
         return chat[minId]?.is_system;
@@ -134,6 +156,13 @@ export function buildRetrievalContext(opts = {}) {
         recentContext,
         userMessages,
         chatLength: chat.length,
+        chatFingerprintMap: (() => {
+            const map = new Map();
+            for (let i = 0; i < chat.length; i++) {
+                map.set(getFingerprint(chat[i]), i);
+            }
+            return map;
+        })(),
         primaryCharacter,
         activeCharacters: getActiveCharacters(),
         headerName: isGroupChat ? povCharacters[0] : 'Scene',
@@ -201,7 +230,8 @@ export function injectContext(contextText, worldText = '') {
 async function selectFormatAndInject(memoriesToUse, data, ctx) {
     const { primaryCharacter, activeCharacters, headerName, finalTokens, chatLength, userMessages } = ctx;
 
-    const relevantMemories = await selectRelevantMemories(memoriesToUse, ctx);
+    const selectionResult = await selectRelevantMemories(memoriesToUse, ctx);
+    const relevantMemories = selectionResult.memories;
 
     if (!relevantMemories || relevantMemories.length === 0) {
         // Clear cachedContent and world context if no memories found
@@ -246,7 +276,8 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
             data.global_world_state || null,
             userMessages || '',
             worldQueryEmbedding, // May be null for st_vector
-            ctx.worldContextBudget
+            ctx.worldContextBudget,
+            selectionResult.communityIds || null // ST Vector community IDs from scoring
         );
         worldText = worldResult.text || '';
         // Cache world context result for debug export

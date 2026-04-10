@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deleteEmbedding, getEmbedding, hasEmbedding, setEmbedding } from '../../src/utils/embedding-codec.js';
+import { getEmbedding, hasEmbedding, setEmbedding } from '../../src/utils/embedding-codec.js';
 
 describe('setEmbedding + getEmbedding roundtrip', () => {
     it('encodes to Base64 and decodes back to Float32Array', () => {
@@ -33,9 +33,7 @@ describe('setEmbedding + getEmbedding roundtrip', () => {
             expect(decoded[i]).toBeCloseTo(vec[i], 5);
         }
     });
-});
 
-describe('getEmbedding (lazy migration)', () => {
     it('wraps legacy number[] in Float32Array', () => {
         const obj = { embedding: [0.1, 0.2, 0.3] };
         const result = getEmbedding(obj);
@@ -45,63 +43,6 @@ describe('getEmbedding (lazy migration)', () => {
         expect(result[1]).toBeCloseTo(0.2, 5);
         expect(result[2]).toBeCloseTo(0.3, 5);
     });
-
-    it('prefers embedding_b64 over legacy embedding', () => {
-        const obj = { embedding: [999, 999] };
-        setEmbedding(obj, [0.1, 0.2]);
-        // Manually add back legacy key to simulate mixed state
-        obj.embedding = [999, 999];
-        const result = getEmbedding(obj);
-        expect(result[0]).toBeCloseTo(0.1, 5);
-    });
-
-    it('returns null for empty object', () => {
-        expect(getEmbedding({})).toBeNull();
-    });
-
-    it('returns null for null/undefined input', () => {
-        expect(getEmbedding(null)).toBeNull();
-        expect(getEmbedding(undefined)).toBeNull();
-    });
-
-    it('returns null for embedding: null', () => {
-        expect(getEmbedding({ embedding: null })).toBeNull();
-    });
-
-    it('returns null for embedding: []', () => {
-        expect(getEmbedding({ embedding: [] })).toBeNull();
-    });
-
-    it('returns Float32Array from Base64 decode', () => {
-        const obj = {};
-        setEmbedding(obj, [0.5, -0.5, 1.0]);
-        const result = getEmbedding(obj);
-        expect(result).toBeInstanceOf(Float32Array);
-        expect(result).toHaveLength(3);
-    });
-
-    it('returns Float32Array from legacy path', () => {
-        const obj = { embedding: [1.0, 2.0] };
-        const result = getEmbedding(obj);
-        expect(result).toBeInstanceOf(Float32Array);
-    });
-});
-
-describe('setEmbedding', () => {
-    it('deletes legacy embedding key', () => {
-        const obj = { embedding: [1, 2, 3] };
-        setEmbedding(obj, [0.5, 0.6]);
-        expect(obj.embedding).toBeUndefined();
-        expect(obj.embedding_b64).toBeTypeOf('string');
-    });
-
-    it('accepts Float32Array input', () => {
-        const obj = {};
-        setEmbedding(obj, new Float32Array([0.1, 0.2, 0.3]));
-        const decoded = getEmbedding(obj);
-        expect(decoded).toHaveLength(3);
-        expect(decoded[0]).toBeCloseTo(0.1, 5);
-    });
 });
 
 describe('hasEmbedding', () => {
@@ -109,67 +50,5 @@ describe('hasEmbedding', () => {
         const obj = {};
         setEmbedding(obj, [0.1]);
         expect(hasEmbedding(obj)).toBe(true);
-    });
-
-    it('returns true for legacy embedding', () => {
-        expect(hasEmbedding({ embedding: [0.1] })).toBe(true);
-    });
-
-    it('returns false for empty object', () => {
-        expect(hasEmbedding({})).toBe(false);
-    });
-
-    it('returns false for null/undefined', () => {
-        expect(hasEmbedding(null)).toBe(false);
-        expect(hasEmbedding(undefined)).toBe(false);
-    });
-
-    it('returns false for embedding: null', () => {
-        expect(hasEmbedding({ embedding: null })).toBe(false);
-    });
-
-    it('returns false for embedding: []', () => {
-        expect(hasEmbedding({ embedding: [] })).toBe(false);
-    });
-});
-
-describe('deleteEmbedding', () => {
-    it('removes both embedding_b64 and embedding', () => {
-        const obj = { embedding: [1], embedding_b64: 'abc' };
-        deleteEmbedding(obj);
-        expect(obj.embedding).toBeUndefined();
-        expect(obj.embedding_b64).toBeUndefined();
-    });
-
-    it('handles object with only legacy key', () => {
-        const obj = { embedding: [1, 2] };
-        deleteEmbedding(obj);
-        expect(obj.embedding).toBeUndefined();
-    });
-
-    it('no-ops on empty object', () => {
-        const obj = {};
-        deleteEmbedding(obj);
-        expect(Object.keys(obj)).toHaveLength(0);
-    });
-
-    it('no-ops on null/undefined', () => {
-        expect(() => deleteEmbedding(null)).not.toThrow();
-        expect(() => deleteEmbedding(undefined)).not.toThrow();
-    });
-});
-
-describe('post-migration behavior (no legacy fallback)', () => {
-    it('getEmbedding returns null for legacy array after migration', () => {
-        // After v2 migration, all arrays should be converted to b64
-        // This test documents the expected behavior when legacy data is gone
-        const obj = {};
-        setEmbedding(obj, [0.1, 0.2, 0.3]);
-        expect(getEmbedding(obj)).toBeInstanceOf(Float32Array);
-
-        // Manually setting legacy array should still work during transition
-        obj.embedding = [0.4, 0.5];
-        expect(getEmbedding(obj)).toBeInstanceOf(Float32Array);
-        expect(getEmbedding(obj)[0]).toBeCloseTo(0.1, 5); // Prefers b64
     });
 });

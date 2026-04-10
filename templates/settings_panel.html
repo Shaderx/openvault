@@ -3,26 +3,34 @@
         <div class="inline-drawer-toggle inline-drawer-header">
             <b>OpenVault</b>
             <span id="openvault_status" class="openvault-status ready">Ready</span>
-            <i id="openvault_side_panel_toggle" class="fa-solid fa-table-columns menu_button margin0" title="Toggle memory side panel"></i>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div class="inline-drawer-content">
-            <!-- Tab Navigation — 4 tabs, browsers-first layout -->
+            <!-- Tab Navigation — 6 tabs, responsive labels -->
             <div class="openvault-tab-nav">
                 <button class="openvault-tab-btn active" data-tab="dashboard-connections">
-                    <i class="fa-solid fa-gauge-high"></i> Dashboard
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <span>Dash</span>
                 </button>
                 <button class="openvault-tab-btn" data-tab="memory-bank">
-                    <i class="fa-solid fa-brain"></i> Memories
+                    <i class="fa-solid fa-brain"></i>
+                    <span>Mems</span>
                 </button>
-                <button class="openvault-tab-btn" data-tab="world">
-                    <i class="fa-solid fa-globe"></i> World
+                <button class="openvault-tab-btn" data-tab="entities">
+                    <i class="fa-solid fa-diagram-project"></i>
+                    <span>Ents</span>
+                </button>
+                <button class="openvault-tab-btn" data-tab="communities">
+                    <i class="fa-solid fa-circle-nodes"></i>
+                    <span>Comms</span>
                 </button>
                 <button class="openvault-tab-btn" data-tab="advanced">
-                    <i class="fa-solid fa-sliders"></i> Advanced
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Adv</span>
                 </button>
                 <button class="openvault-tab-btn" data-tab="perf">
-                    <i class="fa-solid fa-stopwatch"></i> Perf
+                    <i class="fa-solid fa-stopwatch"></i>
+                    <span>Perf</span>
                 </button>
             </div>
 
@@ -124,9 +132,6 @@
                     <div class="openvault-button-row" style="margin-top: 8px;">
                         <button id="openvault_backfill_embeddings_btn" class="menu_button">
                             <i class="fa-solid fa-vector-square"></i> Generate Embeddings
-                        </button>
-                        <button id="openvault_generate_reflections_btn" class="menu_button">
-                            <i class="fa-solid fa-brain"></i> Generate Reflections
                         </button>
                     </div>
                 </div>
@@ -410,42 +415,23 @@
             </div>
 
             <!-- ================================================================
-                 TAB 3: WORLD
+                 TAB 3: ENTITIES (CRUD)
                  ================================================================ -->
-            <div class="openvault-tab-content" data-tab="world">
-
-                <!-- Communities Browser -->
-                <div class="openvault-card">
-                    <div class="openvault-card-header">
-                        <span class="openvault-card-title">
-                            <i class="fa-solid fa-circle-nodes"></i> Communities
-                        </span>
-                        <span class="openvault-card-badge" id="openvault_community_count">0</span>
-                    </div>
-                    <div class="openvault-help-text" style="padding: 10px; font-size: 0.85em; color: var(--SmartThemeEmColor);">
-                        AI-discovered groups of related people, places, and concepts
-                    </div>
-                    <div id="openvault_community_list" class="openvault-community-list">
-                        <p class="openvault-placeholder">No communities detected yet</p>
-                    </div>
-                </div>
+            <div class="openvault-tab-content" data-tab="entities">
 
                 <!-- Entity Browser -->
-                <div class="openvault-card" style="margin-top: 15px;">
+                <div class="openvault-card">
                     <div class="openvault-card-header">
                         <span class="openvault-card-title">
                             <i class="fa-solid fa-diagram-project"></i> Entities
                         </span>
                         <span class="openvault-card-badge" id="openvault_entity_count">0</span>
                     </div>
-                    <div class="openvault-help-text" style="padding: 10px; font-size: 0.85em; color: var(--SmartThemeEmColor);">
-                        Browse all people, places, organizations, objects, and concepts in your story
-                    </div>
                     <div class="openvault-filters">
                         <div class="openvault-search-container" style="flex: 1;">
                             <i class="fa-solid fa-search"></i>
                             <input type="text" id="openvault_entity_search" class="openvault-search-input"
-                                   placeholder="Search entities..." />
+                                   placeholder="Search entities (name, description, or alias)..." />
                         </div>
                         <select id="openvault_entity_type_filter" class="text_pole">
                             <option value="">All Types</option>
@@ -464,7 +450,30 @@
             </div>
 
             <!-- ================================================================
-                 TAB 4: ADVANCED (Expert Math)
+                 TAB 4: COMMUNITIES (Read-only)
+                 ================================================================ -->
+            <div class="openvault-tab-content" data-tab="communities">
+
+                <!-- Communities Browser -->
+                <div class="openvault-card">
+                    <div class="openvault-card-header">
+                        <span class="openvault-card-title">
+                            <i class="fa-solid fa-circle-nodes"></i> Communities
+                        </span>
+                        <span class="openvault-card-badge" id="openvault_community_count">0</span>
+                    </div>
+                    <div class="openvault-help-text" style="padding: 10px; font-size: 0.85em; color: var(--SmartThemeEmColor);">
+                        AI-discovered groups of related people, places, and concepts
+                    </div>
+                    <div id="openvault_community_list" class="openvault-community-list">
+                        <p class="openvault-placeholder">No communities detected yet</p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ================================================================
+                 TAB 5: ADVANCED (Expert Math)
                  ================================================================ -->
             <div class="openvault-tab-content" data-tab="advanced">
 
@@ -612,15 +621,6 @@
                                 ↓Char is recommended. Memories injected at ↑Char may not affect character behavior in some models.
                             </small>
                         </div>
-
-                        <!-- Post-History Prompt -->
-                        <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
-                            <h4 style="margin-bottom: 10px;">Post-History Prompt</h4>
-                            <small class="openvault-hint" style="margin-bottom: 8px; display: block;">
-                                Custom instructions injected after all messages (depth 0). Useful for reminders, formatting rules, or scene guidance.
-                            </small>
-                            <textarea id="openvault_post_history_prompt" class="text_pole" rows="4" placeholder="e.g. Always describe the environment in detail. Keep responses under 3 paragraphs." style="width: 100%; resize: vertical;"></textarea>
-                        </div>
                     </div>
                 </details>
 
@@ -655,10 +655,6 @@
                             <i class="fa-solid fa-trash"></i> Delete Current Chat Memories
                         </button>
                         <small class="openvault-hint">Permanently remove all OpenVault data for this chat</small>
-                        <button id="openvault_reset_backfill_btn" class="menu_button danger wide" style="margin-top: 15px;">
-                            <i class="fa-solid fa-arrows-rotate"></i> Reset &amp; Backfill
-                        </button>
-                        <small class="openvault-hint">Un-hides all auto-hidden messages, deletes memories, then re-extracts entire chat from scratch</small>
                     </div>
                 </div>
 
@@ -669,7 +665,7 @@
             </div>
 
             <!-- ================================================================
-                 TAB 5: PERFORMANCE
+                 TAB 6: PERFORMANCE
                  ================================================================ -->
             <div class="openvault-tab-content" data-tab="perf">
                 <div class="openvault-card">
@@ -696,7 +692,6 @@
                         </tbody>
                     </table>
                 </div>
-
             </div>
         </div>
     </div>

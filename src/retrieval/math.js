@@ -244,13 +244,36 @@ export function calculateScore(
     /** @type {number} */ chatLength,
     /** @type {ForgetfulnessConstants} */ constants,
     /** @type {ScoringSettings} */ settings,
-    /** @type {number} */ bm25Score = 0
+    /** @type {number} */ bm25Score = 0,
+    /** @type {Map<string, number>|null} */ chatFingerprintMap = null
 ) {
+    // === Settings Clamping (Defense-in-Depth) ===
+    // Prevents NaN, Infinity, and division-by-zero from corrupted/tampered settings.
+    // Zod schemas provide schema-level validation; this is the runtime safety net.
+    const clampedThreshold = Math.min(Math.max(settings.vectorSimilarityThreshold || 0, 0), 0.99);
+    const clampedAlpha = Math.min(Math.max(settings.alpha || 0, 0), 1);
+    const clampedBoostWeight = Math.max(settings.combinedBoostWeight || 0, 0);
+    const clampedTransientMultiplier = Math.max(settings.transientDecayMultiplier || 5.0, 0.01);
+    const clampedBaseLambda = Math.max(constants.BASE_LAMBDA || 0.001, 0.001);
+
     // === Forgetfulness Curve ===
-    // Use message distance (narrative time) instead of timestamp
-    const messageIds = memory.message_ids || [0];
-    const maxMessageId = Math.max(...messageIds);
-    const distance = Math.max(0, chatLength - maxMessageId);
+    // Resolve message positions using fingerprints when available,
+    // falling back to raw indices for backward compatibility
+    let maxMessagePosition = 0;
+    if (chatFingerprintMap && memory.message_fingerprints?.length > 0) {
+        for (const fp of memory.message_fingerprints) {
+            const pos = chatFingerprintMap.get(fp);
+            if (pos !== undefined && pos > maxMessagePosition) {
+                maxMessagePosition = pos;
+            }
+        }
+    } else {
+        const messageIds = memory.message_ids || [0];
+        for (let i = 0; i < messageIds.length; i++) {
+            if (messageIds[i] > maxMessagePosition) maxMessagePosition = messageIds[i];
+        }
+    }
+    const distance = Math.max(0, chatLength - maxMessagePosition);
 
     // Get importance (1-5, default 3)
     const importance = memory.importance || 3;
@@ -262,11 +285,11 @@ export function calculateScore(
     // Access-reinforced decay: dampen lambda by retrieval history
     const hits = memory.retrieval_hits || 0;
     const hitDamping = Math.max(0.5, 1 / (1 + hits * 0.1));
-    let lambda = (constants.BASE_LAMBDA / (importance * importance)) * hitDamping;
+    let lambda = (clampedBaseLambda / (importance * importance)) * hitDamping;
 
     // Apply transient multiplier for short-term memories (faster decay)
     if (memory.is_transient) {
-        const multiplier = settings.transientDecayMultiplier || 5.0;
+        const multiplier = clampedTransientMultiplier;
         lambda *= multiplier;
     }
 
@@ -282,8 +305,8 @@ export function calculateScore(
     const recencyPenalty = baseAfterFloor - base;
 
     // === Alpha-Blend Scoring ===
-    const alpha = settings.alpha;
-    const boostWeight = settings.combinedBoostWeight;
+    const alpha = clampedAlpha;
+    const boostWeight = clampedBoostWeight;
 
     // === Vector Similarity Bonus (alpha-blend) ===
     let vectorBonus = 0;
@@ -292,19 +315,21 @@ export function calculateScore(
     // ST Vector Storage branch: use pre-assigned proxy score (no local embeddings)
     if (!contextEmbedding && memory._proxyVectorScore != null) {
         vectorSimilarity = memory._proxyVectorScore;
-        const threshold = settings.vectorSimilarityThreshold;
+        const threshold = clampedThreshold;
         if (vectorSimilarity > threshold) {
-            const normalizedSim = (vectorSimilarity - threshold) / (1 - threshold);
+            const denominator = 1 - threshold;
+            const normalizedSim = denominator > 0 ? (vectorSimilarity - threshold) / denominator : 0;
             vectorBonus = alpha * boostWeight * normalizedSim;
         }
     } else if (contextEmbedding && hasEmbedding(memory)) {
         vectorSimilarity = cosineSimilarity(contextEmbedding, getEmbedding(memory));
-        const threshold = settings.vectorSimilarityThreshold;
+        const threshold = clampedThreshold;
 
         if (vectorSimilarity > threshold) {
             // Scale similarity above threshold to bonus points
             // e.g., similarity 0.75 with threshold 0.5 -> (0.75-0.5)/(1-0.5) = 0.5
-            const normalizedSim = (vectorSimilarity - threshold) / (1 - threshold);
+            const denominator = 1 - threshold;
+            const normalizedSim = denominator > 0 ? (vectorSimilarity - threshold) / denominator : 0;
             // Vector bonus = alpha * boostWeight * normalizedSim
             vectorBonus = alpha * boostWeight * normalizedSim;
         }
@@ -374,7 +399,8 @@ export async function scoreMemories(
     /** @type {string|string[]} */ queryTokens,
     /** @type {string[]} */ characterNames = [],
     /** @type {Memory[]} */ hiddenMemories = [],
-    /** @type {IDFCache|null} */ idfCache = null
+    /** @type {IDFCache|null} */ idfCache = null,
+    /** @type {Map<string, number>|null} */ chatFingerprintMap = null
 ) {
     const start = performance.now();
 
@@ -453,7 +479,13 @@ export async function scoreMemories(
 
     // Apply exact phrase boost: flat additive score for matching phrases
     // Use max IDF as phrase weight (phrases are highly specific)
-    const maxIDF = idfMap ? Math.max(...idfMap.values()) : Math.log(idfCorpus.length + 1);
+    let maxIDF = idfMap ? -Infinity : Math.log(idfCorpus.length + 1);
+    if (idfMap) {
+        for (const val of idfMap.values()) {
+            if (val > maxIDF) maxIDF = val;
+        }
+    }
+    if (!Number.isFinite(maxIDF)) maxIDF = Math.log(idfCorpus.length + 1);
 
     for (let i = 0; i < memories.length; i++) {
         if (exactPhrases.length === 0) break;
@@ -468,7 +500,10 @@ export async function scoreMemories(
     }
 
     // Batch-max normalize BM25 to [0, 1] for alpha-blend scoring
-    const maxBM25 = Math.max(...rawBM25Scores, 1e-9);
+    let maxBM25 = 1e-9;
+    for (let i = 0; i < rawBM25Scores.length; i++) {
+        if (rawBM25Scores[i] > maxBM25) maxBM25 = rawBM25Scores[i];
+    }
     const normalizedBM25Scores = rawBM25Scores.map((s) => s / maxBM25);
 
     // ===== TWO-PASS RETRIEVAL OPTIMIZATION =====
@@ -486,7 +521,8 @@ export async function scoreMemories(
             chatLength,
             constants,
             settings,
-            normalizedBM25Scores[i]
+            normalizedBM25Scores[i],
+            chatFingerprintMap
         );
         fastPassScores.push({ memory, score: breakdown.total, breakdown, index: i });
     }
@@ -533,15 +569,19 @@ export async function scoreMemories(
             chatLength,
             constants,
             settings,
-            normalizedBM25Scores[i]
+            normalizedBM25Scores[i],
+            chatFingerprintMap
         );
 
         // If we have a pre-computed vector similarity, override the vectorBonus
         if (vectorSimilarity !== null) {
-            const threshold = settings.vectorSimilarityThreshold;
+            const threshold = Math.min(Math.max(settings.vectorSimilarityThreshold || 0, 0), 0.99);
+            const alpha = Math.min(Math.max(settings.alpha || 0, 0), 1);
+            const boostWeight = Math.max(settings.combinedBoostWeight || 0, 0);
             if (vectorSimilarity > threshold) {
-                const normalizedSim = (vectorSimilarity - threshold) / (1 - threshold);
-                breakdown.vectorBonus = settings.alpha * settings.combinedBoostWeight * normalizedSim;
+                const denominator = 1 - threshold;
+                const normalizedSim = denominator > 0 ? (vectorSimilarity - threshold) / denominator : 0;
+                breakdown.vectorBonus = alpha * boostWeight * normalizedSim;
                 breakdown.vectorSimilarity = vectorSimilarity;
                 breakdown.total = breakdown.baseAfterFloor + breakdown.vectorBonus + breakdown.bm25Bonus;
                 breakdown.total *= breakdown.frequencyFactor;

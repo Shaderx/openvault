@@ -127,3 +127,79 @@ describe('world-context ST branch', () => {
         expect(result.isMacroIntent).toBe(false);
     });
 });
+
+describe('selectRelevantMemoriesWithST community routing', () => {
+    it('separates community results from memory results', async () => {
+        // Dynamically import to allow mocking
+        vi.doMock('../../src/services/st-vector.js', () => ({
+            querySTVector: vi.fn().mockResolvedValue([
+                { id: 'event_1', hash: 111, text: '[OV_ID:event_1] test event' },
+                { id: 'C0', hash: 222, text: '[OV_ID:C0] community summary' },
+                { id: 'C1', hash: 333, text: '[OV_ID:C1] another community' },
+            ]),
+        }));
+
+        const { selectRelevantMemoriesWithST } = await import('../../src/retrieval/scoring.js');
+        const { getStrategy } = await import('../../src/embeddings.js');
+
+        const memories = [{ id: 'event_1', type: 'event', summary: 'test event', importance: 3, message_ids: [50] }];
+        const communities = {
+            C0: { title: 'Community 0', summary: 'community summary' },
+            C1: { title: 'Community 1', summary: 'another community' },
+        };
+        const ctx = {
+            recentContext: '',
+            userMessages: 'test query',
+            activeCharacters: [],
+            chatLength: 100,
+            scoringConfig: {
+                embeddingSource: 'st_vector',
+                vectorSimilarityThreshold: 0.3,
+                forgetfulnessBaseLambda: 0.05,
+                forgetfulnessImportance5Floor: 1.0,
+                reflectionDecayThreshold: 750,
+                alpha: 0.7,
+                combinedBoostWeight: 3.0,
+                transientDecayMultiplier: 1.0,
+            },
+            queryConfig: {},
+            allAvailableMemories: memories,
+            communities,
+        };
+        const strategy = getStrategy('st_vector');
+
+        const result = await selectRelevantMemoriesWithST(memories, ctx, 10, [], null, strategy, communities);
+
+        // Communities must be returned separately, not dropped
+        expect(result.communityIds).toBeDefined();
+        expect(result.communityIds).toContain('C0');
+        expect(result.communityIds).toContain('C1');
+        // Memories still scored normally
+        expect(result.memories.length).toBeGreaterThan(0);
+        expect(result.memories[0].id).toBe('event_1');
+
+        vi.doUnmock('../../src/services/st-vector.js');
+    });
+});
+
+describe('ST Vector world context integration', () => {
+    it('ST Vector community IDs get formatted into world context', async () => {
+        // Set up test context with ST Vector mode
+        setupTestContext({ settings: { embeddingSource: 'st_vector' } });
+
+        const { retrieveWorldContext } = await import('../../src/retrieval/world-context.js');
+
+        const communities = {
+            C0: { title: 'The Castle', summary: 'An ancient fortress on the hill.', findings: ['old'] },
+            C1: { title: 'The Village', summary: 'A peaceful farming community.', findings: [] },
+        };
+
+        // Simulate: scoring layer returned these community IDs from ST Vector
+        const result = retrieveWorldContext(communities, null, 'test query', null, 2000, ['C0', 'C1']);
+
+        expect(result.text).toContain('world_context');
+        expect(result.text).toContain('Castle');
+        expect(result.text).toContain('Village');
+        expect(result.communityIds).toEqual(['C0', 'C1']);
+    });
+});

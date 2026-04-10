@@ -1,46 +1,10 @@
 #!/bin/bash
-# Pre-commit hook: generate types, run Biome unsafe fixes on staged files
+# Pre-commit hook: run all checks via `npm run check`.
+# If any step fails the commit is aborted — fix errors, don't skip them.
+set -euo pipefail
 
-# Generate types from Zod schemas first (typecheck depends on it)
-echo "Generating types from Zod schemas..."
-npm run generate-types
+echo "Running pre-commit checks..."
+npm run check
 
-# Stage the generated file if it changed
-if ! git diff --quiet src/types.d.ts; then
-    echo "Staging updated types.d.ts..."
-    git add src/types.d.ts
-fi
-
-# Get list of staged files (excluding deletions)
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=d)
-
-if [ -z "$STAGED_FILES" ]; then
-    exit 0
-fi
-
-# Filter for files Biome can handle (js,ts,jsx,tsx,json,jsonc)
-BIOME_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|ts|jsx|tsx|json|jsonc)$' || true)
-
-if [ -n "$BIOME_FILES" ]; then
-    # Run Biome check with unsafe fixes
-    echo "Running Biome unsafe fixes..."
-    npx @biomejs/biome check --write --unsafe $BIOME_FILES
-
-    # Add any modified files back to staging
-    git add $BIOME_FILES
-fi
-
-# Check for dead CSS (only if CSS files were staged)
-CSS_FILES=$(echo "$STAGED_FILES" | grep -E '\.css$' || true)
-if [ -n "$CSS_FILES" ]; then
-    echo "Checking for unused CSS classes..."
-    node scripts/check-css.js
-fi
-
-# Check for double/orphaned JSDoc comments
-echo "Checking JSDoc..."
-node scripts/check-jsdoc.mjs || exit 1
-
-# TypeScript type checking (JSDoc)
-echo "Running TypeScript type check..."
-npm run typecheck || exit 1
+# Re-stage any files modified by sync-version / generate-types / lint:fix
+git add -u

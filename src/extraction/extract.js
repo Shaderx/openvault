@@ -139,14 +139,16 @@ async function rpmDelay(settings, label = 'Rate limit') {
  * @param {StSyncChanges} stChanges
  * @returns {Promise<void>}
  */
-async function applySyncChanges(stChanges) {
+export async function applySyncChanges(stChanges) {
     if (!isStVectorSource()) return;
     const chatId = getCurrentChatId();
+    let requiresSave = false;
     if (stChanges.toSync?.length > 0) {
         const items = stChanges.toSync.map((c) => ({ hash: c.hash, text: c.text, index: 0 }));
         const success = await syncItemsToST(items, chatId);
         if (success) {
             for (const c of stChanges.toSync) markStSynced(c.item);
+            requiresSave = true;
         }
     }
     if (stChanges.toDelete?.length > 0) {
@@ -154,6 +156,9 @@ async function applySyncChanges(stChanges) {
             stChanges.toDelete.map((c) => c.hash),
             chatId
         );
+    }
+    if (requiresSave) {
+        await saveOpenVaultData();
     }
 }
 
@@ -177,6 +182,7 @@ export async function hideExtractedMessages() {
         const msg = chat[i];
         if (processedFps.has(getFingerprint(msg)) && !msg.is_system) {
             msg.is_system = true;
+            msg.openvault_hidden = true;
             hiddenCount++;
         }
     }
@@ -453,10 +459,12 @@ export function cleanupCharacterStates(data, validCharNames = []) {
  * @param {Object} _graphNodes - Graph nodes keyed by normalized name (unused, for API compatibility)
  */
 export function updateIDFCache(data, _graphNodes = {}) {
-    const memories = data[MEMORIES_KEY] || [];
+    const allMemories = data[MEMORIES_KEY] || [];
+    // Only include active (non-archived) memories in IDF calculation
+    const memories = allMemories.filter((m) => !m.archived);
     if (memories.length === 0) return;
 
-    // Build tokenized corpus from memory tokens
+    // Build tokenized corpus from active memory tokens
     const tokenizedMemories = new Map();
     for (let i = 0; i < memories.length; i++) {
         const m = memories[i];
@@ -464,7 +472,7 @@ export function updateIDFCache(data, _graphNodes = {}) {
         tokenizedMemories.set(i, m.tokens || tokenize(m.summary || ''));
     }
 
-    // Calculate IDF from memories only (graph descriptions don't have tokens stored)
+    // Calculate IDF from active memories only
     const { idfMap, avgDL } = calculateIDF(memories, tokenizedMemories);
 
     // Convert Map to plain object for JSON serialization
@@ -476,7 +484,7 @@ export function updateIDFCache(data, _graphNodes = {}) {
     };
 
     data.idf_cache = idfCache;
-    logDebug(`IDF cache updated: ${memories.length} memories, avgDL=${avgDL.toFixed(2)}`);
+    logDebug(`IDF cache updated: ${memories.length} active memories, avgDL=${avgDL.toFixed(2)}`);
 }
 
 /**
@@ -627,7 +635,7 @@ export async function filterSimilarEvents(
  * @param {Object} [options={}]
  * @param {AbortSignal} [options.abortSignal=null] - Abort signal for cancellation
  */
-async function synthesizeReflections(data, characterNames, settings, options = {}) {
+export async function synthesizeReflections(data, characterNames, settings, options = {}) {
     const { abortSignal = null } = options;
     const reflectionThreshold = settings.reflectionThreshold;
     const ladderQueue = await createLadderQueue(settings.maxConcurrency);
@@ -642,6 +650,11 @@ async function synthesizeReflections(data, characterNames, settings, options = {
             reflectionPromises.push(
                 ladderQueue
                     .add(async () => {
+                        // Reset accumulator BEFORE LLM call to prevent infinite retry loop on failure
+                        // The accumulated importance is "consumed" here - even if the LLM call fails,
+                        // we don't want to retry immediately (to avoid token burning)
+                        data.reflection_state[characterName].importance_sum = 0;
+
                         const { reflections, stChanges } = await generateReflections(
                             characterName,
                             data[MEMORIES_KEY] || [],
@@ -650,8 +663,6 @@ async function synthesizeReflections(data, characterNames, settings, options = {
                         if (reflections.length > 0) {
                             addMemories(reflections);
                         }
-                        // Reset accumulator after reflection
-                        data.reflection_state[characterName].importance_sum = 0;
                         await applySyncChanges(stChanges);
                     })
                     .catch((error) => {
@@ -800,12 +811,20 @@ async function fetchGraphFromLLM(contextParams, formattedEvents, abortSignal) {
  *
  * @param {Array} rawEvents - Events from LLM (no metadata yet)
  * @param {number[]} messageIdsArray - Source message IDs for this batch
+ * @param {string[]} messageFingerprintsArray - Source message fingerprints for this batch
  * @param {string} batchId - Unique batch identifier
  * @param {Array} existingMemories - All existing memories (for dedup comparison)
  * @param {Object} settings - Extension settings
  * @returns {Promise<{events: Array}>}
  */
-async function enrichAndDedupEvents(rawEvents, messageIdsArray, batchId, existingMemories, settings) {
+async function enrichAndDedupEvents(
+    rawEvents,
+    messageIdsArray,
+    messageFingerprintsArray,
+    batchId,
+    existingMemories,
+    settings
+) {
     const minMessageId = Math.min(...messageIdsArray);
 
     let events = rawEvents.map((event, index) => ({
@@ -814,6 +833,7 @@ async function enrichAndDedupEvents(rawEvents, messageIdsArray, batchId, existin
         ...event,
         tokens: tokenize(event.summary || ''),
         message_ids: messageIdsArray,
+        message_fingerprints: messageFingerprintsArray,
         sequence: minMessageId * 1000 + index,
         created_at: Date.now(),
         batch_id: batchId,
@@ -922,7 +942,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Defensive: use scheduler to get next batch if no IDs provided
         const batch = getNextBatch(chat, data, settings?.extractionTokenBudget || 2000);
         if (!batch) {
-            console.log('[extract] No messages to extract (scheduler returned empty batch)');
+            logDebug('No messages to extract (scheduler returned empty batch)');
             return { status: 'skipped', reason: 'no_new_messages' };
         }
         messagesToExtract = batch.map((id) => ({ id, ...chat[id] }));
@@ -968,20 +988,20 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         const existingMemories = selectMemoriesForExtraction(data, settings);
         const { events: rawEvents } = await fetchEventsFromLLM(contextParams, existingMemories, abortSignal);
 
-        // Stage 2: Graph extraction (LLM call, skip if no events)
+        // Stage 2: Graph extraction (LLM call)
         let graphResult = { entities: [], relationships: [] };
-        if (rawEvents.length > 0) {
-            await rpmDelay(settings, 'Inter-call rate limit');
-            const formattedEvents = rawEvents.map((e, i) => `${i + 1}. [${e.importance}★] ${e.summary}`);
-            graphResult = await fetchGraphFromLLM(contextParams, formattedEvents, abortSignal);
-        }
+        await rpmDelay(settings, 'Inter-call rate limit');
+        const formattedEvents = rawEvents.map((e, i) => `${i + 1}. [${e.importance}★] ${e.summary}`);
+        graphResult = await fetchGraphFromLLM(contextParams, formattedEvents, abortSignal);
 
         // Stage 3: Enrich & dedup events
         const messageIdsArray = messages.map((m) => m.id);
+        const messageFingerprintsArray = messages.map((m) => getFingerprint(m));
         logDebug(`LLM returned ${rawEvents.length} events from ${messages.length} messages`);
         const { events } = await enrichAndDedupEvents(
             rawEvents,
             messageIdsArray,
+            messageFingerprintsArray,
             batchId,
             data.memories || [],
             settings

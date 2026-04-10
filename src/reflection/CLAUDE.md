@@ -10,9 +10,9 @@ Synthesizes raw event memories into high-level psychological insights, adapting 
 4. **Candidate Set**: Recent events (top `REFLECTION_CANDIDATE_LIMIT` = 50) + **old reflections** (all levels). Enables synthesizing higher-level insights (level 2+).
 5. **Generate**: Single unified LLM call (with configurable prefill from `resolveExtractionPrefill`) generates 1-3 question+insight pairs with evidence citations (`UNIFIED_REFLECTION_EXAMPLES` - 6 bilingual EN/RU).
 6. **3-Tier Dedup & Embed**: (See below).
-7. **Reset**: Clears accumulator to 0.
+7. **Reset**: Clears accumulator to 0 **before** the LLM call (restored on failure to prevent data loss while avoiding infinite retry loops).
 
-**stChanges Return Pattern (PR2)**: `generateReflections()` returns `{ reflections, stChanges: { toSync: [] } }`. Each new reflection pushes `{ hash, text, item }` to `toSync`. Orchestrator applies bulk network I/O.
+**stChanges**: `generateReflections()` returns `{ reflections, stChanges }`. See `src/store/CLAUDE.md` for the stChanges contract.
 
 ## PERFORMANCE
 - **Unified Call**: Replaced old 4-call pipeline (questions + 3 parallel insights) with single unified call.

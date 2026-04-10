@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { extensionName } from '../../src/constants.js';
 import { resetDeps, setDeps } from '../../src/deps.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, withTimeout, yieldToMain } from '../../src/utils/st-helpers.js';
@@ -7,6 +7,14 @@ describe('st-helpers', () => {
     afterEach(() => resetDeps());
 
     describe('withTimeout', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
         it('resolves when promise completes before timeout', async () => {
             const result = await withTimeout(Promise.resolve('success'), 1000, 'Test');
             expect(result).toBe('success');
@@ -14,7 +22,63 @@ describe('st-helpers', () => {
 
         it('rejects when promise exceeds timeout', async () => {
             const promise = new Promise((resolve) => setTimeout(resolve, 100));
-            await expect(withTimeout(promise, 10, 'Test')).rejects.toThrow('Test timed out after 10ms');
+            const resultPromise = withTimeout(promise, 10, 'Test');
+
+            // Advance time past the timeout
+            vi.advanceTimersByTime(10);
+
+            await expect(resultPromise).rejects.toThrow('Test timed out after 10ms');
+        });
+
+        it('should clear timeout when promise resolves before timeout', async () => {
+            const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+
+            const promise = Promise.resolve('success');
+            const resultPromise = withTimeout(promise, 5000, 'Test');
+
+            // Fast-forward but not enough to trigger timeout
+            await vi.advanceTimersByTimeAsync(100);
+
+            const result = await resultPromise;
+
+            expect(result).toBe('success');
+            expect(clearTimeoutSpy).toHaveBeenCalled();
+        });
+
+        it('should clear timeout when promise rejects before timeout', async () => {
+            vi.useRealTimers();
+            const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+
+            // Defer rejection so it fires after withTimeout sets up its handlers
+            let rejectFn;
+            const rejectingPromise = new Promise((_, reject) => {
+                rejectFn = reject;
+            });
+
+            const resultPromise = withTimeout(rejectingPromise, 5000, 'Test');
+
+            // Now trigger the rejection — handlers are already attached
+            rejectFn(new Error('test error'));
+
+            await expect(resultPromise).rejects.toThrow('test error');
+            expect(clearTimeoutSpy).toHaveBeenCalled();
+        });
+
+        it('should reject with timeout error when promise takes too long', async () => {
+            const promise = new Promise(() => {}); // Never resolves
+            const resultPromise = withTimeout(promise, 5000, 'Test Operation');
+
+            vi.advanceTimersByTime(5000);
+
+            await expect(resultPromise).rejects.toThrow('Test Operation timed out after 5000ms');
+        });
+
+        it('should resolve with promise value when it completes in time', async () => {
+            const promise = Promise.resolve('completed');
+
+            const result = await withTimeout(promise, 5000, 'Test');
+
+            expect(result).toBe('completed');
         });
     });
 
@@ -65,6 +129,43 @@ describe('st-helpers', () => {
 
             safeSetExtensionPrompt('test content');
             expect(mockSetPrompt).toHaveBeenCalledWith('openvault', 'test content', 0, 0);
+        });
+
+        it('passes position and depth parameters', () => {
+            const mockSetPrompt = vi.fn();
+            setDeps({
+                console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
+                setExtensionPrompt: mockSetPrompt,
+                extension_prompt_types: { IN_PROMPT: 0, AN: 2, CHAT: 4 },
+            });
+
+            safeSetExtensionPrompt('test content', 'openvault', 2, 4);
+            expect(mockSetPrompt).toHaveBeenCalledWith('openvault', 'test content', 2, 4);
+        });
+
+        it('skips injection when position is CUSTOM (-1)', () => {
+            const mockSetPrompt = vi.fn();
+            setDeps({
+                console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
+                setExtensionPrompt: mockSetPrompt,
+                extension_prompt_types: { IN_PROMPT: 0 },
+            });
+
+            expect(safeSetExtensionPrompt('test content', 'openvault', -1, 0)).toBe(false);
+            expect(mockSetPrompt).not.toHaveBeenCalled();
+        });
+
+        it('maps named slot world position', () => {
+            const mockSetPrompt = vi.fn();
+            setDeps({
+                console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
+                setExtensionPrompt: mockSetPrompt,
+                extension_prompt_types: { IN_PROMPT: 0, AN: 2 },
+            });
+
+            safeSetExtensionPrompt('world content', 'openvault_world', 1, 0);
+            // Position 1 is the named world slot — maps to IN_PROMPT (0)
+            expect(mockSetPrompt).toHaveBeenCalledWith('openvault_world', 'world content', 0, 0);
         });
     });
 

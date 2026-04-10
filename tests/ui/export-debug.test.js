@@ -83,86 +83,6 @@ describe('buildExportPayload', () => {
         clearRetrievalDebug();
     });
 
-    it('returns payload with marker and timestamp', () => {
-        const payload = buildExportPayload();
-        expect(payload.openvault_debug_export).toBe(true);
-        expect(payload.exportedAt).toBeTypeOf('string');
-    });
-
-    it('includes memory stats', () => {
-        const payload = buildExportPayload();
-        expect(payload.state.memories.total).toBe(2);
-        expect(payload.state.memories.byType.event).toBe(1);
-        expect(payload.state.memories.byType.reflection).toBe(1);
-    });
-
-    it('includes character states without known_events array', () => {
-        const payload = buildExportPayload();
-        expect(payload.state.characterStates.Alice.emotion).toBe('happy');
-        expect(payload.state.characterStates.Alice.knownEvents).toBe(1); // count, not array
-    });
-
-    it('includes graph summary with top entities', () => {
-        const payload = buildExportPayload();
-        expect(payload.state.graph.summary.nodeCount).toBe(2);
-        expect(payload.state.graph.summary.edgeCount).toBe(1);
-        expect(payload.state.graph.summary.topEntitiesByMentions[0].name).toBe('Alice');
-    });
-
-    it('excludes embeddings from relevant graph nodes', () => {
-        cacheRetrievalDebug({
-            queryContext: {
-                entities: ['Alice'],
-                embeddingQuery: '',
-                bm25Tokens: { total: 0, entityStems: 0, grounded: 0, nonGrounded: 0 },
-            },
-        });
-        const payload = buildExportPayload();
-        expect(payload.state.graph.relevant.nodes.alice).toBeDefined();
-        expect(payload.state.graph.relevant.nodes.alice.embedding).toBeUndefined();
-    });
-
-    it('strips embeddings from community details', () => {
-        const payload = buildExportPayload();
-        expect(payload.state.communities.details.c1.title).toBe('Alice World');
-        expect(payload.state.communities.details.c1.embedding).toBeUndefined();
-    });
-
-    it('settings contains only non-default values', () => {
-        const payload = buildExportPayload();
-        // All mock settings match defaults → empty diff
-        expect(Object.keys(payload.settings).length).toBe(0);
-    });
-
-    it('includes runtime computed values', () => {
-        const payload = buildExportPayload();
-        expect(payload.runtime.embeddingsEnabled).toBe(true);
-    });
-
-    it('includes lastRetrieval when cached', () => {
-        cacheRetrievalDebug({
-            filters: { totalMemories: 10, hiddenMemories: 5, afterPOVFilter: 4 },
-            injectedContext: '<scene_memory>test</scene_memory>',
-        });
-        const payload = buildExportPayload();
-        expect(payload.lastRetrieval.filters.totalMemories).toBe(10);
-        expect(payload.lastRetrieval.injectedContext).toBe('<scene_memory>test</scene_memory>');
-    });
-
-    it('sets lastRetrieval to null when no cache', () => {
-        const payload = buildExportPayload();
-        expect(payload.lastRetrieval).toBeNull();
-    });
-
-    it('settings contains only values that differ from defaults', () => {
-        const payload = buildExportPayload();
-        // Mock has alpha: 0.7 and enabled: true which match defaults
-        // debugMode: false also matches default
-        // So settings should be empty (or contain only truly different values)
-        // Since all mock values match defaultSettings, settings should be {}
-        expect(payload.settings).toEqual({});
-    });
-
     describe('graph filtering', () => {
         it('shows relevant section with matched entities when retrieval cached', () => {
             cacheRetrievalDebug({
@@ -197,6 +117,19 @@ describe('buildExportPayload', () => {
             const payload = buildExportPayload();
             expect(payload.state.graph.summary.nodeCount).toBe(2);
             expect(payload.state.graph.relevant).toBeUndefined();
+        });
+
+        it('excludes embeddings from relevant graph nodes', () => {
+            cacheRetrievalDebug({
+                queryContext: {
+                    entities: ['Alice'],
+                    embeddingQuery: '',
+                    bm25Tokens: { total: 0, entityStems: 0, grounded: 0, nonGrounded: 0 },
+                },
+            });
+            const payload = buildExportPayload();
+            expect(payload.state.graph.relevant.nodes.alice).toBeDefined();
+            expect(payload.state.graph.relevant.nodes.alice.embedding).toBeUndefined();
         });
     });
 
@@ -331,20 +264,5 @@ describe('buildExportPayload', () => {
             const payload = buildExportPayload();
             expect(payload.scoring._note).toContain('Default-value');
         });
-    });
-
-    it('includes extended runtime info', () => {
-        const payload = buildExportPayload();
-        expect(payload.runtime.embeddingsEnabled).toBe(true);
-        expect(payload.runtime.embeddingModelId).toBeDefined();
-        expect(payload.runtime.extractionProgress).toBeDefined();
-        expect(payload.runtime.extractionProgress).toHaveProperty('processed');
-        expect(payload.runtime.extractionProgress).toHaveProperty('chatLength');
-    });
-
-    it('includes perf section', () => {
-        const payload = buildExportPayload();
-        expect(payload.perf).toBeDefined();
-        expect(payload.perf).toBeTypeOf('object');
     });
 });

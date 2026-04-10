@@ -1,6 +1,7 @@
 # OpenVault Data Schema & Core Algorithms
 
-Reference document for data structures, storage bounds, and non-obvious algorithm logic.
+Authoritative reference for data structures, retrieval formulas, and storage constants.
+Implementation gotchas live in subdirectory CLAUDE.md files — see directory map in root `CLAUDE.md`.
 
 ## 1. DATA SCHEMA (`chatMetadata.openvault`)
 
@@ -117,35 +118,12 @@ IDF is cached in `chatMetadata.openvault.idf_cache` at extraction time. The corp
 - **Layer 2 (Corpus-Grounded):** User-message stems that exist in the established corpus vocabulary. 3x boost.
 - **Layer 3 (Non-Grounded):** User-message stems NOT in corpus vocabulary. 2x boost (preserves scene context).
 
-## 4. GRAPH & SEMANTIC MERGE
-**Rule:** Prevent duplicate nodes ("The King" vs "King Aldric") using a 4-Guard system in `shouldMergeEntities()`.
+## 4. GRAPH MERGE, COMMUNITIES, DEDUP
+See `src/graph/CLAUDE.md` for semantic merge 4-guard system, edge consolidation, Louvain communities, hairball prevention.
+See `src/extraction/CLAUDE.md` for event dedup thresholds.
+See `src/retrieval/CLAUDE.md` for score-first soft balancing (context budgeting).
 
-### The 4 Guards
-1. **Cosine Similarity:** Check first. If `>= 0.94`, it's a candidate.
-2. **Type-Aware Routing:** 
-   - `PERSON` entities merge on high cosine alone (names are unique identifiers). 
-   - `OBJECT/CONCEPT/PLACE/ORGANIZATION` *always* require token-overlap confirmation to prevent false merges caused by shared contextual embeddings.
-3. **LCS (Longest Common Substring):** Ratio `>= 60%` for keys > 2 chars.
-4. **Stem Overlap:** Stem-based overlap (catches Russian morphological variants like "ошейник"/"ошейником").
-
-### Cross-Script Merging
-- **Rule:** `PERSON` entities with keys in different scripts (Latin vs Cyrillic) are skipped in semantic merge.
-- **Transliteration Match:** They ONLY merge if the Cyrillic name transliterated to Latin matches an existing English node with `Levenshtein Distance <= 2` (e.g., "Сузи" -> "suzi" -> merges with "suzy").
-
-## 5. GRAPHRAG COMMUNITIES
-- **Edge Consolidation:** Edges track `_descriptionTokens`. When `> 150`, marked in `_edgesNeedingConsolidation`. Before community detection, up to 10 bloated edges are sent to the LLM to be compressed into a single <100 token string.
-- **Hairball Prevention:** During Louvain detection, edges involving User/Char are attenuated by 95% (`MAIN_CHARACTER_ATTENUATION`). This breaks "protagonist hairball" gravity in open-world RPs but prevents object orphaning. Nodes are re-anchored to their strongest neighbor post-detection.
-- **Map-Reduce Synthesis:** `synthesizeInChunks()` chunks communities into groups of 10. Regional summaries are generated, then reduced into a final ~300 token `global_world_state`.
-
-## 6. DEDUPLICATION & BUDGETING
-- **Event Deduplication (Extraction):**
-  - *Cross-Batch:* Cosine similarity `>= 0.95` AND Jaccard token overlap `>= 0.3`. Increments `mentions` on the survivor.
-  - *Intra-Batch:* Jaccard token overlap `>= 0.6` between events in the same LLM payload.
-- **Score-First Soft Balancing (Retrieval):**
-  - *Phase 1:* Reserve 20% of the token budget for each chronological bucket (Old / Mid / Recent). Fill with highest-scoring memories from that bucket.
-  - *Phase 2:* Pool the remaining 40% of the budget. Fill strictly by highest overall score, regardless of chronological bucket. Guarantees minimum temporal representation without starvation.
-
-## 7. EMBEDDING MISMATCH PROTECTION
+## 5. EMBEDDING MISMATCH PROTECTION
 - **Trigger:** On `CHAT_CHANGED` and Settings Dropdown change.
 - **Logic:** Compares `embedding_model_id` (e.g., `multilingual-e5-small`) and ST Vector fingerprint (`source` + `model`) against current settings.
 - **Action:** If a mismatch is detected, `invalidateStaleEmbeddings()` bulk-wipes all `embedding_b64` and `_st_synced` flags across memories, nodes, and communities. Background worker auto-triggers `backfillAllEmbeddings({ silent: true })` to regenerate them.

@@ -9,13 +9,12 @@ import { CHARACTERS_KEY, MEMORIES_KEY, MEMORIES_PER_PAGE } from '../constants.js
 import { getDeps } from '../deps.js';
 import { getDocumentEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import {
+    deleteEntity as deleteEntityStoreAction,
     deleteMemory as deleteMemoryAction,
     getOpenVaultData,
+    mergeEntities,
+    updateEntity,
     updateMemory as updateMemoryAction,
-    updateEntity as updateEntityAction,
-    deleteEntity as deleteEntityAction,
-    updateCommunity as updateCommunityAction,
-    deleteCommunity as deleteCommunityAction,
 } from '../store/chat-data.js';
 import { escapeHtml, showToast } from '../utils/dom.js';
 import { hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
@@ -32,9 +31,9 @@ import { refreshStats } from './status.js';
 import {
     renderCharacterState,
     renderCommunityAccordion,
-    renderCommunityEdit,
     renderEntityCard,
     renderEntityEdit,
+    renderEntityMergePicker,
     renderMemoryEdit,
     renderMemoryItem,
     renderReflectionProgress,
@@ -97,11 +96,14 @@ function filterBySearch(memories, query) {
 
 async function deleteMemory(id) {
     const deleted = await deleteMemoryAction(id);
-    if (deleted) {
+    if (deleted.success) {
+        if (deleted.stChanges) {
+            const { applySyncChanges } = await import('../extraction/extract.js');
+            await applySyncChanges(deleted.stChanges);
+        }
         renderMemoryList();
         populateCharacterFilter();
         refreshStats();
-        refreshSidePanelLazy();
         showToast('success', 'Memory deleted');
     }
 }
@@ -110,7 +112,7 @@ function enterEditMode(id) {
     const memory = getMemoryById(id);
     if (!memory) return;
 
-    const $card = $(`.openvault-memory-card[data-id="${id}"]`);
+    const $card = $(SELECTORS.MEMORY_LIST).find(`[data-id="${id}"]`);
     $card.replaceWith(renderMemoryEdit(memory));
 }
 
@@ -118,12 +120,12 @@ function exitEditMode(id) {
     const memory = getMemoryById(id);
     if (!memory) return;
 
-    const $card = $(`.openvault-memory-card[data-id="${id}"]`);
+    const $card = $(SELECTORS.MEMORY_LIST).find(`[data-id="${id}"]`);
     $card.replaceWith(renderMemoryItem(memory));
 }
 
 async function saveEdit(id, btnElement) {
-    const $card = $(btnElement).closest(`.openvault-memory-card[data-id="${id}"]`);
+    const $card = $(SELECTORS.MEMORY_LIST).find(`[data-id="${id}"]`);
     const $btn = $(btnElement);
 
     const summary = $card.find('[data-field="summary"]').val().trim();
@@ -139,7 +141,11 @@ async function saveEdit(id, btnElement) {
     $btn.prop('disabled', true);
 
     const updated = await updateMemoryAction(id, { summary, importance, temporal_anchor, is_transient });
-    if (updated) {
+    if (updated.success) {
+        if (updated.stChanges) {
+            const { applySyncChanges } = await import('../extraction/extract.js');
+            await applySyncChanges(updated.stChanges);
+        }
         const memory = getMemoryById(id);
         if (memory && !hasEmbedding(memory) && isEmbeddingsEnabled()) {
             const embedding = await getDocumentEmbedding(summary);
@@ -155,7 +161,6 @@ async function saveEdit(id, btnElement) {
         }
         showToast('success', 'Memory updated');
         refreshStats();
-        refreshSidePanelLazy();
     }
     $btn.prop('disabled', false);
 }
@@ -188,22 +193,28 @@ function populateCharacterFilter() {
 }
 
 function bindMemoryListEvents() {
-    $(document).on('click', SELECTORS.DELETE_BTN, async (e) => {
+    const $container = $(SELECTORS.MEMORY_LIST);
+
+    $container.off('click', SELECTORS.DELETE_BTN);
+    $container.on('click', SELECTORS.DELETE_BTN, async (e) => {
         const id = $(e.currentTarget).data('id');
         await deleteMemory(id);
     });
 
-    $(document).on('click', SELECTORS.EDIT_BTN, (e) => {
+    $container.off('click', SELECTORS.EDIT_BTN);
+    $container.on('click', SELECTORS.EDIT_BTN, (e) => {
         const id = $(e.currentTarget).data('id');
         enterEditMode(id);
     });
 
-    $(document).on('click', SELECTORS.CANCEL_EDIT_BTN, (e) => {
+    $container.off('click', SELECTORS.CANCEL_EDIT_BTN);
+    $container.on('click', SELECTORS.CANCEL_EDIT_BTN, (e) => {
         const id = $(e.currentTarget).data('id');
         exitEditMode(id);
     });
 
-    $(document).on('click', SELECTORS.SAVE_EDIT_BTN, async (e) => {
+    $container.off('click', SELECTORS.SAVE_EDIT_BTN);
+    $container.on('click', SELECTORS.SAVE_EDIT_BTN, async (e) => {
         const id = $(e.currentTarget).data('id');
         await saveEdit(id, e.currentTarget);
     });
@@ -353,10 +364,6 @@ function renderCommunityList() {
     const $count = $('#openvault_community_count');
     const data = getOpenVaultData();
 
-    if ($container.find('.openvault-edit-form').length > 0) {
-        return;
-    }
-
     const communities = data?.communities || {};
     const ids = Object.keys(communities);
 
@@ -376,19 +383,13 @@ function renderEntityList() {
     const $count = $('#openvault_entity_count');
     const data = getOpenVaultData();
 
-    if ($container.find('.openvault-edit-form').length > 0) {
-        return;
-    }
-
-    const nodes = data?.graph?.nodes || {};
-    const allEntities = Object.entries(nodes).map(([key, node]) => ({ ...node, _key: key }));
-
+    const graph = data?.graph || {};
     const typeFilter = $('#openvault_entity_type_filter').val() || '';
     const searchQuery = $('#openvault_entity_search').val()?.toLowerCase().trim() || '';
 
-    const filtered = filterEntities(allEntities, typeFilter, searchQuery);
+    const filtered = filterEntities(graph, searchQuery, typeFilter);
 
-    $count.text(allEntities.length);
+    $count.text(Object.keys(graph?.nodes || {}).length);
 
     if (filtered.length === 0) {
         const msg = searchQuery || typeFilter ? 'No entities match your filters' : 'No entities extracted yet';
@@ -396,7 +397,7 @@ function renderEntityList() {
         return;
     }
 
-    const html = filtered.map(renderEntityCard).join('');
+    const html = filtered.map(([key, entity]) => renderEntityCard(entity, key)).join('');
     $container.html(html);
 }
 
@@ -406,194 +407,405 @@ function renderWorldTab() {
 }
 
 // =============================================================================
-// Entity Edit/Delete
+// Entity CRUD Event Bindings & Actions
 // =============================================================================
 
-function getEntityByKey(key) {
-    const data = getOpenVaultData();
-    if (!data) return null;
-    const node = data.graph?.nodes?.[key];
-    if (!node) return null;
-    return { ...node, _key: key };
-}
+// In-memory storage for edit form state
+const entityEditState = new Map();
 
-function enterEntityEditMode(key) {
-    const entity = getEntityByKey(key);
-    if (!entity) return;
+/**
+ * Initialize entity list event bindings
+ * Called once during UI setup
+ */
+function initEntityEventBindings() {
+    const $container = $('#openvault_entity_list');
+    if ($container.length === 0) return;
 
-    const $card = $(`[data-entity-key="${key}"]`);
-    $card.replaceWith(renderEntityEdit(entity));
-}
-
-function exitEntityEditMode(key) {
-    const entity = getEntityByKey(key);
-    if (!entity) return;
-
-    const $card = $(`[data-entity-key="${key}"]`);
-    $card.replaceWith(renderEntityCard(entity));
-}
-
-async function saveEntityEdit(key, btnElement) {
-    const $card = $(btnElement).closest(`[data-entity-key="${key}"]`);
-    const $btn = $(btnElement);
-
-    const name = $card.find('[data-field="name"]').val().trim();
-    const type = $card.find('[data-field="type"]').val();
-    const description = $card.find('[data-field="description"]').val().trim();
-
-    if (!name) {
-        showToast('warning', 'Name cannot be empty');
-        return;
-    }
-
-    $btn.prop('disabled', true);
-
-    const updated = await updateEntityAction(key, { name, type, description });
-    if (updated) {
-        const entity = getEntityByKey(key);
-        if (entity && !hasEmbedding(entity) && isEmbeddingsEnabled()) {
-            const embedding = await getDocumentEmbedding(`${type}: ${name} - ${description}`);
-            if (embedding) {
-                setEmbedding(entity, embedding);
-                await getDeps().saveChatConditional();
-            }
-        }
-
-        const updatedEntity = getEntityByKey(key);
-        if (updatedEntity) {
-            $card.replaceWith(renderEntityCard(updatedEntity));
-        }
-        showToast('success', 'Entity updated');
-        refreshStats();
-        refreshSidePanelLazy();
-    }
-    $btn.prop('disabled', false);
-}
-
-function bindEntityEvents() {
-    $(document).on('click', '.openvault-edit-entity', (e) => {
-        e.stopPropagation();
+    // Edit button - switch to edit mode
+    $container.on('click', '.openvault-edit-entity', (e) => {
         const key = $(e.currentTarget).data('key');
         enterEntityEditMode(key);
     });
 
-    $(document).on('click', '.openvault-delete-entity', async (e) => {
-        e.stopPropagation();
+    // Delete button - confirm and delete
+    $container.on('click', '.openvault-delete-entity', async (e) => {
         const key = $(e.currentTarget).data('key');
-        const deleted = await deleteEntityAction(key);
-        if (deleted) {
-            renderEntityList();
-            renderCommunityList();
-            refreshStats();
-            refreshSidePanelLazy();
-            showToast('success', 'Entity deleted');
-        }
+        await deleteEntityAction(key);
     });
 
-    $(document).on('click', '.openvault-cancel-entity-edit', (e) => {
+    // Cancel button - revert to view mode
+    $container.on('click', '.openvault-cancel-entity-edit', (e) => {
         const key = $(e.currentTarget).data('key');
-        exitEntityEditMode(key);
+        cancelEntityEdit(key);
     });
 
-    $(document).on('click', '.openvault-save-entity-edit', async (e) => {
+    // Save button - validate and save
+    $container.on('click', '.openvault-save-entity-edit', async (e) => {
         const key = $(e.currentTarget).data('key');
         await saveEntityEdit(key, e.currentTarget);
     });
+
+    // Remove alias button
+    $container.on('click', '.openvault-remove-alias', (e) => {
+        const key = $(e.currentTarget).data('key');
+        const alias = $(e.currentTarget).data('alias');
+        removeAliasChip(key, alias);
+    });
+
+    // Add alias button
+    $container.on('click', '.openvault-add-alias', (e) => {
+        const key = $(e.currentTarget).data('key');
+        addAliasChip(key);
+    });
+
+    // Add alias on Enter key
+    $container.on('keypress', '.openvault-alias-input', (e) => {
+        if (e.which === 13) {
+            const key = $(e.currentTarget).data('key');
+            addAliasChip(key);
+        }
+    });
+
+    // Merge button on entity card
+    $container.on('click', '.openvault-merge-entity', (e) => {
+        const key = $(e.currentTarget).data('key');
+        enterEntityMergeMode(key);
+    });
+
+    // Cancel merge picker
+    $container.on('click', '.openvault-cancel-entity-merge', (e) => {
+        const key = $(e.currentTarget).data('key');
+        cancelEntityMerge(key);
+    });
+
+    // Confirm merge
+    $container.on('click', '.openvault-confirm-entity-merge', async (e) => {
+        const sourceKey = $(e.currentTarget).data('source-key');
+        await confirmEntityMerge(sourceKey);
+    });
+
+    // Escape key to cancel
+    $container.on('keydown', '.openvault-entity-merge-panel', (e) => {
+        if (e.key === 'Escape') {
+            const key = $(e.currentTarget).data('source-key');
+            cancelEntityMerge(key);
+        }
+    });
 }
 
-// =============================================================================
-// Community Edit/Delete
-// =============================================================================
+/**
+ * Enter edit mode for an entity
+ * @param {string} key - Entity key
+ */
+function enterEntityEditMode(key) {
+    const graph = getOpenVaultData().graph;
+    const entity = graph.nodes[key];
+    if (!entity) return;
 
-function getCommunityById(id) {
-    const data = getOpenVaultData();
-    return data?.communities?.[id] || null;
+    // Store current state for potential cancel
+    entityEditState.set(key, { ...entity });
+
+    // Replace card with edit form
+    const $card = $(`.openvault-entity-card[data-key="${key}"]`);
+    const editHtml = renderEntityEdit(entity, key);
+    $card.replaceWith(editHtml);
 }
 
-function enterCommunityEditMode(id) {
-    const community = getCommunityById(id);
-    if (!community) return;
+/**
+ * Cancel entity edit and revert to view mode
+ * @param {string} key - Entity key
+ */
+function cancelEntityEdit(key) {
+    const graph = getOpenVaultData().graph;
+    const entity = graph.nodes[key];
+    if (!entity) return;
 
-    const $item = $(`[data-community-id="${id}"]`);
-    $item.replaceWith(renderCommunityEdit(id, community));
+    entityEditState.delete(key);
+
+    const $edit = $(`.openvault-entity-edit[data-key="${key}"]`);
+    const viewHtml = renderEntityCard(entity, key);
+    $edit.replaceWith(viewHtml);
 }
 
-function exitCommunityEditMode(id) {
-    const community = getCommunityById(id);
-    if (!community) return;
+/**
+ * Save entity edit
+ * @param {string} key - Entity key
+ * @param {HTMLElement} btn - Save button element
+ */
+async function saveEntityEdit(key, btn) {
+    const $edit = $(`.openvault-entity-edit[data-key="${key}"]`);
+    const name = $edit.find('.openvault-edit-name').val()?.toString().trim();
+    const type = $edit.find('.openvault-edit-type').val()?.toString();
+    const description = $edit.find('.openvault-edit-description').val()?.toString().trim();
 
-    const $item = $(`[data-community-id="${id}"]`);
-    $item.replaceWith(renderCommunityAccordion(id, community));
-}
-
-async function saveCommunityEdit(id, btnElement) {
-    const $item = $(btnElement).closest(`[data-community-id="${id}"]`);
-    const $btn = $(btnElement);
-
-    const title = $item.find('[data-field="title"]').val().trim();
-    const summary = $item.find('[data-field="summary"]').val().trim();
-    const findingsRaw = $item.find('[data-field="findings"]').val().trim();
-    const findings = findingsRaw ? findingsRaw.split('\n').map((f) => f.trim()).filter(Boolean) : [];
-
-    if (!title) {
-        showToast('warning', 'Title cannot be empty');
+    // Validation
+    if (!name) {
+        showToast('warning', 'Entity name cannot be empty');
         return;
     }
 
-    $btn.prop('disabled', true);
+    // Build aliases from chips
+    const aliases = $edit
+        .find('.openvault-alias-chip')
+        .map((_, chip) => $(chip).text().replace('×', '').trim())
+        .get();
 
-    const updated = await updateCommunityAction(id, { title, summary, findings });
-    if (updated) {
-        const community = getCommunityById(id);
-        if (community && !hasEmbedding(community) && isEmbeddingsEnabled()) {
-            const embedding = await getDocumentEmbedding(summary);
-            if (embedding) {
-                setEmbedding(community, embedding);
-                await getDeps().saveChatConditional();
-            }
+    // Capture any pending alias in the input field
+    const pendingAlias = $edit.find('.openvault-alias-input').val()?.toString()?.trim();
+    if (pendingAlias) {
+        const existingLower = aliases.map((a) => a.toLowerCase());
+        if (!existingLower.includes(pendingAlias.toLowerCase())) {
+            aliases.push(pendingAlias);
         }
-
-        const updatedCommunity = getCommunityById(id);
-        if (updatedCommunity) {
-            $item.replaceWith(renderCommunityAccordion(id, updatedCommunity));
-        }
-        showToast('success', 'Community updated');
-        refreshStats();
-        refreshSidePanelLazy();
     }
-    $btn.prop('disabled', false);
+
+    const updates = {
+        name,
+        type,
+        description,
+        aliases,
+    };
+
+    // Show loading state
+    const $btn = $(btn);
+    const originalText = $btn.text();
+    $btn.prop('disabled', true).text('Saving...');
+
+    try {
+        const result = await updateEntity(key, updates);
+
+        if (result === null) {
+            showToast(
+                'warning',
+                'An entity with that name already exists. Merging will be available in a future update.'
+            );
+            $btn.prop('disabled', false).text(originalText);
+            return;
+        }
+
+        // Clear edit state (use old key and new key for rename case)
+        entityEditState.delete(key);
+
+        // Sync ST Vector changes (re-sync on rename, delete old hashes)
+        if (result.stChanges) {
+            const { applySyncChanges } = await import('../extraction/extract.js');
+            await applySyncChanges(result.stChanges);
+        }
+
+        // Replace with updated view card (use newKey if renamed)
+        const graph = getOpenVaultData().graph;
+        const entity = graph.nodes[result.key];
+        const viewHtml = renderEntityCard(entity, result.key);
+        $edit.replaceWith(viewHtml);
+
+        showToast('success', 'Entity updated');
+        refreshStats();
+    } catch (err) {
+        console.error('[OpenVault] Failed to save entity:', err);
+        $btn.prop('disabled', false).text(originalText);
+    }
 }
 
-function bindCommunityEvents() {
-    $(document).on('click', '.openvault-edit-community', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const id = $(e.currentTarget).data('id');
-        enterCommunityEditMode(id);
-    });
+/**
+ * Delete entity action with confirmation
+ * @param {string} key - Entity key
+ */
+async function deleteEntityAction(key) {
+    const graph = getOpenVaultData().graph;
+    const entity = graph.nodes[key];
+    if (!entity) return;
 
-    $(document).on('click', '.openvault-delete-community', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const id = $(e.currentTarget).data('id');
-        const deleted = await deleteCommunityAction(id);
-        if (deleted) {
-            renderCommunityList();
-            refreshStats();
-            refreshSidePanelLazy();
-            showToast('success', 'Community deleted');
+    // Count connected edges
+    const edgeCount = Object.values(graph.edges).filter((e) => e.source === key || e.target === key).length;
+
+    const confirmMsg =
+        edgeCount > 0
+            ? `Delete "${entity.name}"? This will also remove ${edgeCount} connected relationship(s).`
+            : `Delete "${entity.name}"?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    const result = await deleteEntityStoreAction(key);
+    if (result.success) {
+        // Clean up stale edit state
+        entityEditState.delete(key);
+
+        // Remove from DOM
+        $(`.openvault-entity-card[data-key="${key}"]`).remove();
+
+        // Clean up ST Vector if needed
+        if (result.stChanges) {
+            const { applySyncChanges } = await import('../extraction/extract.js');
+            await applySyncChanges(result.stChanges);
         }
-    });
 
-    $(document).on('click', '.openvault-cancel-community-edit', (e) => {
-        const id = $(e.currentTarget).data('id');
-        exitCommunityEditMode(id);
-    });
+        showToast('success', 'Entity deleted');
+        refreshStats();
+        // Update entity count
+        $('#openvault_entity_count').text(Object.keys(getOpenVaultData().graph?.nodes || {}).length);
+    }
+}
 
-    $(document).on('click', '.openvault-save-community-edit', async (e) => {
-        const id = $(e.currentTarget).data('id');
-        await saveCommunityEdit(id, e.currentTarget);
-    });
+/**
+ * Remove alias chip from edit form
+ * @param {string} key - Entity key
+ * @param {string} alias - Alias to remove
+ */
+function removeAliasChip(key, alias) {
+    const $edit = $(`.openvault-entity-edit[data-key="${key}"]`);
+    $edit.find(`.openvault-remove-alias[data-alias="${alias}"]`).closest('.openvault-alias-chip').remove();
+}
+
+/**
+ * Add alias chip to edit form
+ * @param {string} key - Entity key
+ */
+function addAliasChip(key) {
+    const $edit = $(`.openvault-entity-edit[data-key="${key}"]`);
+    const $input = $edit.find('.openvault-alias-input');
+    const alias = $input.val()?.toString().trim();
+
+    if (!alias) return;
+
+    // Check for duplicates (case-insensitive)
+    const existingAliases = $edit
+        .find('.openvault-alias-chip')
+        .map((_, chip) => $(chip).text().replace('×', '').trim().toLowerCase())
+        .get();
+
+    if (existingAliases.includes(alias.toLowerCase())) {
+        $input.val('');
+        return;
+    }
+
+    // Add chip
+    const chipHtml = `
+        <span class="openvault-alias-chip">
+            ${escapeHtml(alias)}
+            <span class="remove openvault-remove-alias" data-key="${escapeHtml(key)}" data-alias="${escapeHtml(alias)}">×</span>
+        </span>
+    `;
+    $edit.find('.openvault-alias-list').append(chipHtml);
+    $input.val('');
+}
+
+// =============================================================================
+// Entity Merge Flow Handlers
+// =============================================================================
+
+/**
+ * Enter merge mode for an entity - replace card with merge picker.
+ * @param {string} sourceKey
+ */
+function enterEntityMergeMode(sourceKey) {
+    const deps = getDeps();
+    const ctx = deps.getContext();
+    const graph = ctx.chatMetadata?.openvault?.graph;
+
+    if (!graph) return;
+
+    const sourceNode = graph.nodes[sourceKey];
+    if (!sourceNode) return;
+
+    // Render the merge picker
+    const pickerHtml = renderEntityMergePicker(sourceKey, sourceNode, graph.nodes);
+
+    // Replace the entity card with the picker
+    const $card = $(`.openvault-entity-card[data-key="${sourceKey}"]`);
+    $card.replaceWith(pickerHtml);
+
+    // Focus the search input
+    $('.openvault-merge-search').focus();
+}
+
+/**
+ * Cancel merge mode - restore the entity card view.
+ * @param {string} sourceKey
+ */
+function cancelEntityMerge(_sourceKey) {
+    // Re-render the entity list to restore the card
+    renderEntityList();
+}
+
+/**
+ * Find target entity key from user input text.
+ * Matches against node names and aliases (case-insensitive).
+ * @param {string} inputText - The text entered by user
+ * @param {Object} nodes - Graph nodes
+ * @returns {string|null} Target key or null if not found
+ */
+function findMergeTargetFromInput(inputText, nodes) {
+    if (!inputText) return null;
+
+    const normalizedInput = inputText.toLowerCase().trim();
+    // Remove type suffix like " [PERSON]" for matching
+    const cleanInput = normalizedInput.replace(/\s*\[[^\]]+\]$/, '').trim();
+
+    for (const [key, node] of Object.entries(nodes)) {
+        const name = (node.name || '').toLowerCase();
+        if (name === cleanInput) return key;
+
+        const aliases = (node.aliases || []).map((a) => a.toLowerCase());
+        if (aliases.includes(cleanInput)) return key;
+    }
+
+    return null;
+}
+
+/**
+ * Confirm and execute the entity merge.
+ * @param {string} sourceKey
+ */
+async function confirmEntityMerge(sourceKey) {
+    const deps = getDeps();
+    const ctx = deps.getContext();
+    const graph = ctx.chatMetadata?.openvault?.graph;
+
+    if (!graph) {
+        showToast('error', 'Graph not available');
+        return;
+    }
+
+    // Get the input value and find the target
+    const $panel = $(`.openvault-entity-merge-panel[data-source-key="${sourceKey}"]`);
+    const inputText = $panel.find('.openvault-merge-search').val();
+    const targetKey = findMergeTargetFromInput(inputText, graph.nodes);
+
+    if (!targetKey) {
+        showToast('error', 'Please select a valid target entity');
+        return;
+    }
+
+    if (targetKey === sourceKey) {
+        showToast('error', 'Cannot merge an entity into itself');
+        return;
+    }
+
+    try {
+        showToast('info', 'Merging entities...');
+
+        const result = await mergeEntities(sourceKey, targetKey);
+
+        if (!result.success) {
+            showToast('error', 'Failed to merge entities');
+            return;
+        }
+
+        // Sync ST Vector changes (delete removed, re-sync surviving node)
+        if (result.stChanges) {
+            const { applySyncChanges } = await import('../extraction/extract.js');
+            await applySyncChanges(result.stChanges);
+        }
+
+        // Re-render the entity list
+        renderEntityList();
+
+        showToast('success', `Merged into ${graph.nodes[targetKey]?.name || targetKey}`);
+    } catch (error) {
+        if (error.name === 'AbortError') return;
+        showToast('error', `Merge failed: ${error.message}`);
+        console.error('Entity merge failed:', error);
+    }
 }
 
 // =============================================================================
@@ -602,8 +814,7 @@ function bindCommunityEvents() {
 
 export function initBrowser() {
     bindMemoryListEvents();
-    bindEntityEvents();
-    bindCommunityEvents();
+    initEntityEventBindings();
     initPositionBadges();
     renderMemoryList();
     renderCharacterStates();
@@ -628,12 +839,6 @@ export function refreshAllUI() {
     renderWorldTab();
     updateBudgetIndicators();
     renderPerfTab();
-
-    refreshSidePanelLazy();
-}
-
-function refreshSidePanelLazy() {
-    import('./side-panel.js').then(({ refreshSidePanel }) => refreshSidePanel()).catch(() => {});
 }
 
 // =============================================================================
@@ -681,10 +886,13 @@ function initPositionBadges() {
     $(document).on('click', '.openvault-position-badge.custom', function () {
         const macro = $(this).data('macro');
         const macroText = `{{${macro}}}`;
-        navigator.clipboard.writeText(macroText).then(
-            () => showToast('success', `Copied {{${macro}}} to clipboard`),
-            () => showToast('error', 'Failed to copy')
-        );
+        navigator.clipboard
+            .writeText(macroText)
+            .then(
+                () => showToast('success', `Copied {{${macro}}} to clipboard`),
+                () => showToast('error', 'Failed to copy')
+            )
+            .catch(() => {});
     });
 }
 

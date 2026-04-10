@@ -5,6 +5,7 @@
  * Zero side effects, easily testable.
  */
 
+import { ENTITY_TYPES } from '../constants.js';
 import { isEmbeddingsEnabled } from '../embeddings.js';
 import { escapeHtml } from '../utils/dom.js';
 import { hasEmbedding } from '../utils/embedding-codec.js';
@@ -84,21 +85,16 @@ function buildCharacterTags(characters) {
  * Build card header HTML
  */
 function buildCardHeader(memory) {
-    const id = escapeHtml(memory.id);
     const date = formatMemoryDate(memory.created_at);
     const anchorHtml = memory.temporal_anchor
         ? `<span class="openvault-memory-card-date" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-clock"></i> ${escapeHtml(memory.temporal_anchor)}</span>`
-        : '<span></span>';
+        : '';
 
     return `
         <div class="openvault-memory-card-header">
             <div class="openvault-memory-card-meta">
                 ${anchorHtml}
                 <span class="openvault-memory-card-date">${escapeHtml(date)}</span>
-            </div>
-            <div class="openvault-memory-card-actions">
-                <i class="fa-solid fa-pen openvault-edit-memory" data-id="${id}" title="Edit"></i>
-                <i class="fa-solid fa-trash openvault-delete-memory" data-id="${id}" title="Delete"></i>
             </div>
         </div>
     `;
@@ -108,10 +104,19 @@ function buildCardHeader(memory) {
  * Build card footer HTML
  */
 function buildCardFooter(memory, badges) {
+    const id = escapeHtml(memory.id);
     return `
         <div class="openvault-memory-card-footer">
             <div class="openvault-memory-card-badges">
                 ${badges}
+            </div>
+            <div>
+                <button class="menu_button openvault-edit-memory" data-id="${id}" title="Edit memory">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+                <button class="menu_button openvault-delete-memory" data-id="${id}" title="Delete memory">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
             </div>
         </div>
     `;
@@ -253,24 +258,15 @@ export function renderReflectionProgress(reflectionState, threshold) {
  * @returns {string} HTML
  */
 export function renderCommunityAccordion(id, community) {
-    const escapedId = escapeHtml(id);
     const memberCount = community.nodeKeys?.length || 0;
     const findings = (community.findings || []).map((f) => `<li>${escapeHtml(f)}</li>`).join('');
     const members = (community.nodeKeys || []).map((k) => escapeHtml(k)).join(', ');
 
     return `
-        <details class="openvault-community-item" data-community-id="${escapedId}">
+        <details class="openvault-community-item">
             <summary>
                 <span class="openvault-community-title">${escapeHtml(community.title || id)}</span>
                 <span class="openvault-community-badge">${memberCount} entities</span>
-                <div class="openvault-community-actions">
-                    <button class="menu_button openvault-edit-community" data-id="${escapedId}" title="Edit community">
-                        <i class="fa-solid fa-pen"></i>
-                    </button>
-                    <button class="menu_button openvault-delete-community" data-id="${escapedId}" title="Delete community">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                </div>
             </summary>
             <div class="openvault-community-content">
                 <p>${escapeHtml(community.summary || 'No summary')}</p>
@@ -282,112 +278,174 @@ export function renderCommunityAccordion(id, community) {
 }
 
 /**
- * Render edit form for a community.
- * @param {string} id - Community ID
- * @param {Object} community - Community data
- * @returns {string} HTML
+ * Render an entity card in view mode
+ * @param {Object} entity - Entity node with name, type, description, aliases
+ * @param {string} key - Normalized entity key
+ * @returns {string} HTML string
  */
-export function renderCommunityEdit(id, community) {
-    const escapedId = escapeHtml(id);
-    const findingsText = (community.findings || []).join('\n');
+export function renderEntityCard(entity, key) {
+    const typeLabel = entity.type.charAt(0) + entity.type.slice(1).toLowerCase();
+    const aliasText = entity.aliases?.length > 0 ? entity.aliases.join(', ') : '';
+    const pendingBadge = !hasEmbedding(entity)
+        ? '<span class="openvault-pending-embed"><span class="icon">↻</span> pending</span>'
+        : '';
 
     return `
-        <div class="openvault-community-item openvault-community-editing" data-community-id="${escapedId}">
-            <div class="openvault-edit-form">
-                <div class="openvault-edit-row">
-                    <label>
-                        Title
-                        <input type="text" class="text_pole" data-field="title" value="${escapeHtml(community.title || '')}" />
-                    </label>
-                </div>
-                <div class="openvault-edit-row">
-                    <label>
-                        Summary
-                        <textarea class="openvault-edit-textarea" data-field="summary">${escapeHtml(community.summary || '')}</textarea>
-                    </label>
-                </div>
-                <div class="openvault-edit-row">
-                    <label>
-                        Findings (one per line)
-                        <textarea class="openvault-edit-textarea" data-field="findings">${escapeHtml(findingsText)}</textarea>
-                    </label>
-                </div>
-                <div class="openvault-edit-actions">
-                    <button class="menu_button openvault-cancel-community-edit" data-id="${escapedId}">
-                        <i class="fa-solid fa-times"></i> Cancel
-                    </button>
-                    <button class="menu_button openvault-save-community-edit" data-id="${escapedId}">
-                        <i class="fa-solid fa-check"></i> Save
-                    </button>
-                </div>
-            </div>
+    <div class="openvault-entity-card" data-key="${escapeHtml(key)}">
+      <div class="openvault-entity-header">
+        <span class="openvault-entity-name">${escapeHtml(entity.name)}</span>
+        <div class="openvault-entity-badges">
+          <span class="openvault-entity-type-badge ${entity.type.toLowerCase()}">
+            ${typeLabel}
+          </span>
+          ${pendingBadge}
         </div>
-    `;
+        <div class="openvault-entity-actions">
+          <button class="openvault-entity-action-btn openvault-edit-entity" data-key="${escapeHtml(key)}" title="Edit">
+            ✏️
+          </button>
+          <button class="openvault-entity-action-btn openvault-merge-entity" data-key="${escapeHtml(key)}" title="Merge into another entity">
+            <i class="fa-solid fa-code-merge"></i>
+          </button>
+          <button class="openvault-entity-action-btn openvault-delete-entity" data-key="${escapeHtml(key)}" title="Delete">
+            🗑️
+          </button>
+        </div>
+      </div>
+      ${aliasText ? `<div class="openvault-entity-aliases">${escapeHtml(aliasText)}</div>` : ''}
+      <div class="openvault-entity-description">${escapeHtml(entity.description || '')}</div>
+      <small class="openvault-entity-mentions">${entity.mentions || 0} mentions</small>
+    </div>
+  `;
 }
 
 /**
- * Render a single entity card.
- * @param {Object} entity - { name, type, description, mentions, _key }
- * @returns {string} HTML
+ * Render an entity card in edit mode
+ * @param {Object} entity - Entity node with name, type, description, aliases
+ * @param {string} key - Normalized entity key
+ * @returns {string} HTML string
  */
-export function renderEntityCard(entity) {
-    const key = escapeHtml(entity._key || '');
-    return `
-        <div class="openvault-entity-card" data-entity-key="${key}">
-            <div class="openvault-entity-header">
-                <span class="openvault-entity-name">${escapeHtml(entity.name)}</span>
-                <span class="openvault-entity-type-badge ${entity.type.toLowerCase()}">${escapeHtml(entity.type)}</span>
-            </div>
-            <div class="openvault-entity-description">${escapeHtml(entity.description || '')}</div>
-            <div class="openvault-entity-footer">
-                <small class="openvault-entity-mentions">${entity.mentions || 0} mentions</small>
-                <div>
-                    <button class="menu_button openvault-edit-entity" data-key="${key}" title="Edit entity">
-                        <i class="fa-solid fa-pen"></i>
-                    </button>
-                    <button class="menu_button openvault-delete-entity" data-key="${key}" title="Delete entity">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-}
+export function renderEntityEdit(entity, key) {
+    const aliasChips = (entity.aliases || [])
+        .map(
+            (alias) => `
+      <span class="openvault-alias-chip">
+        ${escapeHtml(alias)}
+        <span class="remove openvault-remove-alias" data-key="${escapeHtml(key)}" data-alias="${escapeHtml(alias)}">×</span>
+      </span>
+    `
+        )
+        .join('');
 
-/**
- * Render edit form for an entity.
- * @param {Object} entity - Entity data with _key
- * @returns {string} HTML
- */
-export function renderEntityEdit(entity) {
-    const key = escapeHtml(entity._key || '');
-    const typeOptions = ['PERSON', 'PLACE', 'ORGANIZATION', 'OBJECT', 'CONCEPT']
-        .map((t) => `<option value="${t}"${t === entity.type ? ' selected' : ''}>${t}</option>`)
+    const typeOptions = Object.entries(ENTITY_TYPES)
+        .map(
+            ([type]) => `
+    <option value="${type}" ${entity.type === type ? 'selected' : ''}>
+      ${type.charAt(0) + type.slice(1).toLowerCase()}
+    </option>
+  `
+        )
         .join('');
 
     return `
-        <div class="openvault-entity-card" data-entity-key="${key}">
-            <div class="openvault-edit-form">
-                <div class="openvault-edit-row">
-                    <label>
-                        Name
-                        <input type="text" class="text_pole" data-field="name" value="${escapeHtml(entity.name || '')}" />
-                    </label>
-                    <label>
-                        Type
-                        <select data-field="type">${typeOptions}</select>
-                    </label>
-                </div>
-                <textarea class="openvault-edit-textarea" data-field="description">${escapeHtml(entity.description || '')}</textarea>
-                <div class="openvault-edit-actions">
-                    <button class="menu_button openvault-cancel-entity-edit" data-key="${key}">
-                        <i class="fa-solid fa-times"></i> Cancel
-                    </button>
-                    <button class="menu_button openvault-save-entity-edit" data-key="${key}">
-                        <i class="fa-solid fa-check"></i> Save
-                    </button>
-                </div>
-            </div>
+    <div class="openvault-entity-edit" data-key="${escapeHtml(key)}">
+      <div class="openvault-entity-edit-row">
+        <label>Name</label>
+        <input type="text" class="openvault-edit-name" value="${escapeHtml(entity.name)}" data-key="${escapeHtml(key)}">
+      </div>
+      <div class="openvault-entity-edit-row">
+        <label>Type</label>
+        <select class="openvault-edit-type" data-key="${escapeHtml(key)}">
+          ${typeOptions}
+        </select>
+      </div>
+      <div class="openvault-entity-edit-row">
+        <label>Description</label>
+        <textarea class="openvault-edit-description" data-key="${escapeHtml(key)}" rows="3">${escapeHtml(entity.description || '')}</textarea>
+      </div>
+      <div class="openvault-entity-edit-row">
+        <label>Aliases</label>
+        <div class="openvault-alias-list" data-key="${escapeHtml(key)}">
+          ${aliasChips}
         </div>
-    `;
+        <div class="openvault-alias-input-row">
+          <input type="text" class="openvault-alias-input" placeholder="e.g. The Stranger, Masked Figure..." data-key="${escapeHtml(key)}">
+          <button class="openvault-add-alias" data-key="${escapeHtml(key)}">Add</button>
+        </div>
+      </div>
+      <div class="openvault-entity-edit-actions">
+        <button class="cancel openvault-cancel-entity-edit" data-key="${escapeHtml(key)}">Cancel</button>
+        <button class="save openvault-save-entity-edit" data-key="${escapeHtml(key)}">Save</button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Render a merge picker panel using native HTML5 datalist.
+ * @param {string} sourceKey - The entity being merged (will be deleted)
+ * @param {Object} sourceNode - The source entity node data
+ * @param {Object} graphNodes - All nodes in graph (for building options)
+ * @returns {string} HTML string for the merge picker
+ */
+export function renderEntityMergePicker(sourceKey, sourceNode, graphNodes) {
+    const sourceDisplay = escapeHtml(sourceNode.name || sourceKey);
+    const datalistId = `merge-targets-${sourceKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
+
+    // Build datalist options from all nodes except source
+    // Include both name and aliases as separate options for searchability
+    const options = Object.entries(graphNodes)
+        .filter(([key]) => key !== sourceKey)
+        .flatMap(([key, node]) => {
+            const displayName = escapeHtml(node.name || key);
+            const typeLabel = node.type ? ` [${node.type}]` : '';
+            const primaryOption = `<option value="${displayName}${typeLabel}" data-key="${escapeHtml(key)}">`;
+
+            // Also add alias options pointing to same entity
+            const aliasOptions = (node.aliases || [])
+                .filter((alias) => alias !== node.name)
+                .map(
+                    (alias) =>
+                        `<option value="${escapeHtml(alias)} [alias of ${displayName}]" data-key="${escapeHtml(key)}">`
+                );
+
+            return [primaryOption, ...aliasOptions];
+        })
+        .join('\n');
+
+    return `
+    <div class="openvault-entity-merge-panel" data-source-key="${escapeHtml(sourceKey)}">
+      <div class="merge-header">
+        <h4>Merge "${sourceDisplay}" into another entity</h4>
+        <p class="merge-explanation">
+          "${sourceDisplay}" will be deleted. Its relationships, aliases, and description
+          will be combined into the target entity.
+        </p>
+      </div>
+
+      <div class="merge-target-picker">
+        <label for="merge-target-input-${sourceKey}">Target:</label>
+        <input
+          type="text"
+          id="merge-target-input-${sourceKey}"
+          class="openvault-merge-search"
+          placeholder="Type to search entities..."
+          autocomplete="off"
+          list="${datalistId}"
+        />
+        <datalist id="${datalistId}">
+          ${options}
+        </datalist>
+      </div>
+
+      <div class="merge-actions">
+        <button class="openvault-cancel-entity-merge" data-key="${escapeHtml(sourceKey)}">
+          Cancel
+        </button>
+        <button class="openvault-confirm-entity-merge" data-source-key="${escapeHtml(sourceKey)}">
+          Confirm Merge
+        </button>
+      </div>
+    </div>
+  `;
 }

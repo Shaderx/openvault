@@ -52,7 +52,8 @@ async function scoreMemoriesDirect(
     characterNames = [],
     hiddenMemories = [],
     idfCache = null,
-    scoringConfig = /** @type {Partial<ScoringConfig>} */ ({})
+    scoringConfig = /** @type {Partial<ScoringConfig>} */ ({}),
+    chatFingerprintMap = null
 ) {
     // Destructure flat scoringConfig into the {constants, settings} shape math.js expects
     const constants = {
@@ -75,7 +76,8 @@ async function scoreMemoriesDirect(
         queryTokens,
         characterNames,
         hiddenMemories,
-        idfCache
+        idfCache,
+        chatFingerprintMap
     );
     const topScored = scored.slice(0, limit);
     return {
@@ -91,7 +93,7 @@ async function scoreMemoriesDirect(
  * @param {number} limit - Maximum memories to return
  * @param {Memory[]} [allHiddenMemories] - All hidden memories for IDF corpus
  * @param {IDFCache|null} [idfCache] - Pre-computed IDF cache
- * @returns {Promise<{memories: Memory[], scoredResults: ScoredMemory[]}>}
+ * @returns {Promise<{memories: Memory[], scoredResults: ScoredMemory[], communityIds?: string[]}>}
  */
 async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemories = [], idfCache = null) {
     const { recentContext, userMessages, activeCharacters, chatLength, scoringConfig, queryConfig } = ctx;
@@ -101,7 +103,15 @@ async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemor
     const strategy = getStrategy(source);
 
     if (strategy.usesExternalStorage()) {
-        return selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemories, idfCache, strategy);
+        return selectRelevantMemoriesWithST(
+            memories,
+            ctx,
+            limit,
+            allHiddenMemories,
+            idfCache,
+            strategy,
+            ctx.communities
+        );
     }
 
     // Extract context from recent messages for enriched queries
@@ -161,7 +171,8 @@ async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemor
         activeCharacters || [],
         allHiddenMemories,
         idfCache,
-        scoringConfig
+        scoringConfig,
+        ctx.chatFingerprintMap
     );
 }
 
@@ -174,9 +185,18 @@ async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemor
  * @param {Memory[]} allHiddenMemories - All hidden memories for IDF corpus
  * @param {IDFCache|null} idfCache - Pre-computed IDF cache
  * @param {Object} strategy - ST Vector strategy object with searchItems method
- * @returns {Promise<{memories: Memory[], scoredResults: ScoredMemory[]}>}
+ * @param {Object} [communities={}] - Communities map for community results
+ * @returns {Promise<{memories: Memory[], scoredResults: ScoredMemory[], communityIds: string[]}>}
  */
-async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemories, idfCache, strategy) {
+export async function selectRelevantMemoriesWithST(
+    memories,
+    ctx,
+    limit,
+    allHiddenMemories,
+    idfCache,
+    strategy,
+    communities = {}
+) {
     const { recentContext, userMessages, activeCharacters, chatLength, scoringConfig, queryConfig } = ctx;
 
     // Over-fetch from ST for reranking headroom
@@ -187,16 +207,23 @@ async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemor
         scoringConfig.vectorSimilarityThreshold
     );
 
-    // Build candidates with proxy scores
+    // Build lookup map for memories and communities
     const memoriesById = new Map(memories.map((m) => [m.id, m]));
+    const communityById = new Map(Object.entries(communities));
+    const communityResults = [];
 
     if (stResults && stResults.length > 0) {
         const candidates = [];
         for (let i = 0; i < stResults.length; i++) {
-            const memory = memoriesById.get(stResults[i].id);
-            if (!memory) continue;
-            memory._proxyVectorScore = rankToProxyScore(i, stResults.length);
-            candidates.push(memory);
+            const result = stResults[i];
+            const item = memoriesById.get(result.id);
+
+            if (item) {
+                item._proxyVectorScore = rankToProxyScore(i, stResults.length);
+                candidates.push(item);
+            } else if (communityById.has(result.id)) {
+                communityResults.push(result.id);
+            }
         }
 
         if (candidates.length > 0) {
@@ -243,7 +270,8 @@ async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemor
                 bm25Tokens,
                 activeCharacters || [],
                 allHiddenMemories,
-                idfCache
+                idfCache,
+                ctx.chatFingerprintMap
             );
 
             const topScored = scored.slice(0, limit);
@@ -256,6 +284,7 @@ async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemor
             return {
                 memories: topScored.map((r) => r.memory),
                 scoredResults: topScored,
+                communityIds: communityResults,
             };
         }
     }
@@ -270,7 +299,7 @@ async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemor
         bm25Tokens = buildBM25Tokens(userMessages, queryContext, corpusVocab, null, queryConfig);
     }
 
-    return scoreMemoriesDirect(
+    const fallbackResult = await scoreMemoriesDirect(
         memories,
         null,
         chatLength,
@@ -279,8 +308,14 @@ async function selectRelevantMemoriesWithST(memories, ctx, limit, allHiddenMemor
         activeCharacters || [],
         allHiddenMemories,
         idfCache,
-        scoringConfig
+        scoringConfig,
+        ctx.chatFingerprintMap
     );
+
+    return {
+        ...fallbackResult,
+        communityIds: communityResults,
+    };
 }
 
 /**
@@ -348,10 +383,10 @@ export function selectMemoriesWithSoftBalance(scoredMemories, tokenBudget, chatL
  * Select relevant memories using scoring and token budget
  * @param {Memory[]} memories - Available memories
  * @param {RetrievalContext} ctx - Retrieval context object
- * @returns {Promise<Memory[]>} Selected memories
+ * @returns {Promise<{memories: Memory[], communityIds?: string[]}>} Selected memories and optional community IDs
  */
 export async function selectRelevantMemories(memories, ctx) {
-    if (!memories || memories.length === 0) return [];
+    if (!memories || memories.length === 0) return { memories: [] };
     // Skip archived reflections in retrieval
     const activeMemories = memories.filter((m) => !m.archived);
     const { finalTokens } = ctx;
@@ -360,13 +395,11 @@ export async function selectRelevantMemories(memories, ctx) {
     const candidateIds = new Set(activeMemories.map((m) => m.id));
     const hiddenMemories = (ctx.allAvailableMemories || []).filter((m) => !m.archived && !candidateIds.has(m.id));
 
-    const { memories: scoredMemories, scoredResults } = await selectRelevantMemoriesSimple(
-        activeMemories,
-        ctx,
-        1000,
-        hiddenMemories,
-        ctx.idfCache || null
-    );
+    const {
+        memories: scoredMemories,
+        scoredResults,
+        communityIds,
+    } = await selectRelevantMemoriesSimple(activeMemories, ctx, 1000, hiddenMemories, ctx.idfCache || null);
     const finalResults = selectMemoriesWithSoftBalance(scoredResults, finalTokens, ctx.chatLength);
     const selectedIds = new Set(finalResults.map((m) => m.id));
 
@@ -418,5 +451,5 @@ export async function selectRelevantMemories(memories, ctx) {
     logDebug(
         `Retrieval: ${activeMemories.length} active memories -> ${scoredMemories.length} scored -> ${finalResults.length} after token filter (${finalTokens} budget)`
     );
-    return finalResults;
+    return { memories: finalResults, communityIds };
 }

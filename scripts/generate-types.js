@@ -77,8 +77,6 @@ const {
     ReflectionPromptParamsSchema,
     CommunitySummaryParamsSchema,
     GlobalSynthesisParamsSchema,
-    CdnMirrorFnSchema,
-    LadderQueueSchema,
 } = await import('../src/store/schemas.js');
 
 // --- 4. Map: Type Name -> Zod Schema ---
@@ -128,14 +126,26 @@ const typeMappings = [
     { name: 'ReflectionPromptParams', schema: ReflectionPromptParamsSchema },
     { name: 'CommunitySummaryParams', schema: CommunitySummaryParamsSchema },
     { name: 'GlobalSynthesisParams', schema: GlobalSynthesisParamsSchema },
-    // Function/complex types represented as any
-    { name: 'CdnMirrorFn', schema: CdnMirrorFnSchema },
-    { name: 'LadderQueue', schema: LadderQueueSchema },
 ];
 
 // --- 5. Generate the .d.ts file ---
 
 const OUTPUT_PATH = path.resolve(__dirname, '../src/types.d.ts');
+
+// Type overrides for fields that use z.any() in schemas but need specific TS types
+const typeOverrides = {
+    ExtractionOptions: {
+        abortSignal: 'AbortSignal',
+        progressCallback: '(current: number, total: number, phase: number) => void',
+        onPhase2Start: '() => void',
+    },
+    ExtractionLLMOptions: {
+        signal: 'AbortSignal',
+    },
+    LLMCallOptions: {
+        signal: 'AbortSignal',
+    },
+};
 
 async function generateTypes() {
     // Generate type definitions (without timestamp for comparison)
@@ -146,6 +156,15 @@ async function generateTypes() {
         typeContent += `export type ${name} = ${typeDef};\n\n`;
     }
     typeContent += `// End of generated types\n`;
+
+    // Apply type overrides
+    for (const [_typeName, overrides] of Object.entries(typeOverrides)) {
+        for (const [fieldName, typeName] of Object.entries(overrides)) {
+            // Replace patterns like `fieldName?: unknown | undefined` with `fieldName?: typeName | undefined`
+            const pattern = new RegExp(`(${fieldName}\\?:) unknown (\\| undefined)`, 'g');
+            typeContent = typeContent.replace(pattern, `$1 ${typeName} $2`);
+        }
+    }
 
     // Read existing file to compare
     let existingContent = '';

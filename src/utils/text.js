@@ -2,6 +2,7 @@ import { cdnImport } from './cdn.js';
 
 const { jsonrepair } = await cdnImport('jsonrepair');
 
+import { GRAPH_JACCARD_DUPLICATE_THRESHOLD } from '../constants.js';
 import { countTokens } from './tokens.js';
 
 /**
@@ -200,6 +201,33 @@ export function jaccardSimilarity(setA, setB, tokenizeFn = null) {
     const union = a.size + b.size - intersection;
 
     return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * Merge source description into target using segmented Jaccard deduplication.
+ * @param {string} targetDesc - Current target description
+ * @param {string} sourceDesc - Source description to merge
+ * @param {number} [threshold] - Similarity threshold (defaults to GRAPH_JACCARD_DUPLICATE_THRESHOLD)
+ * @returns {string} Combined description
+ */
+export function mergeDescriptions(targetDesc, sourceDesc, threshold = GRAPH_JACCARD_DUPLICATE_THRESHOLD) {
+    if (!sourceDesc) return targetDesc || '';
+    if (!targetDesc) return sourceDesc;
+
+    const segments = sourceDesc.split(' | ');
+    let result = targetDesc;
+
+    for (const segment of segments) {
+        const trimmed = segment.trim();
+        if (!trimmed) continue;
+
+        const similarity = jaccardSimilarity(trimmed, result);
+        if (similarity < threshold) {
+            result = result ? `${result} | ${trimmed}` : trimmed;
+        }
+    }
+
+    return result;
 }
 
 /**

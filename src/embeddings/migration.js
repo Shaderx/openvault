@@ -56,6 +56,9 @@ function _hasSyncedItems(data) {
     for (const node of Object.values(data.graph?.nodes || {})) {
         if (isStSynced(node)) return true;
     }
+    for (const edge of Object.values(data.graph?.edges || {})) {
+        if (isStSynced(edge)) return true;
+    }
     for (const community of Object.values(data.communities || {})) {
         if (isStSynced(community)) return true;
     }
@@ -78,6 +81,12 @@ function _clearAllStSyncFlags(data) {
     for (const node of Object.values(data.graph?.nodes || {})) {
         if (isStSynced(node)) {
             clearStSynced(node);
+            count++;
+        }
+    }
+    for (const edge of Object.values(data.graph?.edges || {})) {
+        if (isStSynced(edge)) {
+            clearStSynced(edge);
             count++;
         }
     }
@@ -104,6 +113,9 @@ function _countEmbeddings(data) {
     }
     for (const node of Object.values(data.graph?.nodes || {})) {
         if (hasEmbedding(node)) count++;
+    }
+    for (const edge of Object.values(data.graph?.edges || {})) {
+        if (hasEmbedding(edge)) count++;
     }
     for (const community of Object.values(data.communities || {})) {
         if (hasEmbedding(community)) count++;
@@ -180,6 +192,13 @@ export async function invalidateStaleEmbeddings(data, currentModelId) {
     for (const node of Object.values(data.graph?.nodes || {})) {
         if (hasEmbedding(node)) {
             deleteEmbedding(node);
+            count++;
+        }
+    }
+
+    for (const edge of Object.values(data.graph?.edges || {})) {
+        if (hasEmbedding(edge)) {
+            deleteEmbedding(edge);
             count++;
         }
     }

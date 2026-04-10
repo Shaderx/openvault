@@ -7,6 +7,7 @@
 
 import { CORPUS_GROUNDED_BOOST_RATIO, NON_GROUNDED_BOOST_RATIO } from '../constants.js';
 import { getOptimalChunkSize } from '../embeddings.js';
+import { logDebug } from '../utils/logging.js';
 import { stemName, stemWord } from '../utils/stemmer.js';
 import { tokenize } from './math.js';
 
@@ -123,9 +124,11 @@ export function buildEmbeddingQuery(messages, extractedEntities, queryConfig) {
     // Append top entities (adds semantic anchors)
     const topEntities = (extractedEntities?.entities || []).slice(0, 5).join(' ');
 
-    // Cap at strategy's optimal chunk size
+    // Cap at strategy's optimal chunk size — entities are prepended so they survive truncation
     const chunkSize = getOptimalChunkSize();
-    return (weightedText + ' ' + topEntities).slice(0, chunkSize);
+    const entityPrefix = topEntities.length > 0 ? topEntities + ' ' : '';
+    const availableSpace = Math.max(0, chunkSize - entityPrefix.length);
+    return (entityPrefix + weightedText.slice(0, availableSpace)).trim();
 }
 
 /**
@@ -187,20 +190,11 @@ export function buildBM25Tokens(userMessage, extractedEntities, corpusVocab = nu
         const grounded = msgStems.filter((t) => corpusVocab.has(t));
         const nonGrounded = msgStems.filter((t) => !corpusVocab.has(t));
 
-        // DEBUG: Log corpus grounding behavior
         if (msgStems.length > 0) {
-            console.log('[BM25-DEBUG] Three-tier BM25:', {
-                msgStems: msgStems.slice(0, 20),
-                groundedCount: grounded.length,
-                nonGroundedCount: nonGrounded.length,
-                sampleGrounded: grounded.slice(0, 10),
-                sampleNonGrounded: nonGrounded.slice(0, 10),
+            logDebug('[BM25] Three-tier grounding:', {
+                grounded: grounded.length,
+                nonGrounded: nonGrounded.length,
                 vocabSize: corpusVocab.size,
-                weights: {
-                    layer1: `${settings.entityBoostWeight}x (entities)`,
-                    layer2: `${Math.ceil(settings.entityBoostWeight * CORPUS_GROUNDED_BOOST_RATIO)}x (grounded)`,
-                    layer3: `${Math.ceil(settings.entityBoostWeight * NON_GROUNDED_BOOST_RATIO)}x (non-grounded)`,
-                },
             });
         }
 

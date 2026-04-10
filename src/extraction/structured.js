@@ -304,8 +304,28 @@ export const InsightExtractionSchema = z.object({
 // --- Unified Reflection Schema ---
 
 /**
+ * Regex matching memory/event IDs that should not appear in prose text.
+ * Matches: event_1234_0, ref_5678_1, and variants in parentheses or brackets.
+ */
+const MEMORY_ID_PATTERN = /\s*[(（[]?(?:event|ref)_[^\s)）\]]+[)）\]]?/g;
+
+/**
+ * Strip leaked memory/event IDs from reflection prose fields.
+ * Catches patterns like "отказ Артёму (event_1775677567032_0)" and removes the ID part.
+ * @param {string} text - Text that may contain leaked IDs
+ * @returns {string} Cleaned text with IDs removed
+ */
+function stripLeakedIds(text) {
+    return text
+        .replace(MEMORY_ID_PATTERN, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}
+
+/**
  * Schema for unified reflection (single-call: question + insight combined)
- * 1-3 reflections, each with question, insight, and evidence_ids
+ * 1-3 reflections, each with question, insight, and evidence_ids.
+ * ID stripping is applied in parseUnifiedReflectionResponse after validation.
  */
 export const UnifiedReflectionSchema = z.object({
     reflections: z
@@ -334,7 +354,14 @@ export function getUnifiedReflectionJsonSchema() {
  * @returns {Object} Validated unified reflection with reflections array
  */
 export function parseUnifiedReflectionResponse(content) {
-    return parseStructuredResponse(content, UnifiedReflectionSchema);
+    const result = parseStructuredResponse(content, UnifiedReflectionSchema);
+    return {
+        reflections: result.reflections.map((r) => ({
+            ...r,
+            question: stripLeakedIds(r.question),
+            insight: stripLeakedIds(r.insight),
+        })),
+    };
 }
 
 // --- Community Summary Schema ---

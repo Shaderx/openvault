@@ -69,24 +69,38 @@ export function getTokenSum(chat, indices) {
  * A split is valid when the last message is from Bot and the next message is from User,
  * or at end-of-chat. This prevents orphaning User messages from their Bot responses.
  * Trims backward until a valid boundary is found. Returns [] if none found.
- * @param {Array<{is_user?: boolean}>} chat - Full chat array
+ * @param {Array<{is_user?: boolean; is_system?: boolean}>} chat - Full chat array
  * @param {number[]} messageIds - Ordered message indices to snap
+ * @param {boolean} [allowUserOnly=false] - If true, return accumulated messages even if no Bot→User boundary found (prevents stall)
  * @returns {number[]} Snapped message indices
  */
-export function snapToTurnBoundary(chat, messageIds) {
+export function snapToTurnBoundary(chat, messageIds, allowUserOnly = false) {
     if (messageIds.length === 0) return [];
 
     // Walk backward from the end of the list
     for (let i = messageIds.length - 1; i >= 0; i--) {
         const lastId = messageIds[i];
         const lastMsg = chat[lastId];
-        const nextInChat = chat[lastId + 1];
+
+        // Skip system messages — they aren't real conversation turns
+        if (lastMsg?.is_system) continue;
+
+        // Walk forward past system messages to find the next real message
+        let nextIdx = lastId + 1;
+        while (chat[nextIdx]?.is_system) nextIdx++;
+        const nextInChat = chat[nextIdx];
 
         // Valid: last message is from bot AND (end of chat OR next message is from user)
         // This ensures we split at B→U boundaries, not mid-turn (U→U or U→B)
         if (lastMsg && !lastMsg.is_user && (!nextInChat || nextInChat.is_user)) {
             return messageIds.slice(0, i + 1);
         }
+    }
+
+    // Fallback: if no Bot→User boundary found and we allow user-only batches,
+    // return the accumulated messages anyway (prevents stall)
+    if (allowUserOnly) {
+        return messageIds;
     }
 
     return [];

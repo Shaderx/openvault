@@ -1,0 +1,85 @@
+/* Merge Picker Panel */
+.openvault-entity-merge-panel {
+    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.3));
+    border: 1px solid var(--SmartThemeBorderColor, #333);
+    border-radius: 6px;
+    padding: 12px;
+    margin: 8px 0;
+}
+
+.openvault-entity-merge-panel .merge-header h4 {
+    margin: 0 0 8px 0;
+    font-size: 1em;
+    color: inherit;
+}
+
+.openvault-entity-merge-panel .merge-explanation {
+    margin: 0 0 12px 0;
+    color: var(--SmartThemeEmColor, #888);
+    font-size: 0.85em;
+    line-height: 1.4;
+}
+
+/* Target Search with datalist */
+.merge-target-picker {
+    margin-bottom: 12px;
+}
+
+.merge-target-picker label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.85em;
+    color: var(--SmartThemeEmColor, #888);
+}
+
+.openvault-merge-search {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--SmartThemeBorderColor, #333);
+    border-radius: 4px;
+    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.2));
+    color: inherit;
+    font-family: inherit;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.openvault-merge-search:focus {
+    outline: none;
+    border-color: var(--SmartThemeEmColor, #48c);
+}
+
+/* Merge Actions */
+.merge-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.merge-actions button {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: opacity 0.2s;
+}
+
+.openvault-cancel-entity-merge {
+    background: transparent;
+    border: 1px solid var(--SmartThemeBorderColor, #333);
+    color: inherit;
+}
+
+.openvault-cancel-entity-merge:hover {
+    opacity: 0.8;
+}
+
+.openvault-confirm-entity-merge {
+    background: #e74c3c;
+    color: white;
+}
+
+.openvault-confirm-entity-merge:hover {
+    opacity: 0.85;
+}

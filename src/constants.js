@@ -334,6 +334,11 @@ export const GLOBAL_SYNTHESIS_CHUNK_SIZE = 10;
 // while still breaking hairball gravity in open-world RPs.
 export const MAIN_CHARACTER_ATTENUATION = 0.05;
 
+/** Number of complete turns (User+Bot pairs) to exclude from the tail of extraction batches.
+ *  Prevents hallucinated/swiped AI responses from being extracted before the user can review.
+ *  Emergency Cut and backfill bypass this. */
+export const SWIPE_PROTECTION_TAIL_MESSAGES = 1;
+
 // ============== ST API Endpoints ==============
 export const ST_API_ENDPOINTS = Object.freeze({
     INSERT: '/api/vector/insert',

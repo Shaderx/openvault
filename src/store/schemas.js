@@ -28,6 +28,7 @@ export const MemorySchema = z.object({
     level: z.number().optional(),
     tokens: z.array(z.string()),
     message_ids: z.array(z.number()).optional(),
+    message_fingerprints: z.array(z.string()).optional(),
     mentions: z.number().optional(),
     retrieval_hits: z.number().optional(),
     archived: z.boolean().optional(),
@@ -124,8 +125,8 @@ export const EventSchema = z.object({
     is_secret: z.boolean().default(false),
     temporal_anchor: z.string().nullable().optional().default(null),
     is_transient: z.boolean().optional().default(false),
-    emotional_impact: z.record(z.string().trim(), z.any()).optional().default({}),
-    relationship_impact: z.record(z.string().trim(), z.any()).optional().default({}),
+    emotional_impact: z.record(z.string().trim(), z.string()).optional().default({}),
+    relationship_impact: z.record(z.string().trim(), z.string()).optional().default({}),
 });
 
 export const EventExtractionSchema = z.object({
@@ -184,15 +185,15 @@ export const StVectorItemSchema = z.object({
 // --- Config Schemas ---
 
 export const ScoringConfigSchema = z.object({
-    forgetfulnessBaseLambda: z.number(),
-    forgetfulnessImportance5Floor: z.number(),
-    reflectionDecayThreshold: z.number(),
-    reflectionLevelMultiplier: z.number(),
-    vectorSimilarityThreshold: z.number(),
-    alpha: z.number(),
-    combinedBoostWeight: z.number(),
+    forgetfulnessBaseLambda: z.number().min(0.001).max(1),
+    forgetfulnessImportance5Floor: z.number().min(0),
+    reflectionDecayThreshold: z.number().min(0),
+    reflectionLevelMultiplier: z.number().min(1).max(10),
+    vectorSimilarityThreshold: z.number().min(0).max(0.99),
+    alpha: z.number().min(0).max(1),
+    combinedBoostWeight: z.number().min(0).max(100),
     embeddingSource: z.enum(['local', 'ollama', 'st_vector']),
-    transientDecayMultiplier: z.number().positive().optional().default(5.0),
+    transientDecayMultiplier: z.number().positive().max(50).optional().default(5.0),
 });
 
 export const QueryConfigSchema = z.object({
@@ -231,7 +232,7 @@ export const StSyncChangesSchema = z.object({
             z.object({
                 hash: z.number(),
                 text: z.string(),
-                item: z.any(),
+                item: z.union([MemorySchema, GraphNodeSchema, GraphEdgeSchema, CommunitySummarySchema]),
             })
         )
         .optional(),
@@ -249,9 +250,9 @@ export const ExtractionOptionsSchema = z.object({
     isBackfill: z.boolean().optional(),
     isEmergencyCut: z.boolean().optional(),
     silent: z.boolean().optional(),
-    abortSignal: z.any().optional(),
-    progressCallback: z.any().optional(),
-    onPhase2Start: z.any().optional(),
+    abortSignal: z.unknown().optional(),
+    progressCallback: z.unknown().optional(),
+    onPhase2Start: z.unknown().optional(),
 });
 
 // IDF cache object
@@ -275,7 +276,7 @@ export const ExtractionContextParamsSchema = z.object({
 // LLM call options for structured extraction
 export const ExtractionLLMOptionsSchema = z.object({
     structured: z.boolean(),
-    signal: z.any().optional(),
+    signal: z.unknown().optional(),
 });
 
 // Return value from generateReflections
@@ -309,13 +310,18 @@ export const LLMConfigSchema = z.object({
     maxTokens: z.number(),
     errorContext: z.string(),
     timeoutMs: z.number(),
-    getJsonSchema: z.any().optional(),
+    getJsonSchema: z
+        .function({
+            input: [],
+            output: z.object({ name: z.string(), strict: z.boolean(), value: z.record(z.string(), z.unknown()) }),
+        })
+        .optional(),
 });
 
 // LLM call options
 export const LLMCallOptionsSchema = z.object({
     structured: z.boolean().optional(),
-    signal: z.any().optional(),
+    signal: z.unknown().optional(),
     profileId: z.string().optional(),
     backupProfileId: z.string().optional(),
 });
@@ -339,8 +345,10 @@ export const RetrievalContextSchema = z.object({
     queryConfig: QueryConfigSchema,
     graphNodes: z.record(z.string(), GraphNodeSchema).optional(),
     graphEdges: z.record(z.string(), GraphEdgeSchema).optional(),
+    communities: z.record(z.string(), CommunitySummarySchema).optional(),
     allAvailableMemories: z.array(MemorySchema).optional(),
     idfCache: IDFCacheSchema.optional(),
+    chatFingerprintMap: z.map(z.string(), z.number()).nullable().optional(),
 });
 
 // BM25 calculation context
@@ -359,10 +367,10 @@ export const ForgetfulnessConstantsSchema = z.object({
 
 // Scoring settings
 export const ScoringSettingsSchema = z.object({
-    vectorSimilarityThreshold: z.number(),
-    alpha: z.number(),
-    combinedBoostWeight: z.number(),
-    transientDecayMultiplier: z.number().optional(),
+    vectorSimilarityThreshold: z.number().min(0).max(0.99),
+    alpha: z.number().min(0).max(1),
+    combinedBoostWeight: z.number().min(0).max(100),
+    transientDecayMultiplier: z.number().positive().max(50).optional(),
 });
 
 // Memory update fields for updateMemory()
@@ -442,9 +450,3 @@ export const GlobalSynthesisParamsSchema = z.object({
     prefill: z.string(),
     outputLanguage: z.enum(['auto', 'en', 'ru']).optional(),
 });
-
-// CdnMirrorFn - function type (represented as any for Zod)
-export const CdnMirrorFnSchema = z.any();
-
-// LadderQueue - complex interface (represented as any for Zod)
-export const LadderQueueSchema = z.any();

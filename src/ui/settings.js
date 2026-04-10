@@ -835,11 +835,13 @@ function bindUIElements() {
                 await saveOpenVaultData();
                 showToast('info', `Embedding model changed. Re-embedding ${wiped} vectors in background.`);
                 // Auto-trigger comprehensive re-embedding in background
-                import('../embeddings.js').then(({ backfillAllEmbeddings }) => {
-                    backfillAllEmbeddings({ silent: true })
-                        .then(() => refreshAllUI())
-                        .catch(() => {});
-                });
+                import('../embeddings.js')
+                    .then(({ backfillAllEmbeddings }) => {
+                        backfillAllEmbeddings({ silent: true })
+                            .then(() => refreshAllUI())
+                            .catch(() => {});
+                    })
+                    .catch(() => {});
                 refreshAllUI();
             }
         }
@@ -928,10 +930,13 @@ function bindUIElements() {
     // Perf tab clipboard copy button
     $('#openvault_copy_perf_btn').on('click', () => {
         const text = formatForClipboard();
-        navigator.clipboard.writeText(text).then(
-            () => showToast('success', 'Perf data copied to clipboard'),
-            () => showToast('error', 'Failed to copy — try selecting manually')
-        );
+        navigator.clipboard
+            .writeText(text)
+            .then(
+                () => showToast('success', 'Perf data copied to clipboard'),
+                () => showToast('error', 'Failed to copy — try selecting manually')
+            )
+            .catch(() => {});
     });
 
     // Injection settings bindings
@@ -974,17 +979,23 @@ function bindInjectionSettings() {
 
     // Copy macro buttons
     $('#openvault_copy_memory_macro').on('click', () => {
-        navigator.clipboard.writeText('{{openvault_memory}}').then(
-            () => showToast('success', 'Copied {{openvault_memory}} to clipboard'),
-            () => showToast('error', 'Failed to copy')
-        );
+        navigator.clipboard
+            .writeText('{{openvault_memory}}')
+            .then(
+                () => showToast('success', 'Copied {{openvault_memory}} to clipboard'),
+                () => showToast('error', 'Failed to copy')
+            )
+            .catch(() => {});
     });
 
     $('#openvault_copy_world_macro').on('click', () => {
-        navigator.clipboard.writeText('{{openvault_world}}').then(
-            () => showToast('success', 'Copied {{openvault_world}} to clipboard'),
-            () => showToast('error', 'Failed to copy')
-        );
+        navigator.clipboard
+            .writeText('{{openvault_world}}')
+            .then(
+                () => showToast('success', 'Copied {{openvault_world}} to clipboard'),
+                () => showToast('error', 'Failed to copy')
+            )
+            .catch(() => {});
     });
 
     // Post-history prompt

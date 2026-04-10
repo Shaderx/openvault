@@ -31,7 +31,7 @@ import {
     resolveExtractionPrefill,
     resolveOutputLanguage,
 } from '../prompts/index.js';
-import { cosineSimilarity } from '../retrieval/math.js';
+import { cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { cyrb53, getEmbedding, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
@@ -53,15 +53,28 @@ function getCrossScriptMaxDistance(lenA, lenB) {
     return minLen <= 4 ? 1 : 2;
 }
 
+const MAX_REDIRECT_DEPTH = 10;
+
 /**
  * Resolve a raw entity name to its final graph key, accounting for merge redirects.
+ * Follows redirect chains with circular reference and depth guards.
  * @param {Object} graphData - The graph object
  * @param {string} rawName - The raw entity name
  * @returns {string} The resolved key (may differ due to semantic merge)
  */
 function _resolveKey(graphData, rawName) {
     const key = normalizeKey(rawName);
-    return graphData._mergeRedirects?.[key] || key;
+    const visited = new Set();
+    let current = key;
+
+    while (graphData._mergeRedirects?.[current]) {
+        if (visited.has(current)) break; // Circular redirect guard
+        visited.add(current);
+        current = graphData._mergeRedirects[current];
+        if (visited.size > MAX_REDIRECT_DEPTH) break; // Depth guard
+    }
+
+    return current;
 }
 
 /**
@@ -202,7 +215,7 @@ export function upsertRelationship(graphData, source, target, description, cap =
         existing.weight += 1;
 
         // Jaccard guard: only append if description is sufficiently different (>60% new content)
-        const jaccard = jaccardSimilarity(existing.description, description);
+        const jaccard = jaccardSimilarity(existing.description, description, tokenize);
         if (jaccard < GRAPH_JACCARD_DUPLICATE_THRESHOLD && !existing.description.includes(description)) {
             existing.description = existing.description + ' | ' + description;
         }
@@ -402,9 +415,19 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
     const key = normalizeKey(name);
     const stChanges = { toSync: [], toDelete: [] };
 
+    /** Push updated node to stChanges.toSync */
+    const syncNode = (nodeKey) => {
+        const n = graphData.nodes[nodeKey];
+        if (n) {
+            const t = `[OV_ID:${nodeKey}] ${n.description}`;
+            stChanges.toSync.push({ hash: cyrb53(t), text: t, item: n });
+        }
+    };
+
     // Fast path: exact key match
     if (graphData.nodes[key]) {
         upsertEntity(graphData, name, type, description, cap);
+        syncNode(key);
         return { key, stChanges };
     }
 
@@ -438,6 +461,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
                 if (key !== existingKey) {
                     graphData._mergeRedirects[key] = existingKey;
                 }
+                syncNode(existingKey);
                 return { key: existingKey, stChanges };
             }
         }
@@ -453,6 +477,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
 
     if (!newEmbedding) {
         upsertEntity(graphData, name, type, description, cap);
+        syncNode(key);
         return { key, stChanges };
     }
 
@@ -507,6 +532,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
         if (key !== bestMatch) {
             graphData._mergeRedirects[key] = bestMatch;
         }
+        syncNode(bestMatch);
         return { key: bestMatch, stChanges };
     }
 
@@ -529,10 +555,10 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
  */
 export async function consolidateEdges(graphData, _settings) {
     if (!graphData._edgesNeedingConsolidation?.length) {
-        return { count: 0, stChanges: { toSync: [] } };
+        return { count: 0, stChanges: { toSync: [], toDelete: [] } };
     }
 
-    const stChanges = { toSync: [] };
+    const stChanges = { toSync: [], toDelete: [] };
     const toProcess = graphData._edgesNeedingConsolidation.slice(0, CONSOLIDATION.MAX_CONSOLIDATION_BATCH);
 
     const deps = getDeps();
@@ -555,6 +581,13 @@ export async function consolidateEdges(graphData, _settings) {
 
                     const result = parseConsolidationResponse(response);
                     if (result.consolidated_description) {
+                        // Queue old embedding for ST deletion before overwrite
+                        if (edge._st_synced) {
+                            const oldEdgeId = `edge_${edge.source}_${edge.target}`;
+                            const oldText = `[OV_ID:${oldEdgeId}] ${edge.description}`;
+                            stChanges.toDelete.push({ hash: cyrb53(oldText) });
+                        }
+
                         edge.description = result.consolidated_description;
                         edge._descriptionTokens = countTokens(result.consolidated_description);
 

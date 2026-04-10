@@ -1,29 +1,31 @@
 # Retrieval, Scoring, and World Context
 
-## TWO-PASS ALPHA-BLEND SCORING
-- **Apply Alpha-Blend formula:** `Total = Base + (Alpha * VectorBonus) + ((1 - Alpha) * BM25Bonus) * FrequencyFactor`.
-- **Run O(N) Fast Pass first.** Calculate `Base + BM25` for all memories.
-- **Run O(1) Slow Pass second.** Execute heavy typed-array Cosine Similarity only on the top `VECTOR_PASS_LIMIT` (200) candidates.
+For alpha-blend formula, 4-tier BM25, and decay math see `include/DATA_SCHEMA.md` Section 3.
+For event dedup thresholds see `src/extraction/CLAUDE.md`.
 
-## FORGETFULNESS & DECAY
-- **Calculate narrative distance.** Use `chat.length - max(message_ids)`.
-- **Apply Transient Multiplier.** Multiply lambda by 5x (`transientDecayMultiplier`) for short-term intentions (`is_transient: true`).
-- **Decay high-level reflections slower.** Divide decay penalty by `reflectionLevelMultiplier` (2.0) for level-2+ reflections past 750 messages.
+## IMPLEMENTATION GOTCHAS
 
-## 4-TIER BM25 KEYWORD MATCHING
-- **Expand the IDF corpus.** Calculate document frequencies using candidates *plus* all hidden memories. 
-- **Strip main character stopwords.** Remove POV names dynamically to prevent them from diluting the IDF math.
-- **Apply tiered boosts:**
-  - **Layer 0:** Multi-word exact phrase matches (Flat 10x maxIDF boost).
-  - **Layer 1:** Single-word graph entity stems (5x boost).
-  - **Layer 2:** Corpus-grounded message stems (3x boost).
-  - **Layer 3:** Non-grounded message stems (2x boost).
+### Narrative Distance
+- **Resolve `message_fingerprints` via `chatFingerprintMap`** to find current positions, then `chat.length - max(resolvedPosition)`. Falls back to `message_ids` for unmigrated v2 data.
 
-## WORLD CONTEXT & INTENT ROUTING
-- **Route via multilingual intent.** Use `detectMacroIntent()` (matches "recap", "вкратце", etc.).
-- **Macro queries:** Inject the pre-computed `global_world_state`.
-- **Local queries:** Execute pure vector similarity search against specific community summaries.
+### Context Budgeting
+- **Never spread large iterables into Math.max.** Use `for...of` loops with manual tracking — `Math.max(...array)` hits JS argument limits (~65K) with large IDF maps.
+- **Score-First Soft Balancing:**
+  - *Phase 1:* Reserve `minRepresentation` (20%) per chronological bucket (Old/Mid/Recent). Fill with highest-scoring memories from each.
+  - *Phase 2:* Remaining 40% allocated purely by score regardless of bucket.
 
-## CONTEXT BUDGETING
-- **Use Score-First Soft Balancing.** Reserve `minRepresentation` (20%) of the token budget per chronological bucket (Old/Mid/Recent).
-- **Fill the remainder by raw score.** Allocate the remaining 40% purely to the highest-scoring memories regardless of bucket.
+### ST Vector Retrieval
+- **`selectRelevantMemoriesWithST` returns all item types.** Build lookup maps for memories, graph nodes (`graphNodes`), AND communities. Results include `communityIds` field for downstream world context injection.
+- **Community retrieval uses scoring-layer IDs in ST Vector mode.** `retrieveWorldContext` accepts `stCommunityIds` parameter — communities pre-selected by the scoring layer. Returns empty when no IDs provided (avoids duplicate local embedding computation).
+
+### Scoring Safety
+- **Clamp at consumption, not storage.** `calculateScore()` applies `Math.min`/`Math.max` clamping at the top of the function as a runtime safety net. Don't rely solely on Zod constraints — settings can be corrupted or tampered with.
+- **Guard vector normalization denominators.** The formula `(vectorSimilarity - threshold) / (1 - threshold)` appears in 3 locations. All use `denominator = 1 - threshold; denominator > 0 ? ... : 0` to prevent division-by-zero when `threshold >= 1.0`.
+
+### Query Building
+- **Prepend entity anchors before truncation.** In `buildEmbeddingQuery()`, prepend `topEntities` before slicing to `chunkSize`. Entities survive budget cuts; appended text gets chopped.
+
+### Intent Routing
+- **Route via multilingual intent.** `detectMacroIntent()` matches "recap", "вкратце", etc.
+- **Macro queries:** Inject pre-computed `global_world_state`.
+- **Local queries:** Execute vector similarity search against specific community summaries.

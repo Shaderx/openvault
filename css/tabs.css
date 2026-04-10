@@ -5,11 +5,17 @@
     border-bottom: 2px solid var(--SmartThemeBorderColor, #333);
     margin-bottom: 15px;
     gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.openvault-tab-nav::-webkit-scrollbar {
+    display: none;
 }
 
 .openvault-tab-btn {
-    flex: 1;
-    padding: 10px 8px;
+    padding: 8px 6px;
     text-align: center;
     background: transparent;
     border: none;
@@ -20,6 +26,8 @@
     color: var(--SmartThemeBodyColor, #ccc);
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
+    white-space: nowrap;
+    min-width: fit-content;
 }
 
 .openvault-tab-btn:hover {
@@ -35,6 +43,16 @@
 
 .openvault-tab-btn i {
     margin-right: 4px;
+}
+
+/* Small screens: icons only, hide text */
+@media (max-width: 1280px) {
+    .openvault-tab-btn span {
+        display: none;
+    }
+    .openvault-tab-btn i {
+        margin-right: 0;
+    }
 }
 
 .openvault-tab-content {

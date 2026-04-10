@@ -292,11 +292,19 @@ export async function updateCommunitySummaries(
     await Promise.all(promises);
 
     // Build change set for ST sync (orchestrator handles network I/O)
-    const stChanges = { toSync: [] };
+    const stChanges = { toSync: [], toDelete: [] };
     for (const [id, community] of Object.entries(updatedCommunities)) {
         if (community.summary) {
             const text = `[OV_ID:${id}] ${community.summary}`;
             stChanges.toSync.push({ hash: cyrb53(text), text, item: community });
+        }
+    }
+
+    // Detect dissolved communities — present in existing but absent in updated
+    for (const [id, community] of Object.entries(existingCommunities)) {
+        if (!updatedCommunities[id] && community._st_synced) {
+            const text = `[OV_ID:${id}] ${community.summary || ''}`;
+            stChanges.toDelete.push({ hash: cyrb53(text) });
         }
     }
 
