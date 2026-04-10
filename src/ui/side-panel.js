@@ -6,13 +6,25 @@
  */
 
 import { CHARACTERS_KEY, MEMORIES_KEY, extensionFolderPath } from '../constants.js';
-import { deleteMemory as deleteMemoryAction, getOpenVaultData, updateMemory as updateMemoryAction } from '../store/chat-data.js';
+import {
+    deleteMemory as deleteMemoryAction,
+    getOpenVaultData,
+    updateMemory as updateMemoryAction,
+    updateEntity,
+    deleteEntity as deleteEntityAction,
+    mergeEntities,
+    updateCommunity,
+    deleteCommunity,
+} from '../store/chat-data.js';
 import { escapeHtml, showToast } from '../utils/dom.js';
 import { buildCharacterStateData, filterEntities, formatMemoryDate, formatMemoryImportance } from './helpers.js';
+import { refreshStats } from './status.js';
 import {
     renderCharacterState,
     renderCommunityAccordion,
     renderEntityCard,
+    renderEntityEdit,
+    renderEntityMergePicker,
     renderMemoryEdit,
 } from './templates.js';
 
@@ -118,11 +130,208 @@ function bindSidePanelEvents() {
         }
         $btn.prop('disabled', false);
     });
+
+    // =========================================================================
+    // Entity actions (scoped to sidebar)
+    // =========================================================================
+
+    $panel.on('click', '.openvault-edit-entity', (e) => {
+        const key = $(e.currentTarget).data('key');
+        const graph = getOpenVaultData()?.graph;
+        const entity = graph?.nodes?.[key];
+        if (!entity) return;
+        const $card = $panel.find(`.openvault-entity-card[data-key="${key}"]`);
+        $card.replaceWith(renderEntityEdit(entity, key));
+    });
+
+    $panel.on('click', '.openvault-cancel-entity-edit', (e) => {
+        const key = $(e.currentTarget).data('key');
+        const entity = getOpenVaultData()?.graph?.nodes?.[key];
+        if (!entity) return;
+        const $edit = $panel.find(`.openvault-entity-edit[data-key="${key}"]`);
+        $edit.replaceWith(renderEntityCard(entity, key));
+    });
+
+    $panel.on('click', '.openvault-save-entity-edit', async (e) => {
+        const key = $(e.currentTarget).data('key');
+        const $edit = $panel.find(`.openvault-entity-edit[data-key="${key}"]`);
+        const name = $edit.find('.openvault-edit-name').val()?.toString().trim();
+        const type = $edit.find('.openvault-edit-type').val()?.toString();
+        const description = $edit.find('.openvault-edit-description').val()?.toString().trim();
+
+        if (!name) { showToast('warning', 'Entity name cannot be empty'); return; }
+
+        const aliases = $edit.find('.openvault-alias-chip')
+            .map((_, chip) => $(chip).text().replace('×', '').trim()).get();
+        const pending = $edit.find('.openvault-alias-input').val()?.toString()?.trim();
+        if (pending && !aliases.map(a => a.toLowerCase()).includes(pending.toLowerCase())) {
+            aliases.push(pending);
+        }
+
+        const $btn = $(e.currentTarget);
+        $btn.prop('disabled', true).text('Saving...');
+        try {
+            const result = await updateEntity(key, { name, type, description, aliases });
+            if (result === null) {
+                showToast('warning', 'An entity with that name already exists');
+                $btn.prop('disabled', false).text('Save');
+                return;
+            }
+            if (result.stChanges) {
+                const { applySyncChanges } = await import('../extraction/extract.js');
+                await applySyncChanges(result.stChanges);
+            }
+            const entity = getOpenVaultData().graph.nodes[result.key];
+            $edit.replaceWith(renderEntityCard(entity, result.key));
+            showToast('success', 'Entity updated');
+            refreshStats();
+        } catch (err) {
+            console.error('[OpenVault] Failed to save entity:', err);
+            $btn.prop('disabled', false).text('Save');
+        }
+    });
+
+    $panel.on('click', '.openvault-delete-entity', async (e) => {
+        const key = $(e.currentTarget).data('key');
+        const graph = getOpenVaultData()?.graph;
+        const entity = graph?.nodes?.[key];
+        if (!entity) return;
+        const edgeCount = Object.values(graph.edges || {}).filter(ed => ed.source === key || ed.target === key).length;
+        const msg = edgeCount > 0
+            ? `Delete "${entity.name}"? This will also remove ${edgeCount} connected relationship(s).`
+            : `Delete "${entity.name}"?`;
+        if (!confirm(msg)) return;
+        const result = await deleteEntityAction(key);
+        if (result.success) {
+            if (result.stChanges) {
+                const { applySyncChanges } = await import('../extraction/extract.js');
+                await applySyncChanges(result.stChanges);
+            }
+            $panel.find(`.openvault-entity-card[data-key="${key}"]`).remove();
+            showToast('success', 'Entity deleted');
+            refreshStats();
+        }
+    });
+
+    $panel.on('click', '.openvault-remove-alias', function () {
+        $(this).closest('.openvault-alias-chip').remove();
+    });
+
+    $panel.on('click', '.openvault-add-alias', (e) => {
+        const key = $(e.currentTarget).data('key');
+        const $edit = $panel.find(`.openvault-entity-edit[data-key="${key}"]`);
+        const $input = $edit.find('.openvault-alias-input');
+        const alias = $input.val()?.toString().trim();
+        if (!alias) return;
+        const existing = $edit.find('.openvault-alias-chip')
+            .map((_, chip) => $(chip).text().replace('×', '').trim().toLowerCase()).get();
+        if (existing.includes(alias.toLowerCase())) { $input.val(''); return; }
+        $edit.find('.openvault-alias-list').append(`
+            <span class="openvault-alias-chip">
+                ${escapeHtml(alias)}
+                <span class="remove openvault-remove-alias" data-key="${escapeHtml(key)}" data-alias="${escapeHtml(alias)}">×</span>
+            </span>
+        `);
+        $input.val('');
+    });
+
+    $panel.on('click', '.openvault-merge-entity', (e) => {
+        const key = $(e.currentTarget).data('key');
+        const graph = getOpenVaultData()?.graph;
+        const node = graph?.nodes?.[key];
+        if (!node) return;
+        const $card = $panel.find(`.openvault-entity-card[data-key="${key}"]`);
+        $card.replaceWith(renderEntityMergePicker(key, node, graph.nodes));
+        $panel.find('.openvault-merge-search').focus();
+    });
+
+    $panel.on('click', '.openvault-cancel-entity-merge', () => {
+        renderSideEntities();
+    });
+
+    $panel.on('click', '.openvault-confirm-entity-merge', async (e) => {
+        const sourceKey = $(e.currentTarget).data('source-key');
+        const graph = getOpenVaultData()?.graph;
+        if (!graph) return;
+        const inputText = $panel.find('.openvault-merge-search').val();
+        const targetKey = findMergeTarget(inputText, graph.nodes);
+        if (!targetKey) { showToast('error', 'Please select a valid target entity'); return; }
+        if (targetKey === sourceKey) { showToast('error', 'Cannot merge an entity into itself'); return; }
+        try {
+            const result = await mergeEntities(sourceKey, targetKey);
+            if (!result.success) { showToast('error', 'Failed to merge entities'); return; }
+            if (result.stChanges) {
+                const { applySyncChanges } = await import('../extraction/extract.js');
+                await applySyncChanges(result.stChanges);
+            }
+            renderSideEntities();
+            showToast('success', `Merged into ${graph.nodes[targetKey]?.name || targetKey}`);
+        } catch (err) {
+            if (err.name !== 'AbortError') showToast('error', `Merge failed: ${err.message}`);
+        }
+    });
+
+    // =========================================================================
+    // Community actions (sidebar-only editing)
+    // =========================================================================
+
+    $panel.on('click', '.openvault-edit-community', (e) => {
+        const id = $(e.currentTarget).data('id');
+        const data = getOpenVaultData();
+        const community = data?.communities?.[id];
+        if (!community) return;
+        const $item = $(e.currentTarget).closest('.openvault-community-item');
+        $item.replaceWith(renderSideCommunityEdit(id, community));
+    });
+
+    $panel.on('click', '.openvault-cancel-community-edit', (e) => {
+        const id = $(e.currentTarget).data('id');
+        const community = getOpenVaultData()?.communities?.[id];
+        if (!community) return;
+        const $edit = $panel.find(`.openvault-community-editing[data-id="${id}"]`);
+        $edit.replaceWith(renderSideCommunityAccordion(id, community));
+    });
+
+    $panel.on('click', '.openvault-save-community', async (e) => {
+        const id = $(e.currentTarget).data('id');
+        const $edit = $panel.find(`.openvault-community-editing[data-id="${id}"]`);
+        const title = $edit.find('.openvault-community-edit-title').val().trim();
+        const summary = $edit.find('.openvault-community-edit-summary').val().trim();
+        if (!title) { showToast('warning', 'Title cannot be empty'); return; }
+        const result = await updateCommunity(id, { title, summary });
+        if (result) {
+            const community = getOpenVaultData()?.communities?.[id];
+            $edit.replaceWith(renderSideCommunityAccordion(id, community));
+            showToast('success', 'Community updated');
+        }
+    });
+
+    $panel.on('click', '.openvault-delete-community', async (e) => {
+        const id = $(e.currentTarget).data('id');
+        const community = getOpenVaultData()?.communities?.[id];
+        if (!community) return;
+        if (!confirm(`Delete community "${community.title || id}"?`)) return;
+        const result = await deleteCommunity(id);
+        if (result) {
+            $panel.find(`.openvault-community-item[data-id="${id}"]`).remove();
+            showToast('success', 'Community deleted');
+        }
+    });
 }
 
 function getSideMemoryById(id) {
     const data = getOpenVaultData();
     return data?.[MEMORIES_KEY]?.find((m) => m.id === id) || null;
+}
+
+function findMergeTarget(inputText, nodes) {
+    if (!inputText) return null;
+    const clean = inputText.toLowerCase().trim().replace(/\s*\[[^\]]+\]$/, '').trim();
+    for (const [key, node] of Object.entries(nodes)) {
+        if ((node.name || '').toLowerCase() === clean) return key;
+        if ((node.aliases || []).some(a => a.toLowerCase() === clean)) return key;
+    }
+    return null;
 }
 
 // =============================================================================
@@ -161,6 +370,12 @@ export function isSidePanelOpen() {
 // Sidebar-specific memory card (buttons beside date, compact layout)
 // =============================================================================
 
+function buildSideCharacterTags(characters) {
+    if (!characters || characters.length === 0) return '';
+    const tags = characters.map((c) => `<span class="openvault-character-tag">${escapeHtml(c)}</span>`).join('');
+    return `<div class="openvault-memory-characters" style="margin-top: 4px;">${tags}</div>`;
+}
+
 function renderSideMemoryItem(memory) {
     const id = escapeHtml(memory.id);
     const date = formatMemoryDate(memory.created_at);
@@ -168,6 +383,7 @@ function renderSideMemoryItem(memory) {
     const anchorHtml = memory.temporal_anchor
         ? `<span class="openvault-side-mem-date" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-clock"></i> ${escapeHtml(memory.temporal_anchor)}</span>`
         : '';
+    const charTags = buildSideCharacterTags(memory.characters_involved);
 
     return `
         <div class="openvault-memory-card openvault-side-mem" data-id="${id}">
@@ -187,6 +403,58 @@ function renderSideMemoryItem(memory) {
                 </div>
             </div>
             <div class="openvault-memory-card-summary">${escapeHtml(memory.summary || 'No summary')}</div>
+            ${charTags}
+        </div>
+    `;
+}
+
+// =============================================================================
+// Sidebar-specific community templates (edit/delete buttons + edit form)
+// =============================================================================
+
+function renderSideCommunityAccordion(id, community) {
+    const memberCount = community.nodeKeys?.length || 0;
+    const findings = (community.findings || []).map((f) => `<li>${escapeHtml(f)}</li>`).join('');
+    const members = (community.nodeKeys || []).map((k) => escapeHtml(k)).join(', ');
+
+    return `
+        <details class="openvault-community-item" data-id="${escapeHtml(id)}">
+            <summary>
+                <span class="openvault-community-title">${escapeHtml(community.title || id)}</span>
+                <span class="openvault-community-badge">${memberCount} entities</span>
+                <div class="openvault-community-actions">
+                    <button class="openvault-entity-action-btn openvault-edit-community" data-id="${escapeHtml(id)}" title="Edit">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="openvault-entity-action-btn openvault-delete-community" data-id="${escapeHtml(id)}" title="Delete">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </summary>
+            <div class="openvault-community-content">
+                <p>${escapeHtml(community.summary || 'No summary')}</p>
+                ${findings ? `<ul class="openvault-community-findings">${findings}</ul>` : ''}
+                <small class="openvault-community-members">Members: ${members}</small>
+            </div>
+        </details>
+    `;
+}
+
+function renderSideCommunityEdit(id, community) {
+    return `
+        <div class="openvault-community-editing" data-id="${escapeHtml(id)}">
+            <div class="openvault-entity-edit-row">
+                <label>Title</label>
+                <input type="text" class="openvault-community-edit-title" value="${escapeHtml(community.title || '')}">
+            </div>
+            <div class="openvault-entity-edit-row">
+                <label>Summary</label>
+                <textarea class="openvault-community-edit-summary" rows="4">${escapeHtml(community.summary || '')}</textarea>
+            </div>
+            <div class="openvault-entity-edit-actions">
+                <button class="cancel openvault-cancel-community-edit" data-id="${escapeHtml(id)}">Cancel</button>
+                <button class="save openvault-save-community" data-id="${escapeHtml(id)}">Save</button>
+            </div>
         </div>
     `;
 }
@@ -246,7 +514,7 @@ function renderSideCommunities() {
         return;
     }
 
-    const html = ids.map((id) => renderCommunityAccordion(id, communities[id])).join('');
+    const html = ids.map((id) => renderSideCommunityAccordion(id, communities[id])).join('');
     $container.html(html);
 }
 

@@ -64,14 +64,18 @@ These are fork-only features. Isolate in dedicated files where possible.
 
 ### FEAT-1: Side Panel
 - **New files (no merge conflict):**
-  - `src/ui/side-panel.js` — Full panel logic, compact memory renderer, sidebar-scoped event handlers
+  - `src/ui/side-panel.js` — Full panel logic with sidebar-scoped handlers for:
+    - Compact memory cards (buttons beside date, character tag bubbles)
+    - Memory edit/delete/save (full inline editing)
+    - Entity edit/delete/merge (full CRUD with alias management)
+    - Community edit/delete (sidebar-only feature, not in upstream)
   - `css/side-panel.css` — All sidebar styles
   - `templates/side_panel.html` — Panel HTML template
 - **Upstream file touches (minimal, merge-safe):**
   - `index.js` — Init, toggle button binding, auto-open on load (~10 lines)
   - `src/ui/render.js` — 1 line: `import('./side-panel.js').then(...)` in `refreshAllUI()`
   - `style.css` — 1 line: `@import url("css/side-panel.css")`
-- **Merge strategy:** Side panel files are entirely ours. The 3 integration hooks in upstream files are minimal and easy to re-add if lost.
+- **Merge strategy:** Side panel files are entirely ours. All CRUD handlers are self-contained in `side-panel.js` — they don't depend on main panel event bindings. The 3 integration hooks in upstream files are minimal and easy to re-add if lost.
 
 ### FEAT-2: Reset & Backfill
 - **Files:** `src/ui/settings.js` (+`handleResetAndBackfill`), `templates/settings_panel.html` (+button)
@@ -88,14 +92,8 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **What it does:** Excludes the most recent message from automatic extraction to avoid extracting content the user is still regenerating/editing. Backfill and emergency cut pass `includeLatest: true` to override.
 - **Merge strategy:** Touches upstream file. Could be PR'd — prevents premature extraction of in-progress messages.
 
-### FEAT-5: Generate Reflections Button (BROKEN)
-- **Files:** `src/ui/settings.js` (+`handleGenerateReflections`, button binding)
-- **What it does:** Force-generates reflections for all characters, bypassing importance threshold.
-- **Status: BROKEN — 3 issues:**
-  1. Button `#openvault_generate_reflections_btn` does not exist in `settings_panel.html` (binding is dead)
-  2. Imports from `../utils/data.js` which doesn't exist (should be `../store/chat-data.js`)
-  3. Calls `saveOpenVaultData()` which isn't exported (should use `getDeps().saveChatConditional()`)
-- **Action:** Either fix or remove the dead code.
+### ~~FEAT-5: Generate Reflections Button~~ (REMOVED)
+- Removed — was broken dead code (wrong imports, missing HTML button).
 
 ### FEAT-6: Post-History Prompt Injection (PARTIAL)
 - **Files:** `src/constants.js` (+`postHistoryPrompt` default), `src/retrieval/retrieve.js` (+injection logic), `src/ui/settings.js` (+binding + UI sync)
@@ -117,10 +115,10 @@ These are fork-only features. Isolate in dedicated files where possible.
 
 ## Preferences (fork-only defaults)
 
-### PREF-1: Language Defaults (CN → EN)
-- **Files:** `src/constants.js`, `src/settings.js`
-- **What it does:** Changes default preamble/prefill/output language from Chinese to English. Includes a one-time migration for existing installs.
-- **Merge strategy:** Will conflict on every upstream merge of `constants.js`. Keep migration in `settings.js` to handle upstream's CN defaults at runtime.
+### PREF-1: Language Migration (CN → EN at runtime)
+- **Files:** `src/settings.js` (migration only — `constants.js` matches upstream)
+- **What it does:** One-time migration in `loadSettings()` switches existing installs from CN to EN defaults. Defaults in `constants.js` are left as upstream's `cn` values to avoid merge conflicts.
+- **Merge strategy:** Only touches `settings.js`. Will not conflict with `constants.js` merges.
 
 ### PREF-2: WebGPU Warning Suppression
 - **Files:** `src/embeddings.js`

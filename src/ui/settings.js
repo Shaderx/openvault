@@ -506,59 +506,6 @@ async function handleResetAndBackfill() {
     });
 }
 
-/**
- * Force-generate reflections for all characters, bypassing the importance threshold.
- */
-async function handleGenerateReflections() {
-    const { CHARACTERS_KEY, MEMORIES_KEY, extensionName } = await import('../constants.js');
-    const { getOpenVaultData, saveOpenVaultData } = await import('../utils/data.js');
-    const { generateReflections } = await import('../reflection/reflect.js');
-
-    const data = getOpenVaultData();
-    if (!data) {
-        showToast('warning', 'No chat loaded');
-        return;
-    }
-
-    const memories = data[MEMORIES_KEY] || [];
-    const characterStates = data[CHARACTERS_KEY] || {};
-    const characterNames = Object.keys(characterStates);
-
-    if (memories.length < 3) {
-        showToast('info', 'Need at least 3 memories before reflections can be generated');
-        return;
-    }
-
-    if (characterNames.length === 0) {
-        showToast('info', 'No characters found — extract memories first');
-        return;
-    }
-
-    showToast('info', `Generating reflections for ${characterNames.length} character(s)...`);
-
-    let totalNew = 0;
-    for (const name of characterNames) {
-        try {
-            const reflections = await generateReflections(name, memories, characterStates);
-            if (reflections.length > 0) {
-                data[MEMORIES_KEY].push(...reflections);
-                totalNew += reflections.length;
-            }
-        } catch (err) {
-            logError(`Reflection generation failed for ${name}`, err);
-        }
-    }
-
-    if (totalNew > 0) {
-        await saveOpenVaultData();
-        showToast('success', `Generated ${totalNew} new reflection(s)`);
-    } else {
-        showToast('info', 'No new reflections generated (existing insights may already cover recent events)');
-    }
-
-    refreshAllUI();
-}
-
 // Define keys that should be preserved during settings reset
 const PRESERVED_KEYS = [
     'extractionProfile',
@@ -941,7 +888,6 @@ function bindUIElements() {
     // Action buttons
     $('#openvault_backfill_embeddings_btn').on('click', backfillEmbeddings);
     $('#openvault_extract_all_btn').on('click', handleExtractAll);
-    $('#openvault_generate_reflections_btn').on('click', handleGenerateReflections);
 
     // Emergency Cut button
     $('#openvault_emergency_cut_btn').on('click', handleEmergencyCutClick);
