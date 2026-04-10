@@ -6,13 +6,14 @@
  */
 
 import { CHARACTERS_KEY, MEMORIES_KEY, extensionFolderPath } from '../constants.js';
-import { getOpenVaultData } from '../store/chat-data.js';
-import { escapeHtml } from '../utils/dom.js';
+import { deleteMemory as deleteMemoryAction, getOpenVaultData, updateMemory as updateMemoryAction } from '../store/chat-data.js';
+import { escapeHtml, showToast } from '../utils/dom.js';
 import { buildCharacterStateData, filterEntities, formatMemoryDate, formatMemoryImportance } from './helpers.js';
 import {
     renderCharacterState,
     renderCommunityAccordion,
     renderEntityCard,
+    renderMemoryEdit,
 } from './templates.js';
 
 let _initialized = false;
@@ -33,8 +34,10 @@ export async function initSidePanel() {
 }
 
 function bindSidePanelEvents() {
+    const $panel = $('#openvault_side_panel');
+
     // Tab switching
-    $(document).on('click', '.openvault-side-tab', function () {
+    $panel.on('click', '.openvault-side-tab', function () {
         const tabId = $(this).data('side-tab');
         $('.openvault-side-tab').removeClass('active');
         $(this).addClass('active');
@@ -43,16 +46,83 @@ function bindSidePanelEvents() {
     });
 
     // Close button
-    $(document).on('click', '#openvault_side_panel_close', () => {
+    $panel.on('click', '#openvault_side_panel_close', () => {
         closeSidePanel();
     });
 
     // Entity filters
-    $(document).on('input', '#openvault_side_entity_search', () => {
+    $panel.on('input', '#openvault_side_entity_search', () => {
         clearTimeout(_entitySearchTimeout);
         _entitySearchTimeout = setTimeout(renderSideEntities, 200);
     });
-    $(document).on('change', '#openvault_side_entity_type', renderSideEntities);
+    $panel.on('change', '#openvault_side_entity_type', renderSideEntities);
+
+    // Memory actions (scoped to sidebar so they don't conflict with main panel)
+    $panel.on('click', '.openvault-delete-memory', async (e) => {
+        const id = $(e.currentTarget).data('id');
+        if (!confirm('Delete this memory?')) return;
+        const result = await deleteMemoryAction(id);
+        if (result.success) {
+            if (result.stChanges) {
+                const { applySyncChanges } = await import('../extraction/extract.js');
+                await applySyncChanges(result.stChanges);
+            }
+            renderSideMemories();
+            showToast('success', 'Memory deleted');
+        }
+    });
+
+    $panel.on('click', '.openvault-edit-memory', (e) => {
+        const id = $(e.currentTarget).data('id');
+        const memory = getSideMemoryById(id);
+        if (!memory) return;
+        const $card = $panel.find(`.openvault-memory-card[data-id="${id}"]`);
+        $card.replaceWith(renderMemoryEdit(memory));
+    });
+
+    $panel.on('click', '.openvault-cancel-edit', (e) => {
+        const id = $(e.currentTarget).data('id');
+        const memory = getSideMemoryById(id);
+        if (!memory) return;
+        const $card = $panel.find(`.openvault-memory-card[data-id="${id}"]`);
+        $card.replaceWith(renderSideMemoryItem(memory));
+    });
+
+    $panel.on('click', '.openvault-save-edit', async (e) => {
+        const id = $(e.currentTarget).data('id');
+        const $card = $panel.find(`.openvault-memory-card[data-id="${id}"]`);
+        const $btn = $(e.currentTarget);
+
+        const summary = $card.find('[data-field="summary"]').val().trim();
+        const importance = parseInt($card.find('[data-field="importance"]').val(), 10);
+        const temporal_anchor = $card.find('[data-field="temporal_anchor"]').val().trim() || null;
+        const is_transient = $card.find('[data-field="is_transient"]').is(':checked');
+
+        if (!summary) {
+            showToast('warning', 'Summary cannot be empty');
+            return;
+        }
+
+        $btn.prop('disabled', true);
+        const result = await updateMemoryAction(id, { summary, importance, temporal_anchor, is_transient });
+        if (result.success) {
+            if (result.stChanges) {
+                const { applySyncChanges } = await import('../extraction/extract.js');
+                await applySyncChanges(result.stChanges);
+            }
+            const updated = getSideMemoryById(id);
+            if (updated) {
+                $card.replaceWith(renderSideMemoryItem(updated));
+            }
+            showToast('success', 'Memory updated');
+        }
+        $btn.prop('disabled', false);
+    });
+}
+
+function getSideMemoryById(id) {
+    const data = getOpenVaultData();
+    return data?.[MEMORIES_KEY]?.find((m) => m.id === id) || null;
 }
 
 // =============================================================================
