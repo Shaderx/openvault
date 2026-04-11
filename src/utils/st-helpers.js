@@ -27,12 +27,13 @@ export function withTimeout(promise, ms, operation = 'Operation') {
 }
 
 // Position code mapping to ST extension_prompt_types
+// ST only has: NONE=-1, IN_PROMPT=0 (end of main), IN_CHAT=1 (at depth), BEFORE_PROMPT=2 (start of main)
 const POSITION_MAP = {
-    0: 0, // BEFORE_MAIN -> IN_PROMPT
-    1: 0, // AFTER_MAIN -> IN_PROMPT (same slot, different ordering)
-    2: 2, // BEFORE_AN -> AN
-    3: 3, // AFTER_AN -> AN_SCOPE
-    4: 4, // IN_CHAT -> CHAT
+    0: 2, // BEFORE_MAIN -> BEFORE_PROMPT (before system prompt)
+    1: 0, // AFTER_MAIN  -> IN_PROMPT     (after system prompt, before char defs)
+    2: 0, // Legacy BEFORE_AN — no ST equivalent, fall back to IN_PROMPT
+    3: 0, // Legacy AFTER_AN  — no ST equivalent, fall back to IN_PROMPT
+    4: 1, // IN_CHAT     -> IN_CHAT       (in chat at specified depth)
 };
 
 /**

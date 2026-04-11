@@ -56,6 +56,17 @@ These fix real issues in upstream and should ideally be contributed back.
 - **Problem:** Memory card action icons (`.openvault-memory-card-actions`) have no styles for visibility, hover effects, or theme color inheritance.
 - **Fix:** Added styles with opacity transitions and theme-aware colors.
 
+### BUG-8: Injection position mapping completely wrong
+- **Files:** `src/utils/st-helpers.js`, `src/constants.js`, `templates/settings_panel.html`
+- **Problem:** Three separate bugs in the injection position system:
+  1. **Labels wrong:** UI said "↓Char (After character definitions)" but `setExtensionPrompt` has no "after char defs" position. Both "↑Char" (0) and "↓Char" (1) mapped to the same ST value `IN_PROMPT=0` (end of system prompt, which is *before* char defs).
+  2. **IN_CHAT broken:** Position 4 ("In-chat") mapped to ST value `4`, but ST's `IN_CHAT` is value `1`. Injections at this position were silently dropped — including the post-history prompt (FEAT-6).
+  3. **AN positions non-existent:** "Before/After AN" (positions 2/3) mapped to ST values `2`/`3`. Value `2` is actually `BEFORE_PROMPT` (before system prompt, not before AN). Value `3` doesn't exist in ST's `extension_prompt_types` — injection lost.
+- **Fix:**
+  - Fixed `POSITION_MAP`: `0→2` (BEFORE_PROMPT), `1→0` (IN_PROMPT), `4→1` (IN_CHAT). Legacy values 2/3 fall back to IN_PROMPT.
+  - Relabeled: "↑Main (Before system prompt)", "↓Main (After system prompt)", "In-chat"
+  - Removed broken AN options from the dropdown and constants.
+
 ---
 
 ## Personal Features (keep separate)
