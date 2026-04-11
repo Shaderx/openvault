@@ -15,10 +15,10 @@ export const EXAMPLES = [
 
 Extracted events:
 1. [★★★★] Ксения confronted Бориса за то, что он отправил отчёт Савченко напрямую, пока она была на похоронах — он не отрицал`,
-        thinking: `Step 1: Entity scan — Ксения (PERSON), Борис (PERSON), Савченко (PERSON — referenced, not present), Переговорная (PLACE), Отчёт (OBJECT).
-Step 2: Type validation — Savchenko is PERSON (superior, off-scene). Report is OBJECT (the contested action artifact). All valid.
-Step 3: Relationship map — Ксения→Борис (authority challenged, direct confrontation), Борис→Савченко (bypassed chain of command, sent report directly), Борис→Ксения (bypassed, justified it with deadline), Борис→Отчёт (submitted without her authority), Ксения→Переговорная (chosen space for confrontation — closed door).
-Step 4: Output — 5 entities, 5 relationships.`,
+        thinking: `Step 1: Ксения(PERSON) + Борис(PERSON) + Савченко(PERSON) + Переговорная(PLACE) + Отчёт(OBJECT)
+Step 2: Савченко = PERSON(off-scene); Отчёт = OBJECT(contested); all valid
+Step 3: Ксения→Борис: authority challenged; Борис→Савченко: bypassed chain; Борис→Ксения: bypassed+justified; Борис→Отчёт: sent unauthorized; Ксения→Переговорная: closed-door confrontation
+Step 4: 5 entities + 5 relationships`,
         output: `{"entities":[{"name":"Ксения","type":"PERSON","description":"Руководитель проекта; была на похоронах; confronted Бориса за обход её полномочий при отправке отчёта"},{"name":"Борис","type":"PERSON","description":"Подчинённый Ксении; отправил отчёт Савченко напрямую в её отсутствие; признал факт, оправдал дедлайном"},{"name":"Савченко","type":"PERSON","description":"Вышестоящий руководитель, которому Борис направил отчёт в обход Ксении"},{"name":"Отчёт","type":"OBJECT","description":"Документ проекта — предмет конфликта; отправлен Борисом без санкции Ксении"},{"name":"Переговорная","type":"PLACE","description":"Закрытое пространство, выбранное Ксенией для разговора — дверь закрыта намеренно"}],"relationships":[{"source":"Ксения","target":"Борис","description":"Прямая конфронтация по факту нарушения субординации — её полномочия были взяты без спроса"},{"source":"Борис","target":"Савченко","description":"Обошёл Ксению — отправил отчёт напрямую вышестоящему, сославшись на дедлайн"},{"source":"Борис","target":"Ксения","description":"Знал об её отсутствии на похоронах — принял решение за неё, признал это без отрицания"},{"source":"Борис","target":"Отчёт","description":"Самостоятельно подал документ проекта без санкции непосредственного руководителя"},{"source":"Ксения","target":"Переговорная","description":"Выбрала закрытое пространство — разговор намеренно изолирован от коллег"}]}`,
     },
     {
@@ -34,10 +34,10 @@ Step 4: Output — 5 entities, 5 relationships.`,
 
 Extracted events:
 1. [★★★★] Миа призналась Даниле, что намеренно избегала смотреть на него, потому что думает о нём — он стоял вплотную; она не отвела взгляд`,
-        thinking: `Step 1: Entity scan — Миа (PERSON), Данила (PERSON), Подоконник (PLACE — specific, intimate framing detail), Запретная мысль (CONCEPT — she named it as a category).
-Step 2: Type validation — Windowsill as PLACE (the physical framing of her avoidance posture). Forbidden thought as CONCEPT (she named it explicitly). All valid.
-Step 3: Relationship map — Миа→Данила (conscious avoidance turned toward admission, gaze held), Данила→Миа (approached, pressed with questions, proximate), Миа→Подоконник (posture of withdrawal — back turned), Миа→Запретная мысль (named it as the reason, disclosed to him).
-Step 4: Output — 4 entities, 4 relationships.`,
+        thinking: `Step 1: Миа(PERSON) + Данила(PERSON) + Подоконник(PLACE) + Запретная мысль(CONCEPT)
+Step 2: Подоконник = PLACE(withdrawal posture); Запретная мысль = CONCEPT(named); all valid
+Step 3: Миа→Данила: avoidance→admission+gaze held; Данила→Миа: approached+pressed; Миа→Подоконник: back turned; Миа→Запретная мысль: named aloud
+Step 4: 4 entities + 4 relationships`,
         output: `{"entities":[{"name":"Миа","type":"PERSON","description":"Сидела спиной на подоконнике, сознательно избегая взгляда; призналась, что думает о Даниле недозволенным образом — не отвела взгляд"},{"name":"Данила","type":"PERSON","description":"Подошёл достаточно близко; настойчиво спросил о причине избегания; выслушал признание"},{"name":"Подоконник","type":"PLACE","description":"Место, выбранное Миа — спиной к нему; физическое выражение дистанции до момента признания"},{"name":"Запретная мысль","type":"CONCEPT","description":"Категория, названная Миой — то, о чём она думает, глядя на Данилу, и что сама считает недозволенным"}],"relationships":[{"source":"Миа","target":"Данила","description":"Сознательное избегание взгляда сменилось прямым признанием и удержанным зрительным контактом"},{"source":"Данила","target":"Миа","description":"Подошёл вплотную, задал прямой вопрос — вынудил её обернуться и ответить"},{"source":"Миа","target":"Подоконник","description":"Выбранная позиция спиной — физическая стратегия избегания до момента признания"},{"source":"Миа","target":"Запретная мысль","description":"Назвала её вслух как причину избегания — раскрыла Даниле то, что до этого удерживала"}]}`,
     },
     {
@@ -53,10 +53,10 @@ Step 4: Output — 4 entities, 4 relationships.`,
 
 Extracted events:
 1. [★★★★] Соня инициировала первый сексуальный контакт с Рафаэлем — затащила в номер, толкнула на кровать, взяла его член в руку, отказалась останавливаться на его просьбу`,
-        thinking: `Step 1: Entity scan — Соня (PERSON), Рафаэль (PERSON), Гостиничный номер (PLACE), Галстук (OBJECT — the initiating gesture, physical anchor of her dominance).
-Step 2: Type validation — Tie as OBJECT (her specific tool of initiation). All valid.
-Step 3: Relationship map — Соня→Рафаэль (initiated contact — pulled, pushed, straddled, gripped his cock, overrode his pause), Рафаэль→Соня (passive initially, hands on her hips, voiced hesitation, overridden), Соня→Гостиничный номер (controlled the space — shut the door, drove him to the bed), Соня→Галстук (used as the physical initiating gesture).
-Step 4: Output — 4 entities, 4 relationships.`,
+        thinking: `Step 1: Соня(PERSON) + Рафаэль(PERSON) + Номер(PLACE) + Галстук(OBJECT)
+Step 2: Галстук = OBJECT(initiation tool); all valid
+Step 3: Соня→Рафаэль: initiated+overrode pause; Рафаэль→Соня: passive+hesitated; Соня→Номер: controlled space; Соня→Галстук: pulled as first gesture
+Step 4: 4 entities + 4 relationships`,
         output: `{"entities":[{"name":"Соня","type":"PERSON","description":"Инициатор — потянула за галстук, закрыла дверь, толкнула на кровать, взяла его член, overrode его просьбу подождать; сказала, что давно хотела"},{"name":"Рафаэль","type":"PERSON","description":"Был застан врасплох; руки лёг на её бёдра; застонал; попросил подождать — она отказала и продолжила"},{"name":"Гостиничный номер","type":"PLACE","description":"Место первого сексуального контакта — Соня закрыла дверь и немедленно инициировала"},{"name":"Галстук","type":"OBJECT","description":"Физический якорь инициации — Соня потянула за него как первое действие, установив контроль"}],"relationships":[{"source":"Соня","target":"Рафаэль","description":"Инициировала первый сексуальный контакт — тянула, толкала, садилась сверху, взяла член, overrode паузу"},{"source":"Рафаэль","target":"Соня","description":"Физически не сопротивлялся; руки на бёдрах; голосом обозначил паузу — проигнорирована"},{"source":"Соня","target":"Гостиничный номер","description":"Контролировала пространство с первого момента — закрыла дверь, направила к кровати"},{"source":"Соня","target":"Галстук","description":"Использовала как первый физический жест инициации и установления доминирования"}]}`,
     },
     {
@@ -73,10 +73,10 @@ Step 4: Output — 4 entities, 4 relationships.`,
 
 Extracted events:
 1. [★★★★] Белла привязала Олега к стулу бархатной лентой, провела цветовую проверку и установила правило: не кончать без разрешения под угрозой остановки сцены`,
-        thinking: `Step 1: Entity scan — Белла (PERSON), Олег (PERSON), Бархатная лента (OBJECT), Стул (OBJECT), Правило оргазма (CONCEPT), Цветовой протокол (CONCEPT).
-Step 2: Type validation — Chair as OBJECT (restraint anchor). Orgasm rule and color protocol as CONCEPT (both consent and control structures). All valid.
-Step 3: Relationship map — Белла→Олег (command, restraint, rule establishment, nail-drag), Олег→Белла (obeyed seating command, green check, verbal acknowledged rule), Белла→Бархатная лента (used to bind wrists to chair back with tension check), Олег→Стул (restrained to it), Олег→Правило оргазма (acknowledged — bound by it), Олег→Цветовой протокол (green response).
-Step 4: Output — 6 entities, 6 relationships.`,
+        thinking: `Step 1: Белла(PERSON) + Олег(PERSON) + Лента(OBJECT) + Стул(OBJECT) + Правило оргазма(CONCEPT) + Цветовой протокол(CONCEPT)
+Step 2: Стул = OBJECT(restraint anchor); both CONCEPTs = consent+control; all valid
+Step 3: Белла→Олег: command+bind+rule+nail-drag; Олег→Белла: obeyed+green+accepted; Белла→Лента: bound wrists; Олег→Стул: restrained; Олег→Правило: bound by it; Олег→Цвет: green
+Step 4: 6 entities + 6 relationships`,
         output: `{"entities":[{"name":"Белла","type":"PERSON","description":"Доминант — командовала посадкой, выполнила обвязку, провела цветовую проверку, установила правило оргазма, провела ногтем по бедру"},{"name":"Олег","type":"PERSON","description":"Сабмиссив — выполнил команду, дал зелёный цвет, вербально принял правило оргазма"},{"name":"Бархатная лента","type":"OBJECT","description":"Инструмент фиксации — запястья привязаны к спинке стула с проверкой натяжения"},{"name":"Стул","type":"OBJECT","description":"Якорь ограничения — Олег привязан к нему за спинку"},{"name":"Правило оргазма","type":"CONCEPT","description":"Установленное ограничение: Олег не кончает без разрешения Беллы — нарушение останавливает сцену"},{"name":"Цветовой протокол","type":"CONCEPT","description":"Система проверки согласия — зелёный ответ Олега дан после фиксации, до эскалации"}],"relationships":[{"source":"Белла","target":"Олег","description":"Командовала, связала, установила правило оргазма, провела ногтем по внутреннему бедру — полный физический и психологический контроль"},{"source":"Олег","target":"Белла","description":"Подчинился команде, дал зелёный, вербально принял правило без возражений"},{"source":"Белла","target":"Бархатная лента","description":"Применила для фиксации запястий к стулу — аккуратно, с проверкой натяжения двумя пальцами"},{"source":"Олег","target":"Стул","description":"Зафиксирован запястьями к спинке — не может двигать руками"},{"source":"Олег","target":"Правило оргазма","description":"Вербально признал и принял ограничение — стал им связан"},{"source":"Олег","target":"Цветовой протокол","description":"Дал зелёный после фиксации — протокол согласия соблюдён до эскалации"}]}`,
     },
 ];
