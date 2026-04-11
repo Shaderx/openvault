@@ -8,10 +8,10 @@ export const EXAMPLES = [
         label: 'Discovery (EN/SFW)',
         input: `*Ranger Mireille crouches over the cold fire pit and presses her palm flat to the ash. Still warm. She sweeps her torch across the shelter — sleeping roll shoved aside, a pack left open, half-eaten rations scattered like someone left in a hurry.*
 "Someone was here within the hour," she says, pulling a scrap of cloth from the entrance post. The color matches the expedition uniform.`,
-        thinking: `Step 1: Extract data — Mireille found warm ash, disturbed sleeping roll, abandoned open pack, scattered rations, expedition-colored cloth on entrance post. Concluded presence within the last hour.
-Step 2: Cross-reference — No established memories of this shelter or the expedition's route.
-Step 3: Check progression — New discovery. First physical evidence the expedition reached this location.
-Step 4: Format JSON — Importance 3 (significant find, shifts the investigation's direction). Not transient — physical evidence persists.`,
+        thinking: `Step 1: Mireille -> found -> warm ash + disturbed roll + cloth; hour-old
+Step 2: Cross-ref -> no memories of shelter or route
+Step 3: Progression -> new discovery; first expedition evidence
+Step 4: Format -> importance = 3; not transient; physical evidence`,
         output: `{
   "events": [{
     "summary": "Ranger Mireille found a recently abandoned shelter with warm ash, scattered rations, and an expedition-colored cloth — evidence someone was present within the last hour",
@@ -33,10 +33,10 @@ Step 4: Format JSON — Importance 3 (significant find, shifts the investigation
 *Petra yanked him by the collar and hauled him around the corner before the man could follow.*
 "How deep?" she demanded, pressing her hand over the wound.
 "Keep moving," Corin said. His voice was steady. His legs weren't.`,
-        thinking: `Step 1: Extract data — Unknown attacker struck Corin twice: slash on forearm, stab below ribs. Petra pulled him to safety. Corin told her to keep moving; visibly weakened. Wound depth unknown.
-Step 2: Cross-reference — No established memories of this attacker or this confrontation.
-Step 3: Check progression — New event. First injury recorded for Corin; new threat introduced.
-Step 4: Format JSON — Importance 4 (significant physical injury, severity unknown). Relationship impact: Petra physically protected Corin under lethal threat.`,
+        thinking: `Step 1: Attacker -> slashed -> Corin(forearm) + stabbed(below ribs); Petra -> pulled -> Corin; wound depth = unknown
+Step 2: Cross-ref -> no memories of attacker or confrontation
+Step 3: Progression -> new event; first Corin injury; new threat
+Step 4: Format -> importance = 4; Petra -> protected Corin(lethal threat)`,
         output: `{
   "events": [{
     "summary": "An unidentified attacker stabbed Corin below the ribs and slashed his forearm in an alley ambush before Petra pulled him to safety; wound depth is unknown",
@@ -57,10 +57,10 @@ Step 4: Format JSON — Importance 4 (significant physical injury, severity unkn
         input: `Sabine pushed him down by the chest and climbed over him, knees bracketing his hips. She pulled her hair tie loose without looking away.
 "Tell me if you want me to stop," she said. Not a question.
 She rocked forward slowly, taking him in inch by inch, watching his mouth fall open. His hands came up to her hips — not to stop her, just to hold on. She set the pace, low and deliberate, learning what made his breath catch.`,
-        thinking: `Step 1: Extract data — Sabine pushed Theo down, removed her hair tie, issued explicit consent check. Began penetrative sex controlling pace and position. Theo's hands on her hips, responsive and compliant.
-Step 2: Cross-reference — No established memories of sexual contact between Sabine and Theo.
-Step 3: Check progression — New dynamic: first penetrative encounter; Sabine controlling pace, initiating the consent check herself.
-Step 4: Format JSON — Importance 4 (first sexual contact; relationship threshold). Sabine dominant in both initiation and pace.`,
+        thinking: `Step 1: Sabine -> pushed -> Theo down + consent check; began penetration; Theo = responsive
+Step 2: Cross-ref -> no sexual contact memories
+Step 3: Progression -> new dynamic; first penetrative encounter; Sabine controls pace
+Step 4: Format -> importance = 4; Sabine = dominant(initiator + pace)`,
         output: `{
   "events": [{
     "summary": "Sabine initiated penetrative sex with Theo for the first time, setting the pace from above and issuing an explicit consent check before proceeding",
@@ -84,10 +84,10 @@ Step 4: Format JSON — Importance 4 (first sexual contact; relationship thresho
 "Copper."
 She walked slowly around behind him, let her fingers trail up the back of his neck. He didn't turn his head. "Good. Kneel."
 He went down. She felt the quality of his attention shift — the particular stillness that meant he was inside the scene now, fully.`,
-        thinking: `Step 1: Extract data — Inara bound Rook's wrists with silk cord. Safeword "copper" confirmed. Positional command (kneel) issued and obeyed. Inara noted Rook's attention shift into scene headspace.
-Step 2: Cross-reference — No established memories of any restraint or D/s dynamic between them.
-Step 3: Check progression — New dynamic: first physical restraint, consent infrastructure (safeword) established, first positional command.
-Step 4: Format JSON — Importance 4 (new power dynamic, safeword system on record). is_secret true.`,
+        thinking: `Step 1: Inara -> bound -> Rook(wrists, silk cord); safeword = copper; kneel -> obeyed; Rook = in scene
+Step 2: Cross-ref -> no restraint or D/s memories
+Step 3: Progression -> new dynamic; first restraint + safeword + positional command
+Step 4: Format -> importance = 4; is_secret = true`,
         output: `{
   "events": [{
     "summary": "Inara bound Rook's wrists with silk cord, confirmed safeword 'copper', and commanded him to kneel — establishing their first physical restraint scene",
@@ -111,10 +111,10 @@ Step 4: Format JSON — Importance 4 (new power dynamic, safeword system on reco
 She studied his face for a long moment, then stood and stepped back.
 
 <established_memories>Inara bound Rook's wrists with silk cord, confirmed safeword 'copper', and commanded him to kneel — establishing their first physical restraint scene</established_memories>`,
-        thinking: `Step 1: Extract data — Inara issued welfare check mid-scene; Rook confirmed green. Voice noticeably thicker. Inara paused to assess his face before continuing. Still kneeling, wrists still bound.
-Step 2: Cross-reference — Existing: Inara restrained Rook, safeword confirmed, kneel commanded. Core action (restraint scene) same.
-Step 3: Check progression — Same dynamic, but: voice thicker = physiological shift toward subspace. Inara stopping to read his face = calibration behavior, not scripted. Genuine state change, not a repeat.
-Step 4: Format JSON — Importance 2 (progression within established scene). Subspace deepening worth recording at low weight.`,
+        thinking: `Step 1: Inara -> welfare check; Rook -> green; voice = thicker; Inara -> assessed face
+Step 2: Cross-ref -> existing: restraint + safeword + kneel; core action = same
+Step 3: Progression -> same dynamic; voice thicker -> subspace shift; Inara pausing = calibration
+Step 4: Format -> importance = 2; state change in established scene`,
         output: `{
   "events": [{
     "summary": "Inara checked Rook mid-scene; he confirmed green with a noticeably thicker voice indicating subspace deepening",
@@ -137,10 +137,10 @@ Marcus looked up from his laptop. "You're right. I'll talk to Chen this week —
 "I need that in writing. Last time you said 'this week' it took six weeks."
 "Fair." He pulled out his phone. "Logging it right now. Tuesday rotation, removed. Done."
 Yolanda watched him type. "Thank you."`,
-        thinking: `Step 1: Extract data — Yolanda raised three-month Tuesday shift grievance. Marcus committed to speaking with Chen this week. Yolanda demanded written documentation; Marcus immediately logged a calendar entry on the spot.
-Step 2: Cross-reference — No established memories of this shift arrangement or previous broken commitment.
-Step 3: Check progression — New commitment: Marcus has a logged item to resolve Yolanda's rotation. Concrete action taken (calendar entry) makes this durable. The prior broken promise is backstory but not an event to extract.
-Step 4: Format JSON — Importance 3. The chair-drop and thanks are transient. The logged commitment is durable — spans future actions across multiple days.`,
+        thinking: `Step 1: Yolanda -> raised -> Tuesday grievance(3 months); Marcus -> commit -> talk to Chen; Yolanda -> demanded -> documentation; Marcus -> logged -> calendar
+Step 2: Cross-ref -> no memories of shift arrangement
+Step 3: Progression -> new commitment; calendar entry = durable action
+Step 4: Format -> importance = 3; chair-drop + thanks = transient; logged commitment = durable`,
         output: `{
   "events": [{
     "summary": "Marcus committed to removing Yolanda from Tuesday shift rotation by speaking to Chen this week, and logged it in his calendar on the spot when she demanded documented follow-through",
@@ -166,10 +166,10 @@ Lev grabbed his jacket from the back of the chair. "I'll be at the studio until 
 "You don't have to."
 "I know." She finally looked at him. "Also — I made the appointment. Couples counseling. First session is the 14th at six."
 Lev went still. "Okay," he said, after a moment. "I'll be there."`,
-        thinking: `Step 1: Extract data — Timestamp present. Lev announced studio until 8–9 PM tonight. Nadia offered to save dinner. Nadia revealed she booked couples counseling — first session March 14, 6 PM. Lev committed to attend after a visible pause.
-Step 2: Cross-reference — No established memories of either plan.
-Step 3: Check progression — Two commitments with different lifespans. Studio/dinner: tonight only (transient). Counseling appointment: durable — spans days, emotionally significant relationship threshold.
-Step 4: Format JSON — Two events. Temporal anchor: strip location and weather, preserve exact datetime format. Studio plan = importance 2, transient. Counseling = importance 4, durable, relationship impact.`,
+        thinking: `Step 1: Timestamp present; Lev -> studio(until 8-9 PM); Nadia -> save dinner; Nadia -> booked -> counseling(March 14, 6 PM); Lev -> committed -> attend
+Step 2: Cross-ref -> no memories of either plan
+Step 3: Progression -> two commitments; studio/dinner = tonight(transient); counseling = durable(spans days)
+Step 4: Format -> two events; temporal anchor -> strip location + weather; studio = importance 2(transient); counseling = importance 4(durable)`,
         output: `{
   "events": [
     {
