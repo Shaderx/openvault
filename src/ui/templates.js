@@ -220,9 +220,6 @@ export function renderCharacterState(charData) {
             <div class="openvault-character-name">${escapeHtml(charData.name)}</div>
             <div class="openvault-emotion">
                 <span class="openvault-emotion-label">${escapeHtml(charData.emotion)}${charData.emotionSource || ''}</span>
-                <div class="openvault-emotion-bar">
-                    <div class="openvault-emotion-fill" style="width: ${charData.intensityPercent}%"></div>
-                </div>
             </div>
             <div class="openvault-memory-witnesses">Known events: ${charData.knownCount}</div>
         </div>

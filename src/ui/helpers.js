@@ -119,7 +119,6 @@ export function extractCharactersSet(memories) {
  */
 export function buildCharacterStateData(name, charData) {
     const emotion = charData.current_emotion || 'neutral';
-    const intensity = charData.emotion_intensity || 5;
     const knownCount = charData.known_events?.length || 0;
 
     let emotionSource = '';
@@ -132,8 +131,6 @@ export function buildCharacterStateData(name, charData) {
         name,
         emotion,
         emotionSource,
-        intensity,
-        intensityPercent: intensity * 10,
         knownCount,
     };
 }

@@ -67,7 +67,7 @@ All extension state lives within SillyTavern's `context.chatMetadata.openvault`.
   character_states: { 
     [charName: string]: { 
       current_emotion: string, emotion_from_messages?: {min: number, max: number},
-      emotion_intensity: number, known_events: string[] // POV strictness boundary
+      known_events: string[] // POV strictness boundary
     } 
   },
   

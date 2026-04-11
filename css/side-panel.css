@@ -186,10 +186,6 @@
     font-size: 0.8em;
 }
 
-.openvault-side-scroll .openvault-emotion-bar {
-    height: 6px;
-}
-
 /* Entity search/filter bar */
 .openvault-side-entity-filters {
     display: flex;

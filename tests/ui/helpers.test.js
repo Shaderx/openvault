@@ -300,7 +300,6 @@ describe('ui/helpers', () => {
         it('builds display data from character state', () => {
             const charData = {
                 current_emotion: 'happy',
-                emotion_intensity: 8,
                 known_events: ['evt1', 'evt2', 'evt3'],
                 emotion_from_messages: { min: 5, max: 10 },
             };
@@ -309,8 +308,6 @@ describe('ui/helpers', () => {
 
             expect(result.name).toBe('Alice');
             expect(result.emotion).toBe('happy');
-            expect(result.intensity).toBe(8);
-            expect(result.intensityPercent).toBe(80);
             expect(result.knownCount).toBe(3);
             expect(result.emotionSource).toBe(' (msgs 5-10)');
         });
@@ -319,8 +316,6 @@ describe('ui/helpers', () => {
             const result = buildCharacterStateData('Bob', {});
 
             expect(result.emotion).toBe('neutral');
-            expect(result.intensity).toBe(5);
-            expect(result.intensityPercent).toBe(50);
             expect(result.knownCount).toBe(0);
             expect(result.emotionSource).toBe('');
         });

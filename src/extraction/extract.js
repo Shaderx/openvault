@@ -370,7 +370,6 @@ export function updateCharacterStatesFromEvents(events, data, validCharNames = [
                     data[CHARACTERS_KEY][charName] = {
                         name: charName,
                         current_emotion: 'neutral',
-                        emotion_intensity: 5,
                         known_events: [],
                     };
                 }
@@ -396,7 +395,6 @@ export function updateCharacterStatesFromEvents(events, data, validCharNames = [
                 data[CHARACTERS_KEY][witness] = {
                     name: witness,
                     current_emotion: 'neutral',
-                    emotion_intensity: 5,
                     known_events: [],
                 };
             }
