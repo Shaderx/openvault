@@ -133,6 +133,11 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **Why:** Raw `m.mes` may contain think blocks that inflate token counts, causing more batches than necessary. Outgoing-prompt regex scripts (OOC removal, formatting fixes, token reduction) should apply to extraction just like they do to the main AI.
 - **Merge strategy:** Core logic in new file. Only 3 upstream files touched with 1-2 line changes each.
 
+### FEAT-11: Sidebar Reflection Badge
+- **Files:** `src/ui/side-panel.js` (fork-owned — **zero upstream file changes**)
+- **What it does:** Shows a `💡 Reflection` badge on reflection memories in the sidebar, displayed in the time anchor position (since reflections don't have time anchors). Regular memories still show the clock icon + anchor text as before.
+- **Merge strategy:** Change is entirely within our fork-owned file. Will never conflict with upstream merges.
+
 ---
 
 ## Preferences (fork-only defaults)
@@ -142,17 +147,22 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **What it does:** One-time migration in `loadSettings()` switches existing installs from CN to EN defaults. Defaults in `constants.js` are left as upstream's `cn` values to avoid merge conflicts.
 - **Merge strategy:** Only touches `settings.js`. Will not conflict with `constants.js` merges.
 
-### PREF-2: WebGPU Warning Suppression
+### PREF-2: Hide Emotion Intensity Bar
+- **Files:** `css/side-panel.css` (fork-owned — **zero upstream file changes**)
+- **What it does:** Hides the `.openvault-emotion-bar` via `display: none`. Upstream hardcodes `emotion_intensity: 5` on character state creation and never updates it from LLM output, so every character permanently shows a 50% bar. The emotion text label is still displayed.
+- **Merge strategy:** Single CSS rule in fork-owned file. Will never conflict with upstream merges.
+
+### PREF-3: WebGPU Warning Suppression
 - **Files:** `src/embeddings.js`
 - **What it does:** Deletes `webgpu.powerPreference` to suppress a Chromium/Windows console warning (crbug.com/369219127).
 - **Merge strategy:** Self-contained try/catch block. Could be PR'd.
 
-### PREF-3: Embedding Warmup on Init
+### PREF-4: Embedding Warmup on Init
 - **Files:** `index.js`
 - **What it does:** Fires a dummy `getDocumentEmbedding('warmup')` call on extension init to eagerly load the transformers pipeline.
 - **Merge strategy:** 3 lines at end of init. Easy to re-add.
 
-### ~~PREF-4: .gitignore additions~~ (REMOVED)
+### ~~PREF-5: .gitignore additions~~ (REMOVED)
 - Reverted `.gitignore` to upstream defaults. Removed `sync-upstream.bat`.
 
 ---
@@ -170,5 +180,5 @@ After every `git merge upstream/master`, verify:
 7. [ ] `src/state.js` still has `lastApiCallTime` exports
 8. [ ] `src/llm.js` still calls `setLastApiCallTime` after responses
 9. [ ] No duplicate function declarations (check `git diff --check` for conflict markers)
-10. [ ] `src/extraction/extract.js` still has `stripThinkingTags` + `applyOutgoingRegex` in message formatting
+10. [ ] `src/extraction/extract.js` still uses `sanitizeMessageContent` from `message-sanitizer.js` in message formatting
 11. [ ] Extension loads without console errors

@@ -186,6 +186,16 @@
     font-size: 0.8em;
 }
 
+/* Hide the emotion intensity bar — upstream hardcodes intensity to 5 (always 50%)
+   and never updates it from LLM output. Hide globally via fork-owned CSS. */
+.openvault-emotion-bar {
+    display: none;
+}
+
+.openvault-side-scroll .openvault-emotion-bar {
+    height: 6px;
+}
+
 /* Entity search/filter bar */
 .openvault-side-entity-filters {
     display: flex;

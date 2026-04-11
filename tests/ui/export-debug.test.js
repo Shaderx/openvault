@@ -38,7 +38,7 @@ vi.mock('../../src/deps.js', () => ({
                         },
                     ],
                     character_states: {
-                        Alice: { name: 'Alice', current_emotion: 'happy', known_events: ['1'] },
+                        Alice: { name: 'Alice', current_emotion: 'happy', emotion_intensity: 5, known_events: ['1'] },
                     },
                     graph: {
                         nodes: {

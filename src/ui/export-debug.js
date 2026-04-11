@@ -252,6 +252,7 @@ function buildCharacterSummary(characterStates) {
     for (const [name, state] of Object.entries(characterStates)) {
         result[name] = {
             emotion: state.current_emotion || 'neutral',
+            intensity: state.emotion_intensity || 0,
             knownEvents: state.known_events?.length || 0,
         };
     }
