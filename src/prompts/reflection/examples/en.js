@@ -11,10 +11,10 @@ export const REFLECTIONS = [
 3. [★★★★] Kira lied to the guild about finding only three flasks, secretly keeping two
 4. [★★★] Kira decoded ancient text on the flask labels revealing a resurrection formula
 5. [★★] Kira practiced the formula alone at night, burning her fingertips on failed attempts`,
-        thinking: `Step 1: Pattern scan — Deception: [1, 3]. Obsession: [4, 5]. Conflict: [2].
-Step 2: Causal chains — Discovery(1) → lie about quantity(3) → formula decoded(4) → secret practice with burns(5).
-Step 3: Synthesis — Q1: Why betray guild? Insight: resurrection formula drives theft. Q2: Grief link? Insight: secrecy + self-harm = emotional urgency. Referencing memories by content (hidden flasks, burned fingertips), not by ID.
-Step 4: Evidence — Q1: [1, 3, 4]. Q2: [4, 5]. Check: no IDs in question or insight text.`,
+        thinking: `Step 1: Deception [1,3]; obsession [4,5]; conflict [2]
+Step 2: Discovery(1) -> lie(3) -> decoded(4) -> burns(5)
+Step 3: Q1: betray guild? -> resurrection drives theft; Q2: grief link? -> secrecy + harm = urgency
+Step 4: Q1: [1,3,4]; Q2: [4,5]; no IDs in Q/insight`,
         output: `{
   "reflections": [
     {
@@ -38,10 +38,10 @@ Step 4: Evidence — Q1: [1, 3, 4]. Q2: [4, 5]. Check: no IDs in question or ins
 3. [★★] Mara woke screaming from nightmare about the raid
 4. [★★★] Mara flinched when a merchant reached for her sword arm
 5. [★★★] Mara confessed to her companion that she feels numb during fights, not brave`,
-        thinking: `Step 1: Pattern scan — Traumatic event: [1]. Isolation: [2]. Intrusion: [3]. Hypervigilance: [4]. Dissociation: [5].
-Step 2: Causal chains — Combat killing(1) → refused healing(2) → nightmares(3) → flinch(4) → numbness confession(5).
-Step 3: Synthesis — Q1: Resilience or trauma? Insight: pain as control mechanism. Q2: Numbness impact? Insight: displacement risk. Referencing memories by content (refused healing, combat numbness), not by ID.
-Step 4: Evidence — Q1: [2, 3, 5]. Q2: [4, 5]. Check: no IDs in question or insight text.`,
+        thinking: `Step 1: Trauma [1]; isolation [2]; intrusion [3]; hypervigilance [4]; dissociation [5]
+Step 2: Killing(1) -> refused healing(2) -> nightmares(3) -> flinch(4) -> numbness(5)
+Step 3: Q1: resilience or trauma? -> pain = control; Q2: numbness impact? -> displacement risk
+Step 4: Q1: [2,3,5]; Q2: [4,5]; no IDs in Q/insight`,
         output: `{
   "reflections": [
     {
@@ -65,10 +65,10 @@ Step 4: Evidence — Q1: [2, 3, 5]. Q2: [4, 5]. Check: no IDs in question or ins
 3. [★★] Lila told Marcus she doesn't want gentle — she wants to feel owned
 4. [★★★★] Lila broke down crying after an intense session, saying she doesn't know why
 5. [★★★] Lila refused to discuss the crying incident the next morning, deflecting with humor`,
-        thinking: `Step 1: Pattern scan — Escalation: [1, 2, 3]. Emotional break: [4]. Avoidance: [5].
-Step 2: Causal chains — First time(1) → hair-pulling(2) → "feel owned"(3) → breakdown(4) → deflection(5).
-Step 3: Synthesis — Q1: Why escalate? Insight: physical intensity bypasses emotional defenses. Q2: Breakdown = trauma? Insight: emotional threshold approached, fear of losing coping mechanism. Referencing memories by content (post-sex breakdown, morning deflection), not by ID.
-Step 4: Evidence — Q1: [1, 2, 3]. Q2: [4, 5]. Check: no IDs in question or insight text.`,
+        thinking: `Step 1: Escalation [1,2,3]; emotional break [4]; avoidance [5]
+Step 2: First time(1) -> hair(2) -> "owned"(3) -> breakdown(4) -> deflection(5)
+Step 3: Q1: why escalate? -> intensity bypasses defenses; Q2: breakdown = trauma? -> threshold + fear of losing cope
+Step 4: Q1: [1,2,3]; Q2: [4,5]; no IDs in Q/insight`,
         output: `{
   "reflections": [
     {
@@ -92,10 +92,10 @@ Step 4: Evidence — Q1: [1, 2, 3]. Q2: [4, 5]. Check: no IDs in question or ins
 3. [★★] Daniel struggled to make decisions at work the day after a scene — described feeling "untethered"
 4. [★★★★] Daniel told Vera he only feels fully present when she's in control; outside scenes he feels scattered
 5. [★★★] Vera asked Daniel directly whether he wanted to expand the dynamic into daily life, and he didn't say no`,
-        thinking: `Step 1: Pattern scan — First scene: [1]. Positive reinforcement: [2]. Withdrawal effect: [3]. Dependency confession: [4]. Expansion offer: [5].
-Step 2: Causal chains — Scene(1) → gratitude + repetition request(2) → next-day scatter(3) → "only present under control" confession(4) → Vera offers expansion(5).
-Step 3: Synthesis — Q1: What is "untethered" actually describing? Insight: submission as anxiety-regulation, absence creates void. Q2: Is Daniel's answer to Vera's offer a choice or avoidance? Insight: not saying no is not the same as choosing — the non-answer reveals ambivalence, not consent. Referencing memories by content (untethered feeling, non-answer), not by ID.
-Step 4: Evidence — Q1: [3, 4]. Q2: [4, 5]. Check: no IDs in question or insight text.`,
+        thinking: `Step 1: First scene [1]; reinforcement [2]; withdrawal [3]; dependency [4]; expansion [5]
+Step 2: Scene(1) -> gratitude(2) -> scatter(3) -> "only present" confession(4) -> Vera offers(5)
+Step 3: Q1: "untethered"? -> submission = anxiety-reg; void without it; Q2: choice or avoidance? -> non-answer = ambivalence != consent
+Step 4: Q1: [3,4]; Q2: [4,5]; no IDs in Q/insight`,
         output: `{
   "reflections": [
     {
@@ -119,10 +119,10 @@ Step 4: Evidence — Q1: [3, 4]. Q2: [4, 5]. Check: no IDs in question or insigh
 3. [★★] Yuen wrote a letter to his brother — an officer stationed at Ironhold — and did not send it
 4. [★★★★] Yuen told Halverson he understood, and asked to be reassigned to the northern pass personally
 5. [★★] Yuen burned the unsent letter the following morning without explanation`,
-        thinking: `Step 1: Pattern scan — Complicity event: [1]. Silence: [2]. Private conflict: [3]. Public alignment: [4]. Destruction of evidence: [5].
-Step 2: Causal chains — Halverson's disclosure(1) → silence instead of reporting(2) → unsent letter to brother at Ironhold(3) → public alignment with Halverson(4) → letter burned(5).
-Step 3: Synthesis — Q1: Why align with Halverson publicly while privately conflicted? Insight: the reassignment request is not loyalty — it's a move toward information control. Q2: What does burning the letter mean? Insight: destroying the letter is the moment Yuen commits; the brother becomes acceptable collateral. Referencing memories by content (reassignment request, burned letter), not by ID.
-Step 4: Evidence — Q1: [2, 4]. Q2: [3, 5]. Check: no IDs in question or insight text.`,
+        thinking: `Step 1: Complicity [1]; silence [2]; private conflict [3]; public alignment [4]; evidence destroyed [5]
+Step 2: Disclosure(1) -> silence(2) -> unsent letter(3) -> alignment(4) -> letter burned(5)
+Step 3: Q1: align while conflicted? -> reassignment != loyalty, = info control; Q2: burn letter? -> commitment point; brother = collateral
+Step 4: Q1: [2,4]; Q2: [3,5]; no IDs in Q/insight`,
         output: `{
   "reflections": [
     {
