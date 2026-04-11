@@ -18,7 +18,7 @@ import { MIRROR_LANGUAGE_RULES } from './rules.js';
  * Replaces negative "do not use tool calls" constraints with affirmative framing.
  */
 export const EXECUTION_TRIGGER = `OUTPUT FORMAT:
-Step 1: Write your reasoning in plain text inside <think/> tags.
+Step 1: Write concise draft notes inside <think/> tags. Limit each step to 8 words max.
 Step 2: You MUST close the reasoning block with exactly </think>.
 Step 3: Output ONLY a single raw JSON object immediately after the closing tag.
 CRITICAL: Do NOT put the JSON inside the think tags. The JSON must follow AFTER think`;
