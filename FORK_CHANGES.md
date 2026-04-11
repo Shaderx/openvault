@@ -66,6 +66,7 @@ These fix real issues in upstream and should ideally be contributed back.
   - Fixed `POSITION_MAP`: `0→2` (BEFORE_PROMPT), `1→0` (IN_PROMPT), `4→1` (IN_CHAT). Legacy values 2/3 fall back to IN_PROMPT.
   - Relabeled: "↑Main (Before system prompt)", "↓Main (After system prompt)", "In-chat"
   - Removed broken AN options from the dropdown and constants.
+  - Added new "↓Char (After char defs — top of chat)" option: uses `IN_CHAT` at `depth=10000` to place injection at the very start of the chat section, effectively after all system-level content (char defs, personality, scenario). This is the closest equivalent to WI's "After Char Defs" that the extension API supports.
 
 ---
 

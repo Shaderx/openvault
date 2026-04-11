@@ -27,6 +27,7 @@ export const PROCESSED_MESSAGES_KEY = 'processed_message_ids';
 export const INJECTION_POSITIONS = Object.freeze({
     BEFORE_MAIN: 0, // ↑Main - Before system prompt
     AFTER_MAIN: 1, // ↓Main - After system prompt (default)
+    TOP_OF_CHAT: 5, // ↓Char - After char defs (IN_CHAT at max depth)
     IN_CHAT: 4, // In-chat - At specified message depth
     CUSTOM: -1, // Custom - Macro-only, no auto-injection
 });
@@ -34,6 +35,7 @@ export const INJECTION_POSITIONS = Object.freeze({
 export const POSITION_LABELS = Object.freeze([
     { value: 0, label: '↑Main', description: 'Before system prompt' },
     { value: 1, label: '↓Main', description: 'After system prompt' },
+    { value: 5, label: '↓Char', description: 'After char defs (top of chat)' },
     { value: 4, label: 'In-chat', description: 'At specified message depth' },
     { value: -1, label: 'Custom', description: 'Use macro manually' },
 ]);
