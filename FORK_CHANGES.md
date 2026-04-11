@@ -67,6 +67,8 @@ These fix real issues in upstream and should ideally be contributed back.
   - Relabeled: "↑Main (Before system prompt)", "↓Main (After system prompt)", "In-chat"
   - Removed broken AN options from the dropdown and constants.
   - Added new "↓Char (After char defs — top of chat)" option: uses `IN_CHAT` at `depth=10000` to place injection at the very start of the chat section, effectively after all system-level content (char defs, personality, scenario). This is the closest equivalent to WI's "After Char Defs" that the extension API supports.
+  - Changed default from "↓Main" (position 1) to "↓Char" (position 5) — "After char defs" has greater impact than "After system prompt" and matches what lorebook WI entries call "↓Char".
+  - All fallback `?? 1` references updated to `?? 5` in `retrieve.js`, `settings.js`, `render.js`.
 
 ---
 
