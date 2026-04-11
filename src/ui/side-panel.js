@@ -380,16 +380,23 @@ function renderSideMemoryItem(memory) {
     const id = escapeHtml(memory.id);
     const date = formatMemoryDate(memory.created_at);
     const stars = formatMemoryImportance(memory.importance || 3);
-    const anchorHtml = memory.temporal_anchor
-        ? `<span class="openvault-side-mem-date" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-clock"></i> ${escapeHtml(memory.temporal_anchor)}</span>`
-        : '';
+    const isReflection = memory.type === 'reflection';
+
+    // Reflections don't have time anchors — show a reflection badge in that slot instead
+    let leadBadge = '';
+    if (isReflection) {
+        leadBadge = '<span class="openvault-memory-card-badge reflection"><i class="fa-solid fa-lightbulb"></i> Reflection</span>';
+    } else if (memory.temporal_anchor) {
+        leadBadge = `<span class="openvault-side-mem-date" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-clock"></i> ${escapeHtml(memory.temporal_anchor)}</span>`;
+    }
+
     const charTags = buildSideCharacterTags(memory.characters_involved);
 
     return `
         <div class="openvault-memory-card openvault-side-mem" data-id="${id}">
             <div class="openvault-side-mem-header">
                 <div class="openvault-side-mem-meta">
-                    ${anchorHtml}
+                    ${leadBadge}
                     <span class="openvault-side-mem-date">${escapeHtml(date)}</span>
                     <span class="openvault-memory-card-badge importance">${stars}</span>
                 </div>
