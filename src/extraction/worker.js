@@ -17,6 +17,7 @@ import {
     setWorkerRunning,
 } from '../state.js';
 import { getCurrentChatId, getOpenVaultData } from '../store/chat-data.js';
+import { refreshAllUI } from '../ui/render.js';
 import { setStatus } from '../ui/status.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled } from '../utils/st-helpers.js';
@@ -116,6 +117,7 @@ async function runWorkerLoop() {
                 await extractMemories(batch, targetChatId, { silent: true });
                 retryCount = 0;
                 cumulativeBackoffMs = 0;
+                refreshAllUI();
             } catch (err) {
                 // Fast-fail on abort or chat switch — don't retry, just stop
                 if (err.name === 'AbortError' || err.message === 'Chat changed during extraction') {
