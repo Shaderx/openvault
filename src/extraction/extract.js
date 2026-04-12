@@ -966,8 +966,10 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             })
             .join('\n\n');
 
-        const characterDescription = context.characters?.[context.characterId]?.description || '';
-        const personaDescription = context.powerUserSettings?.persona_description || '';
+        // Disabled: passing char card / persona descriptions to extraction prompts causes the LLM
+        // to extract static traits from the character sheet instead of actual conversation events.
+        const characterDescription = '';
+        const personaDescription = '';
         const contextParams = {
             messagesText,
             names: { char: characterName, user: userName },
