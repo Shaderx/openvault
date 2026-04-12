@@ -102,7 +102,7 @@ function recoverBareString(data, key) {
  * @returns {Object} Validated parsed data
  * @throws {Error} If JSON parsing or validation fails
  */
-function parseStructuredResponse(content, schema, recoverFn = null) {
+export function parseStructuredResponse(content, schema, recoverFn = null) {
     // Use safeParseJSON with new API (handles thinking tags and markdown internally)
     const result = safeParseJSON(content);
     if (!result.success) {
@@ -117,6 +117,29 @@ function parseStructuredResponse(content, schema, recoverFn = null) {
     }
 
     let parsed = result.data;
+
+    // Auto-unwrap hallucinated OpenAI-style tool call payloads
+    // LLMs sometimes output {"name": "...", "arguments": {...}} instead of the expected schema
+    if (
+        parsed != null &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        'arguments' in parsed &&
+        (parsed.name != null || parsed.tool != null || parsed.function != null)
+    ) {
+        logWarn('LLM returned tool-call wrapper, unwrapping arguments');
+        let args = parsed.arguments;
+        // arguments may be a JSON string (common with some models)
+        if (typeof args === 'string') {
+            const argsResult = safeParseJSON(args);
+            if (argsResult.success) {
+                args = argsResult.data;
+            } else {
+                throw new Error(`Failed to parse tool arguments string: ${argsResult.error.message}`);
+            }
+        }
+        parsed = args;
+    }
 
     // Apply recovery function before array unwrapping (e.g. bare-string → object)
     if (recoverFn) {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
     _testStripMarkdown,
     GlobalSynthesisSchema,
@@ -10,6 +11,7 @@ import {
     parseEventExtractionResponse,
     parseGlobalSynthesisResponse,
     parseGraphExtractionResponse,
+    parseStructuredResponse,
     parseUnifiedReflectionResponse,
 } from '../../src/extraction/structured.js';
 
@@ -342,5 +344,48 @@ describe('parseConsolidationResponse', () => {
     it('throws on empty string', () => {
         const empty = JSON.stringify('');
         expect(() => parseConsolidationResponse(empty)).toThrow();
+    });
+});
+
+describe('parseStructuredResponse - tool call unwrapping', () => {
+    const testSchema = z.object({
+        events: z.array(z.string()),
+    });
+
+    it('unwraps object with "name" and "arguments" keys', () => {
+        const json = JSON.stringify({ name: 'extract', arguments: { events: [] } });
+        const result = parseStructuredResponse(json, testSchema);
+        expect(result).toEqual({ events: [] });
+    });
+
+    it('unwraps object with "tool" and "arguments" keys', () => {
+        const json = JSON.stringify({ tool: 'extract', arguments: { events: ['a', 'b'] } });
+        const result = parseStructuredResponse(json, testSchema);
+        expect(result).toEqual({ events: ['a', 'b'] });
+    });
+
+    it('unwraps object with "function" and "arguments" keys', () => {
+        const json = JSON.stringify({ function: 'x', arguments: { events: [] } });
+        const result = parseStructuredResponse(json, testSchema);
+        expect(result).toEqual({ events: [] });
+    });
+
+    it('unwraps and re-parses when arguments is a JSON string', () => {
+        const json = JSON.stringify({ tool: 'extract', arguments: '{"events": ["event1", "event2"]}' });
+        const result = parseStructuredResponse(json, testSchema);
+        expect(result).toEqual({ events: ['event1', 'event2'] });
+    });
+
+    it('passes through normal objects without tool keys', () => {
+        const json = JSON.stringify({ events: ['normal'] });
+        const result = parseStructuredResponse(json, testSchema);
+        expect(result).toEqual({ events: ['normal'] });
+    });
+
+    it('does not unwrap arrays (even if they have tool-like structure)', () => {
+        const json = JSON.stringify([{ events: ['array-item'] }]);
+        // Should trigger array unwrapping, not tool unwrapping
+        const result = parseStructuredResponse(json, testSchema);
+        expect(result).toEqual({ events: ['array-item'] });
     });
 });
