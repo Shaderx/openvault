@@ -104,9 +104,10 @@ async function runWorkerLoop() {
             if (!data || !settings?.enabled) break;
 
             const tokenBudget = settings.extractionTokenBudget;
+            const maxTurns = settings.extractionMaxTurns || Infinity;
 
             // Get next batch
-            const batch = getNextBatch(chat, data, tokenBudget);
+            const batch = getNextBatch(chat, data, tokenBudget, false, maxTurns);
             if (!batch) break; // No complete batches, go to sleep
 
             // Process

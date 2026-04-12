@@ -1068,7 +1068,8 @@ export async function updateBudgetIndicators() {
     const { unextractedTokens, extractionPct, extractionBudget } = getExtractionBudgetProgress(
         chat,
         data,
-        settings.extractionTokenBudget
+        settings.extractionTokenBudget,
+        settings.extractionMaxTurns || Infinity
     );
 
     $('#openvault_extraction_budget_fill').css('width', `${extractionPct}%`);

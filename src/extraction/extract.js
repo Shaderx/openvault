@@ -928,7 +928,13 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
     if (!messageIds || messageIds.length === 0) {
         // Defensive: use scheduler to get next batch if no IDs provided
-        const batch = getNextBatch(chat, data, settings?.extractionTokenBudget || 2000);
+        const batch = getNextBatch(
+            chat,
+            data,
+            settings?.extractionTokenBudget || 2000,
+            false,
+            settings?.extractionMaxTurns || Infinity
+        );
         if (!batch) {
             logDebug('No messages to extract (scheduler returned empty batch)');
             return { status: 'skipped', reason: 'no_new_messages' };
@@ -1261,7 +1267,13 @@ export async function extractAllMessages(optionsOrCallback) {
             );
 
             // Get next batch using token budget
-            currentBatch = getNextBatch(freshChat, freshData, tokenBudget, isEmergencyCut);
+            currentBatch = getNextBatch(
+                freshChat,
+                freshData,
+                tokenBudget,
+                isEmergencyCut,
+                settings.extractionMaxTurns || Infinity
+            );
             if (!currentBatch) {
                 logDebug('Backfill: No more complete batches available');
                 break;
