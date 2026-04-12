@@ -345,6 +345,13 @@
                         <input type="range" id="openvault_extraction_token_budget" min="1000" max="32000" step="1000" />
                         <small class="openvault-hint">Chat history sent to the background AI per extraction call. Larger batches see more story context for better extractions, but LLM quality drops with too much input — past a certain size it starts missing or hallucinating events</small>
 
+                        <label for="openvault_extraction_max_turns">
+                            Max Turns per Batch: <span id="openvault_extraction_max_turns_value">30</span> turns
+                            <small class="openvault-default-hint" data-default-key="extractionMaxTurns"></small>
+                        </label>
+                        <input type="range" id="openvault_extraction_max_turns" min="10" max="100" step="1" />
+                        <small class="openvault-hint">Maximum conversation turns per extraction call. LLMs degrade when processing too many semantically dense exchanges — this caps the count regardless of token budget. The batch stops at whichever limit is hit first</small>
+
                         <label for="openvault_extraction_rearview">
                             Context Window Size: <span id="openvault_extraction_rearview_value">6000</span> tokens
                             <small class="openvault-default-hint" data-default-key="contextWindowSize"></small>

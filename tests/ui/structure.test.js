@@ -161,4 +161,37 @@ describe('Progressive Disclosure Integration', () => {
         expect(advancedHtml).toContain('Expert Tuning');
         expect(advancedHtml).toContain('openvault-warning-banner');
     });
+
+    describe('Max Turns per Batch slider', () => {
+        it('has slider with correct id, min, max, step', () => {
+            expect(html).toContain('id="openvault_extraction_max_turns"');
+            expect(html).toContain('min="10"');
+            expect(html).toContain('max="100"');
+            expect(html).toContain('step="1"');
+        });
+
+        it('has label with value span and default hint', () => {
+            expect(html).toContain('for="openvault_extraction_max_turns"');
+            expect(html).toContain('id="openvault_extraction_max_turns_value"');
+            expect(html).toContain('data-default-key="extractionMaxTurns"');
+        });
+
+        it('has descriptive hint', () => {
+            const sliderIndex = html.indexOf('id="openvault_extraction_max_turns"');
+            const hintAfter = html.indexOf('Maximum conversation turns per extraction call', sliderIndex);
+            expect(hintAfter).toBeGreaterThan(sliderIndex);
+        });
+
+        it('appears between extraction batch size and context window size', () => {
+            const batchIndex = html.indexOf('id="openvault_extraction_token_budget"');
+            const maxTurnsIndex = html.indexOf('id="openvault_extraction_max_turns"');
+            const rearviewIndex = html.indexOf('id="openvault_extraction_rearview"');
+
+            expect(batchIndex).toBeGreaterThan(-1);
+            expect(maxTurnsIndex).toBeGreaterThan(-1);
+            expect(rearviewIndex).toBeGreaterThan(-1);
+            expect(maxTurnsIndex).toBeGreaterThan(batchIndex);
+            expect(maxTurnsIndex).toBeLessThan(rearviewIndex);
+        });
+    });
 });

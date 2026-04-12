@@ -436,6 +436,7 @@ const PRESERVED_KEYS = [
 // Define fine-tune keys that should be reset to defaults
 const RESETTABLE_KEYS = [
     'extractionTokenBudget',
+    'extractionMaxTurns',
     'extractionRearviewTokens',
     'retrievalFinalTokens',
     'visibleChatBudget',
@@ -642,6 +643,7 @@ function bindUIElements() {
 
     // Extraction settings
     bindSetting('extraction_token_budget', 'extractionTokenBudget', 'int', () => updatePayloadCalculator());
+    bindSetting('extraction_max_turns', 'extractionMaxTurns', 'int', () => updatePayloadCalculator());
     bindSetting('extraction_rearview', 'extractionRearviewTokens', 'int', (v) => {
         updateWordsDisplay(v, 'openvault_extraction_rearview_words');
         updatePayloadCalculator();
@@ -934,6 +936,9 @@ export function updateUI() {
     // Extraction settings
     $('#openvault_extraction_token_budget').val(settings.extractionTokenBudget);
     $('#openvault_extraction_token_budget_value').text(settings.extractionTokenBudget);
+
+    $('#openvault_extraction_max_turns').val(settings.extractionMaxTurns);
+    $('#openvault_extraction_max_turns_value').text(settings.extractionMaxTurns);
 
     $('#openvault_extraction_rearview').val(settings.extractionRearviewTokens);
     $('#openvault_extraction_rearview_value').text(settings.extractionRearviewTokens);
