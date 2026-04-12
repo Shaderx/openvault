@@ -342,15 +342,15 @@
                             Extraction Batch Size: <span id="openvault_extraction_token_budget_value">8000</span> tokens
                             <small class="openvault-default-hint" data-default-key="extractionTokenBudget"></small>
                         </label>
-                        <input type="range" id="openvault_extraction_token_budget" min="4000" max="64000" step="1000" />
-                        <small class="openvault-hint">How much chat history to send to the background AI at once. Larger batches = fewer API calls but longer waits between updates</small>
+                        <input type="range" id="openvault_extraction_token_budget" min="1000" max="32000" step="1000" />
+                        <small class="openvault-hint">Chat history sent to the background AI per extraction call. Larger batches see more story context for better extractions, but LLM quality drops with too much input — past a certain size it starts missing or hallucinating events</small>
 
                         <label for="openvault_extraction_rearview">
                             Context Window Size: <span id="openvault_extraction_rearview_value">6000</span> tokens
                             <small class="openvault-default-hint" data-default-key="contextWindowSize"></small>
                         </label>
                         <input type="range" id="openvault_extraction_rearview" min="1000" max="32000" step="1000" />
-                        <small class="openvault-hint">How far back the AI reads to extract new memories. Larger = better context, but costs more tokens</small>
+                        <small class="openvault-hint">Existing memories shown to the background AI as context before each extraction batch. Helps it avoid extracting duplicates and maintain consistency. Larger = fewer missed facts, but eats into the background LLM's context window</small>
 
                         <!-- Context & Injection Budgets -->
                         <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
