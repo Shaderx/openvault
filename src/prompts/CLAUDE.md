@@ -17,7 +17,7 @@ Each domain follows the same structure: `builder.js` (assembles messages), `role
 
 ## `<think/>` TAG ENFORCEMENT
 - **Use `<think/>` exclusively.** Never prompt the model to output `<thinking>` or `<reasoning>`.
-- **Wrap structural guidelines in `<thinking_process>`.** Use this XML tag in system rules to define the steps, but instruct the model to execute those steps inside standard `<think/>` tags.
+- **Wrap structural guidelines in `<draft_process>`.** Use this XML tag in system rules to define the steps, and instruct the model to keep each draft step to 8 words max inside standard `<think/>` tags.
 - **Strip tags safely.** Run all LLM output through `stripThinkingTags()` before JSON parsing. Handle orphaned closing tags resulting from assistant prefilling.
 
 ## LANGUAGE MIRRORING
