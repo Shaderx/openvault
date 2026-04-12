@@ -4,7 +4,7 @@ import { EXECUTION_TRIGGER } from '../../../src/prompts/shared/formatters.js';
 
 describe('EXECUTION_TRIGGER', () => {
     it('should contain step-explicit output format', () => {
-        expect(EXECUTION_TRIGGER).toContain('Step 1: Write your reasoning');
+        expect(EXECUTION_TRIGGER).toContain('Step 1: Write concise draft notes');
         expect(EXECUTION_TRIGGER).toContain('Step 2: You MUST close the reasoning block');
         expect(EXECUTION_TRIGGER).toContain('Step 3: Output ONLY a single raw JSON object');
     });

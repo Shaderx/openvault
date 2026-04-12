@@ -3,21 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { GRAPH_RULES } from '../../../src/prompts/graph/rules.js';
 
 describe('GRAPH_RULES', () => {
-    it('should contain Step 4 with validation instruction', () => {
-        expect(GRAPH_RULES).toContain('Step 4: VALIDATION');
-        expect(GRAPH_RULES).toContain("exactly matches a 'name' defined in your entities array");
+    it('should contain Step 4 with verification instruction', () => {
+        expect(GRAPH_RULES).toContain('Step 4: Verify');
+        expect(GRAPH_RULES).toContain('matches Entity name');
     });
 
-    it('should contain Step 5 for Output (renamed from Step 4)', () => {
-        expect(GRAPH_RULES).toContain('Step 5: Output');
+    it('should contain Step 5 for output JSON', () => {
+        expect(GRAPH_RULES).toContain('Step 5: Count');
     });
 
-    it('should have validation step before output step', () => {
-        const validationIndex = GRAPH_RULES.indexOf('Step 4: VALIDATION');
-        const outputIndex = GRAPH_RULES.indexOf('Step 5: Output');
-        expect(validationIndex).toBeGreaterThan(-1);
-        expect(outputIndex).toBeGreaterThan(-1);
-        expect(validationIndex).toBeLessThan(outputIndex);
+    it('should have verification step before output step', () => {
+        const verifyIndex = GRAPH_RULES.indexOf('Step 4: Verify');
+        const countIndex = GRAPH_RULES.indexOf('Step 5: Count');
+        expect(verifyIndex).toBeGreaterThan(-1);
+        expect(countIndex).toBeGreaterThan(-1);
+        expect(verifyIndex).toBeLessThan(countIndex);
     });
 
     describe('OBJECT type definition', () => {
