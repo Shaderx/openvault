@@ -104,7 +104,7 @@ export async function refreshStats() {
         return;
     }
 
-    const { getTokenSum } = await import('../utils/tokens.js');
+    const { getSanitizedTokenSum: getTokenSum } = await import('../utils/message-sanitizer.js');
     const { getProcessedFingerprints, getUnextractedMessageIds } = await import('../extraction/scheduler.js');
 
     const memories = data[MEMORIES_KEY] || [];

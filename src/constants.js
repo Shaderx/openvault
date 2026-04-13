@@ -64,6 +64,7 @@ export const defaultSettings = {
     // Auto-hide settings
     autoHideEnabled: true,
     visibleChatBudget: 16000, // Maximum tokens visible in chat history
+    frozenReplies: 0, // Number of initial bot replies to keep always-visible (0 = disabled)
     // Backfill settings
     backfillMaxRPM: 20,
     // Concurrency settings (Phase 2 parallelism)
@@ -90,7 +91,7 @@ export const defaultSettings = {
     reflectionThreshold: 40,
     maxInsightsPerReflection: 3,
     // World context settings
-    worldContextBudget: 2000,
+    worldContextBudget: 2000, // Legacy — overridden by budget split when using shared pool
     communityDetectionInterval: 100,
     // Entity settings
     // Query context settings (previously only in QUERY_CONTEXT_DEFAULTS)
@@ -225,6 +226,13 @@ export const ENTITY_MERGE_THRESHOLD = 0.9;
 
 export const GRAPH_JACCARD_DUPLICATE_THRESHOLD = 0.6;
 export const ENTITY_TOKEN_OVERLAP_MIN_RATIO = 0.5;
+
+// Budget split ratios for the shared Final Context Budget pool.
+// scene_memory gets the lion's share; entities and world split the rest.
+export const BUDGET_RATIO_SCENE = 0.60;
+export const BUDGET_RATIO_ENTITY = 0.20;
+export const BUDGET_RATIO_WORLD = 0.20;
+
 export const REFLECTION_SKIP_SIMILARITY = 0.85;
 export const REFLECTION_MIN_MEMORIES = 40;
 export const BM25_K1 = 1.2;
@@ -273,6 +281,8 @@ export const UI_DEFAULT_HINTS = {
     maxReflectionsPerCharacter: defaultSettings.maxReflectionsPerCharacter,
     // Dedup
     dedupJaccardThreshold: defaultSettings.dedupJaccardThreshold,
+    // Auto-hide
+    frozenReplies: defaultSettings.frozenReplies,
 };
 
 // Performance monitoring thresholds (ms) — values above threshold show red

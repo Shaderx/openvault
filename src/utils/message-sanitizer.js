@@ -63,6 +63,42 @@ export function sanitizeMessageContent(mes, isUser) {
     return text;
 }
 
+// ── Regex fingerprint (invalidates cache when scripts change) ────────
+
+let _regexFingerprint = '';
+
+/**
+ * Build a lightweight fingerprint of active outgoing-prompt regex scripts.
+ * Changes when scripts are toggled, added, removed, or edited.
+ */
+function getRegexFingerprint() {
+    try {
+        if (!_regexEngine?.getRegexScripts) return '';
+        const scripts = _regexEngine.getRegexScripts();
+        const active = scripts
+            .filter((s) => !s.disabled && s.promptOnly)
+            .map((s) => `${s.scriptName}|${s.findRegex}|${s.replaceString}`)
+            .join('\n');
+        return active;
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * Recompute the regex fingerprint and clear the sanitized token cache
+ * if the active regex configuration has changed.
+ * Called automatically before token lookups and can be called externally
+ * (e.g. on regex toggle events).
+ */
+export function refreshRegexFingerprint() {
+    const fp = getRegexFingerprint();
+    if (fp !== _regexFingerprint) {
+        _regexFingerprint = fp;
+        _sanitizedTokenCache.clear();
+    }
+}
+
 // ── Sanitized token counting (for accurate batch sizing) ────────────
 
 const MAX_CACHE_SIZE = 2000;
@@ -77,6 +113,8 @@ const _sanitizedTokenCache = new Map();
  * @returns {number}
  */
 export function getSanitizedTokenCount(chat, index) {
+    refreshRegexFingerprint();
+
     const msg = chat[index];
     const raw = msg?.mes || '';
     const key = `san_${index}_${raw.length}`;

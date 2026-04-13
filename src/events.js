@@ -60,6 +60,24 @@ export async function autoHideOldMessages() {
             if (!chat[i].is_system) visibleIndices.push(i);
         }
 
+        // Freeze initial replies: count bot messages to determine the boundary
+        const frozenReplies = settings.frozenReplies || 0;
+        let frozenBoundary = 0;
+        if (frozenReplies > 0) {
+            let botCount = 0;
+            for (const idx of visibleIndices) {
+                if (!chat[idx].is_user) botCount++;
+                if (botCount >= frozenReplies) {
+                    frozenBoundary = idx + 1;
+                    break;
+                }
+            }
+        }
+
+        const hideableIndices = frozenReplies > 0
+            ? visibleIndices.filter(idx => idx >= frozenBoundary)
+            : visibleIndices;
+
         // Sum visible tokens
         const totalVisibleTokens = getTokenSum(chat, visibleIndices);
         if (totalVisibleTokens <= visibleChatBudget) return;
@@ -67,11 +85,11 @@ export async function autoHideOldMessages() {
         // Calculate excess
         const excess = totalVisibleTokens - visibleChatBudget;
 
-        // Collect oldest visible messages to hide, skipping unextracted
+        // Collect oldest visible messages to hide, skipping unextracted and frozen
         const toHide = [];
         let accumulated = 0;
 
-        for (const idx of visibleIndices) {
+        for (const idx of hideableIndices) {
             if (accumulated >= excess) break;
 
             // Only hide already-extracted messages; skip unextracted

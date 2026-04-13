@@ -70,6 +70,11 @@ These fix real issues in upstream and should ideally be contributed back.
   - Changed default from "↓Main" (position 1) to "↓Char" (position 5) — "After char defs" has greater impact than "After system prompt" and matches what lorebook WI entries call "↓Char".
   - All fallback `?? 1` references updated to `?? 5` in `retrieve.js`, `settings.js`, `render.js`.
 
+### BUG-9: EVENT_SCHEMA example missing temporal_anchor and is_transient fields
+- **Files:** `src/prompts/events/schema.js`
+- **Problem:** The JSON example in `EVENT_SCHEMA` (the authoritative "output this shape" shown to every extraction model) only listed 7 fields — `temporal_anchor` and `is_transient` were absent. While `EVENT_RULES` described both fields in prose and all few-shot examples included them, weaker/local models prioritize the example shape over rules text and omit any field not present in the schema example. This caused inconsistent `temporal_anchor: null` (missing entirely, not explicitly null) across extractions depending on model capability.
+- **Fix:** Added `"temporal_anchor": null` and `"is_transient": false` to the JSON example, plus brief field definitions in the FIELD DEFINITIONS section. Now all models — regardless of instruction-following strength — see the fields in the canonical output shape.
+
 ---
 
 ## Personal Features (keep separate)
@@ -145,12 +150,37 @@ These are fork-only features. Isolate in dedicated files where possible.
   - `src/extraction/scheduler.js` — 1 import line changed: aliases `getSanitizedTokenCount`/`Sum` as `getMessageTokenCount`/`getTokenSum` so batch sizing uses cleaned content
   - `src/events.js` — 2 lines: import + call `clearSanitizedTokenCache()` alongside existing `clearTokenCache()`
 - **Why:** Raw `m.mes` may contain think blocks that inflate token counts, causing more batches than necessary. Outgoing-prompt regex scripts (OOC removal, formatting fixes, token reduction) should apply to extraction just like they do to the main AI.
+- **Bug fixed (2026-04-13):** UI budget bars in `status.js` and `settings.js` imported raw `getTokenSum` from `tokens.js` instead of `getSanitizedTokenSum` from `message-sanitizer.js`. The core scheduler used sanitized counts (so backfill correctly blocked when threshold wasn't met), but the bars displayed raw token counts — making the bar appear stuck/wrong. Also: the sanitized token cache keyed on `index + raw.length` which didn't change when regex scripts were toggled, so cached values persisted across regex changes. Added `refreshRegexFingerprint()` that detects active regex config changes and auto-clears the cache.
 - **Merge strategy:** Core logic in new file. Only 3 upstream files touched with 1-2 line changes each.
 
 ### FEAT-11: Sidebar Reflection Badge
 - **Files:** `src/ui/side-panel.js` (fork-owned — **zero upstream file changes**)
 - **What it does:** Shows a `💡 Reflection` badge on reflection memories in the sidebar, displayed in the time anchor position (since reflections don't have time anchors). Regular memories still show the clock icon + anchor text as before.
 - **Merge strategy:** Change is entirely within our fork-owned file. Will never conflict with upstream merges.
+
+### FEAT-12: Frozen Initial Replies (Style Anchoring)
+- **Files:** `src/constants.js` (+`frozenReplies` default), `src/events.js` (auto-hide skip), `src/retrieval/retrieve.js` (+`getFrozenAwareDepth` + injection depth), `src/ui/settings.js` (+binding), `templates/settings_panel.html` (+slider)
+- **What it does:** Keeps the first N bot replies (and their interleaved user messages) always visible in chat, preventing auto-hide from removing them. When active, the `<scene_memory>` injection is placed right after the frozen messages instead of at the top of chat. This preserves the opening writing style as a permanent style anchor — OpenVault memories capture plot events but not prose style, so without this the model loses its tone reference as the conversation grows.
+- **Merge strategy:** All changes are additive blocks, no existing logic modified. `constants.js`: +1 default, +1 hint. `events.js`: ~10 lines inserted after `visibleIndices` loop. `retrieve.js`: +1 helper function, +3 lines in `injectContext`. `settings_panel.html`: +6 lines. `settings.js`: +4 lines. Could be PR'd upstream.
+
+### FEAT-14: Entity Context Injection (System Prompt)
+- **Files:** `src/retrieval/entity-context.js` (NEW), `src/retrieval/retrieve.js` (+`_buildMinimalRetrievalContext`, modified `injectContext`), `src/constants.js`
+- **What it does:** Injects relevant entity descriptions (characters, locations, items, organizations) into the system prompt area (↓Main / IN_PROMPT position), giving the LLM "who/what/where" reference knowledge before it reads any chat messages. Entities are selected by detecting mentions in recent chat via graph-anchored stem matching, then enriched with 1-hop connected entities from graph edges. Active characters are excluded (already in card definitions).
+- **Design rationale:** Entities are static reference material (like Lorebook entries), while communities are dynamic thematic summaries. Entities belong at the system level; communities belong near/in chat. This separation mirrors how SillyTavern's own World Info uses "Before/After Char Defs" positions for reference data.
+- **Merge strategy:** One new file (`entity-context.js`). `retrieve.js`: +1 helper function, ~12 lines added to `injectContext`. Could be PR'd upstream.
+
+### FEAT-15: Shared Context Budget Pool (60/20/20 Split)
+- **Files:** `src/constants.js` (+`BUDGET_RATIO_SCENE/ENTITY/WORLD`, removed `entityContextBudget`), `src/retrieval/retrieve.js` (modified `buildRetrievalContext` + `injectContext`)
+- **What it does:** Replaces the separate fixed-cap budgets for scene memories, entities, and world context with a single shared pool derived from "Final Context Budget" (`retrievalFinalTokens`). The pool is split: **60% scene memories**, **20% entity context**, **20% world/communities**. With the default 10,000 pool this gives scene=6000, entity=2000, world=2000 tokens. With a 15,000 pool: scene=9000, entity=3000, world=3000.
+- **Design rationale:** A single slider controls the total OpenVault injection footprint, making budget tuning intuitive. The 60/20/20 split prioritizes narrative memories (the largest and most dynamic block) while giving meaningful budgets to reference data (entities) and thematic context (communities). Ratios are exported constants, easy to adjust.
+- **Merge strategy:** `constants.js`: +3 exported ratio constants, -1 setting. `retrieve.js`: ~6 lines changed in `buildRetrievalContext` to compute split, ~1 line in `injectContext`. Minimal diff, could be PR'd upstream.
+
+### FEAT-13: Narrative Bridge for Hidden Message Gaps
+- **Files:** `src/retrieval/retrieve.js` (+`countHiddenMessages`, +`prependGapNotice`, +`buildEmptyBridge`, modified `injectContext`)
+- **What it does:** When auto-hide removes messages from the middle of chat, the LLM sees a jarring jump from frozen opening messages to recent messages with no explanation. This feature detects the gap (`openvault_hidden` flag) and handles two cases:
+  - **With memories:** Prepends a notice inside the existing `<scene_memory>` block explaining that these memories summarize N hidden messages, telling the LLM to use them for narrative continuity.
+  - **Without memories:** Injects a minimal `<scene_memory>` bridge at the cut point noting the gap and instructing the LLM to continue naturally.
+- **Merge strategy:** Three private helper functions + ~10 lines added to `injectContext`. No existing logic modified, only the injection path is extended. Could be PR'd upstream alongside FEAT-12.
 
 ---
 

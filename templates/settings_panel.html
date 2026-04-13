@@ -369,6 +369,13 @@
                             </label>
                             <input type="range" id="openvault_visible_chat_budget" min="4000" max="64000" step="1000" />
                             <small class="openvault-hint">Maximum tokens visible in chat history. Oldest messages are auto-hidden when exceeded.</small>
+
+                            <label for="openvault_frozen_replies">
+                                Frozen Initial Replies: <span id="openvault_frozen_replies_value">0</span>
+                                <small class="openvault-default-hint" data-default-key="frozenReplies"></small>
+                            </label>
+                            <input type="range" id="openvault_frozen_replies" min="0" max="20" step="1" />
+                            <small class="openvault-hint">Keep the first N bot replies (and interleaved user messages) always visible to anchor writing style. 0 = off.</small>
                         </div>
 
                         <!-- Payload Calculator -->

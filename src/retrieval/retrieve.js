@@ -20,6 +20,9 @@
  */
 
 import {
+    BUDGET_RATIO_ENTITY,
+    BUDGET_RATIO_SCENE,
+    BUDGET_RATIO_WORLD,
     CHARACTERS_KEY,
     COMBINED_BOOST_WEIGHT,
     extensionName,
@@ -36,6 +39,7 @@ import { getOpenVaultData } from '../store/chat-data.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled, safeSetExtensionPrompt } from '../utils/st-helpers.js';
 import { cacheRetrievalDebug } from './debug-cache.js';
+import { buildEntityContextFromRetrieval } from './entity-context.js';
 import { formatContextForInjection } from './formatting.js';
 import { selectRelevantMemories } from './scoring.js';
 import { retrieveWorldContext } from './world-context.js';
@@ -152,6 +156,14 @@ export function buildRetrievalContext(opts = {}) {
         transientDecayMultiplier: settings.transientDecayMultiplier,
     };
 
+    // Shared budget pool: split retrievalFinalTokens into scene / entity / world
+    const totalPool = settings.retrievalFinalTokens || 10000;
+    const sceneBudget = Math.floor(totalPool * BUDGET_RATIO_SCENE);
+    const entityBudget = Math.floor(totalPool * BUDGET_RATIO_ENTITY);
+    const worldBudget = Math.floor(totalPool * BUDGET_RATIO_WORLD);
+
+    logDebug(`Budget split: total=${totalPool} → scene=${sceneBudget} (${BUDGET_RATIO_SCENE * 100}%) entity=${entityBudget} (${BUDGET_RATIO_ENTITY * 100}%) world=${worldBudget} (${BUDGET_RATIO_WORLD * 100}%)`);
+
     return {
         recentContext,
         userMessages,
@@ -166,14 +178,120 @@ export function buildRetrievalContext(opts = {}) {
         primaryCharacter,
         activeCharacters: getActiveCharacters(),
         headerName: isGroupChat ? povCharacters[0] : 'Scene',
-        finalTokens: settings.retrievalFinalTokens,
-        worldContextBudget: settings.worldContextBudget,
+        finalTokens: sceneBudget,
+        worldContextBudget: worldBudget,
+        entityContextBudget: entityBudget,
         graphNodes: data?.graph?.nodes || {},
         graphEdges: data?.graph?.edges || {},
         allAvailableMemories: data?.[MEMORIES_KEY] || [], // Full memory list for IDF
         idfCache: data?.idf_cache || null, // Pre-computed IDF cache
         queryConfig,
         scoringConfig,
+    };
+}
+
+/**
+ * Compute the IN_CHAT depth that places injection right after frozen replies.
+ * Returns null when frozen replies are disabled (caller should use default behavior).
+ * @param {Object} settings - Extension settings
+ * @returns {number|null} Depth value, or null if frozen replies are off
+ */
+function getFrozenAwareDepth(settings) {
+    const frozenReplies = settings?.frozenReplies || 0;
+    if (frozenReplies <= 0) return null;
+
+    const chat = getDeps().getContext().chat || [];
+    let visibleCount = 0;
+    let frozenMsgCount = 0;
+    let botCount = 0;
+    let boundaryFound = false;
+
+    for (const m of chat) {
+        if (m.is_system) continue;
+        visibleCount++;
+        if (!boundaryFound) {
+            frozenMsgCount++;
+            if (!m.is_user) botCount++;
+            if (botCount >= frozenReplies) boundaryFound = true;
+        }
+    }
+
+    if (!boundaryFound) return null;
+    const depth = Math.max(0, visibleCount - frozenMsgCount);
+    logDebug(`Frozen-aware depth: visible=${visibleCount} frozen=${frozenMsgCount} → depth=${depth}`);
+    return depth;
+}
+
+/**
+ * Count messages hidden by auto-hide (openvault_hidden flag).
+ * @param {Object[]} chat - Chat messages array
+ * @returns {{hiddenCount: number, hiddenTurns: number}}
+ */
+function countHiddenMessages(chat) {
+    let hiddenCount = 0;
+    for (const m of chat) {
+        if (m.openvault_hidden) hiddenCount++;
+    }
+    return { hiddenCount, hiddenTurns: Math.ceil(hiddenCount / 2) };
+}
+
+/**
+ * Prepend a gap/context notice into existing <scene_memory> content.
+ * Inserts the notice right after the opening <scene_memory> tag line.
+ * @param {string} contextText - Formatted memory XML string
+ * @param {number} hiddenCount - Number of hidden messages
+ * @param {number} hiddenTurns - Approximate number of hidden exchanges
+ * @returns {string} Modified context with gap notice inserted
+ */
+function prependGapNotice(contextText, hiddenCount, hiddenTurns) {
+    const notice = `[The following summarizes ${hiddenCount} messages (~${hiddenTurns} exchanges) not shown in chat. Use these memories to maintain narrative continuity across the gap.]`;
+    return contextText.replace(
+        '<scene_memory>',
+        `<scene_memory>\n${notice}`,
+    );
+}
+
+/**
+ * Build a minimal narrative bridge when no memories exist for hidden messages.
+ * @param {number} hiddenCount - Number of hidden messages
+ * @param {number} hiddenTurns - Approximate number of hidden exchanges
+ * @returns {string} Bridge XML block
+ */
+function buildEmptyBridge(hiddenCount, hiddenTurns) {
+    return [
+        '<scene_memory>',
+        `[${hiddenCount} messages (~${hiddenTurns} exchanges) occurred between the opening scene above and the recent conversation below but are not shown. No extracted memories are available yet for this section.]`,
+        '[Continue the narrative naturally from the most recent visible messages. Do not reference or acknowledge this gap directly.]',
+        '</scene_memory>',
+    ].join('\n');
+}
+
+/**
+ * Build a lightweight context object for entity detection.
+ * Avoids the full buildRetrievalContext() overhead (embeddings, IDF, etc.)
+ * since entity detection only needs recent messages and graph data.
+ */
+function _buildMinimalRetrievalContext(deps, settings, data) {
+    const context = deps.getContext();
+    const chat = context.chat || [];
+    const recentContext = chat
+        .filter((m) => !m.is_system)
+        .slice(-20)
+        .map((m) => m.mes)
+        .join('\n');
+
+    return {
+        recentContext,
+        activeCharacters: getActiveCharacters(),
+        graphNodes: data?.graph?.nodes || {},
+        graphEdges: data?.graph?.edges || {},
+        queryConfig: {
+            entityWindowSize: settings?.entityWindowSize ?? 10,
+            embeddingWindowSize: settings?.embeddingWindowSize ?? 5,
+            recencyDecayFactor: settings?.recencyDecayFactor ?? 0.09,
+            topEntitiesCount: settings?.topEntitiesCount ?? 5,
+            entityBoostWeight: settings?.entityBoostWeight ?? 5.0,
+        },
     };
 }
 
@@ -194,15 +312,40 @@ export function injectContext(contextText, worldText = '') {
     cachedContent.world = worldText || '';
 
     // Get position settings with defaults
-    const memoryPosition = settings?.injection?.memory?.position ?? 5;
-    const memoryDepth = settings?.injection?.memory?.depth ?? 4;
+    let memoryPosition = settings?.injection?.memory?.position ?? 5;
+    let memoryDepth = settings?.injection?.memory?.depth ?? 4;
     const worldPosition = settings?.injection?.world?.position ?? 5;
     const worldDepth = settings?.injection?.world?.depth ?? 4;
 
-    // Inject memory content
-    if (!contextText) {
+    // When frozen replies are active and memory is at TOP_OF_CHAT (position 5),
+    // switch to IN_CHAT with a computed depth that places injection after frozen messages
+    const frozenDepth = getFrozenAwareDepth(settings);
+    if (memoryPosition === 5 && frozenDepth !== null) {
+        memoryPosition = 4; // IN_CHAT with exact depth
+        memoryDepth = frozenDepth;
+    }
+
+    // Detect hidden message gap and inject appropriate context:
+    // - With memories: prepend a notice explaining these summarize hidden messages
+    // - Without memories: inject a minimal bridge noting the gap
+    const chat = deps.getContext().chat || [];
+    const { hiddenCount, hiddenTurns } = countHiddenMessages(chat);
+    let effectiveContent = contextText;
+
+    if (hiddenCount > 0) {
+        if (effectiveContent) {
+            effectiveContent = prependGapNotice(effectiveContent, hiddenCount, hiddenTurns);
+            logDebug(`Gap notice prepended to scene_memory (${hiddenCount} hidden msgs)`);
+        } else {
+            effectiveContent = buildEmptyBridge(hiddenCount, hiddenTurns);
+            logDebug(`Empty bridge injected (${hiddenCount} hidden msgs, no memories)`);
+        }
+    }
+
+    // Inject memory / bridge content
+    if (!effectiveContent) {
         safeSetExtensionPrompt('', 'openvault', memoryPosition, memoryDepth);
-    } else if (safeSetExtensionPrompt(contextText, 'openvault', memoryPosition, memoryDepth)) {
+    } else if (safeSetExtensionPrompt(effectiveContent, 'openvault', memoryPosition, memoryDepth)) {
         logDebug('Context injected into prompt');
     } else {
         logDebug('Failed to inject context');
@@ -213,6 +356,21 @@ export function injectContext(contextText, worldText = '') {
         safeSetExtensionPrompt('', 'openvault_world', worldPosition, worldDepth);
     } else {
         safeSetExtensionPrompt(worldText, 'openvault_world', worldPosition, worldDepth);
+    }
+
+    // Build and inject entity context at ↓Main (after system prompt)
+    // Entities are independent of memories — always inject when graph data exists.
+    // Budget comes from the shared pool (20% of retrievalFinalTokens).
+    const data = getOpenVaultData();
+    const graphNodes = data?.graph?.nodes;
+    if (graphNodes && Object.keys(graphNodes).length > 0) {
+        const totalPool = settings?.retrievalFinalTokens || 10000;
+        const entityBudget = Math.floor(totalPool * BUDGET_RATIO_ENTITY);
+        const ctx = _buildMinimalRetrievalContext(deps, settings, data);
+        const entityText = buildEntityContextFromRetrieval(ctx, entityBudget);
+        safeSetExtensionPrompt(entityText || '', 'openvault_entities', 1, 0);
+    } else {
+        safeSetExtensionPrompt('', 'openvault_entities', 1, 0);
     }
 
     // Inject post-history prompt (IN_CHAT at depth 0 = after all messages)
@@ -289,7 +447,7 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
         }
     }
 
-    // Inject both memory and world content together
+    // Inject memory and world content (entity context is built inside injectContext)
     injectContext(formattedContext, worldText);
 
     // Cache injected context for debug export
@@ -395,8 +553,9 @@ export async function retrieveAndInjectContext() {
                 chatLength: ctx.chatLength,
                 primaryCharacter: ctx.primaryCharacter,
                 activeCharacters: ctx.activeCharacters,
-                tokenBudget: ctx.finalTokens,
-                worldContextBudget: ctx.worldContextBudget,
+                sceneBudget: ctx.finalTokens,
+                worldBudget: ctx.worldContextBudget,
+                entityBudget: ctx.entityContextBudget,
             },
         });
 
@@ -470,7 +629,7 @@ export async function updateInjection(pendingUserMessage = '') {
     // Filter memories by POV
     const accessibleMemories = filterMemoriesByPOV(candidateMemories, povCharacters, data);
     logDebug(
-        `POV filter: ${memories.length} total -> ${hiddenMemories.length} hidden + ${reflections.length} reflections -> ${accessibleMemories.length} accessible`
+        `Retrieval filter: total=${memories.length} hidden=${hiddenMemories.length} reflections=${reflections.length} candidates=${candidateMemories.length} accessible=${accessibleMemories.length}`
     );
 
     // Fallback to candidate memories if POV filter is too strict

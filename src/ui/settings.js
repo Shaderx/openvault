@@ -530,6 +530,7 @@ const RESETTABLE_KEYS = [
     'extractionRearviewTokens',
     'retrievalFinalTokens',
     'visibleChatBudget',
+    'frozenReplies',
     'worldContextBudget',
     'reflectionThreshold',
     'maxInsightsPerReflection',
@@ -748,6 +749,7 @@ function bindUIElements() {
 
     // Auto-hide settings
     bindSetting('auto_hide', 'autoHideEnabled', 'bool');
+    bindSetting('frozen_replies', 'frozenReplies');
 
     // Scoring weights (alpha-blend)
     bindSetting('alpha', 'alpha', 'float');
@@ -1043,6 +1045,10 @@ export function updateUI() {
     $('#openvault_visible_chat_budget').val(settings.visibleChatBudget);
     $('#openvault_visible_chat_budget_value').text(settings.visibleChatBudget);
 
+    // Frozen replies
+    $('#openvault_frozen_replies').val(settings.frozenReplies ?? 0);
+    $('#openvault_frozen_replies_value').text(settings.frozenReplies ?? 0);
+
     // Retrieval pipeline settings
     $('#openvault_final_budget').val(settings.retrievalFinalTokens);
     $('#openvault_final_budget_value').text(settings.retrievalFinalTokens);
@@ -1160,7 +1166,7 @@ export async function updateBudgetIndicators() {
         return;
     }
 
-    const { getTokenSum } = await import('../utils/tokens.js');
+    const { getSanitizedTokenSum: getTokenSum } = await import('../utils/message-sanitizer.js');
     const { getExtractionBudgetProgress } = await import('../extraction/scheduler.js');
 
     // Extraction indicator - use domain function
