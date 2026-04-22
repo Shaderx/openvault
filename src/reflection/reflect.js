@@ -16,7 +16,6 @@
 import {
     defaultSettings,
     extensionName,
-    REFLECTION_CANDIDATE_LIMIT,
     REFLECTION_DEDUP_REJECT_THRESHOLD,
     REFLECTION_DEDUP_REPLACE_THRESHOLD,
     REFLECTION_MIN_MEMORIES,
@@ -38,7 +37,7 @@ import { cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { generateId } from '../store/chat-data.js';
 import { cyrb53, getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
-import { sortMemoriesBySequence } from '../utils/text.js';
+import { sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 
 /**
  * Check if a character has accumulated enough importance to trigger reflection.
@@ -199,9 +198,12 @@ export function shouldSkipReflectionGeneration(
  * @param {string} characterName
  * @param {Array} allMemories - Full memory stream
  * @param {Object} characterStates - For POV filtering
+ * @param {Object} [options={}]
+ * @param {boolean} [options.force=false] - Skip pre-flight similarity gate (for manual generation)
  * @returns {Promise<{reflections: Array, stChanges: import('../types.d.ts').StSyncChanges}>} Reflections and ST sync changes
  */
-export async function generateReflections(characterName, allMemories, characterStates) {
+export async function generateReflections(characterName, allMemories, characterStates, options = {}) {
+    const { force = false } = options;
     const t0 = performance.now();
     const deps = getDeps();
     const settings = deps.getExtensionSettings()?.[extensionName] || {};
@@ -209,6 +211,7 @@ export async function generateReflections(characterName, allMemories, characterS
     const outputLanguage = resolveOutputLanguage(settings);
     const prefill = resolveExtractionPrefill(settings);
     const maxReflections = settings.maxReflectionsPerCharacter;
+    const contextBudget = settings.reflectionContextTokens || defaultSettings.reflectionContextTokens;
 
     // Archive old reflections if cap is reached
     const characterReflections = allMemories.filter(
@@ -226,9 +229,25 @@ export async function generateReflections(characterName, allMemories, characterS
     // Filter memories to what this character knows
     const data = { character_states: characterStates };
     const accessibleMemories = filterMemoriesByPOV(allMemories, [characterName], data);
-    const recentMemories = sortMemoriesBySequence(accessibleMemories, false).slice(0, REFLECTION_CANDIDATE_LIMIT);
 
-    // Include old reflections for potential synthesis
+    // Token-budgeted candidate selection (replaces fixed REFLECTION_CANDIDATE_LIMIT)
+    // 80% budget for recent events, 20% for existing reflections
+    const eventBudget = Math.floor(contextBudget * 0.8);
+    const reflectionBudget = contextBudget - eventBudget;
+
+    const sortedRecent = sortMemoriesBySequence(accessibleMemories.filter((m) => m.type !== 'reflection'), false);
+    const recentMemories = sliceToTokenBudget(sortedRecent, eventBudget);
+
+    // Existing reflections for this character (separate section in prompt)
+    const existingReflections = accessibleMemories.filter(
+        (m) => m.type === 'reflection' && m.character === characterName && !m.archived
+    );
+    const budgetedReflections = sliceToTokenBudget(
+        sortMemoriesBySequence(existingReflections, false),
+        reflectionBudget
+    );
+
+    // Include old reflections for potential synthesis in candidate set
     const oldReflections = accessibleMemories.filter((m) => m.type === 'reflection' && (m.level || 1) >= 1);
 
     // Combine and deduplicate by id (recent memories take precedence if duplicate)
@@ -239,35 +258,37 @@ export async function generateReflections(characterName, allMemories, characterS
         return { reflections: [], stChanges: { toSync: [] } };
     }
 
-    // Get existing reflections for this character
-    const existingReflections = accessibleMemories.filter(
-        (m) => m.type === 'reflection' && m.character === characterName
-    );
+    // Pre-flight similarity gate (skipped in force mode for manual generation)
+    if (!force) {
+        const recentEvents = recentMemories.filter((m) => m.type === 'event');
+        const { shouldSkip, reason: skipReason } = shouldSkipReflectionGeneration(
+            recentEvents.slice(0, 10),
+            existingReflections,
+            REFLECTION_SKIP_SIMILARITY
+        );
 
-    // For pre-flight gate, use only events (not reflections) to check alignment
-    const recentEvents = recentMemories.filter((m) => m.type === 'event');
-
-    // Pre-flight similarity gate: check if recent events align with existing insights
-    const { shouldSkip, reason: skipReason } = shouldSkipReflectionGeneration(
-        recentEvents.slice(0, 10), // Check top 10 most recent
-        existingReflections,
-        REFLECTION_SKIP_SIMILARITY
-    );
-
-    if (shouldSkip) {
-        logDebug(`Reflection: ${skipReason} for ${characterName}`);
-        // Note: Caller should reset importance_sum for this character
-        return { reflections: [], stChanges: { toSync: [] } };
+        if (shouldSkip) {
+            logDebug(`Reflection: ${skipReason} for ${characterName}`);
+            return { reflections: [], stChanges: { toSync: [] } };
+        }
     }
 
-    // Single unified reflection call (replaces Step 1 + Step 2)
+    // Resolve character description for context enrichment
+    const context = deps.getContext();
+    const charDesc = context?.characters?.[context?.characterId]?.description || '';
+
+    // Single unified reflection call
     const reflectionPrompt = buildUnifiedReflectionPrompt(
         characterName,
         candidateSet,
+        budgetedReflections,
+        charDesc,
         preamble,
         outputLanguage,
         prefill
     );
+
+    logDebug(`Reflection: Context for ${characterName}: ${recentMemories.length} events (${eventBudget}tk), ${budgetedReflections.length} existing reflections (${reflectionBudget}tk), charDesc=${charDesc.length > 0 ? 'yes' : 'no'}`);
     const reflectionResponse = await callLLM(reflectionPrompt, LLM_CONFIGS.reflection, { structured: true });
     const { reflections } = parseUnifiedReflectionResponse(reflectionResponse);
 
@@ -275,7 +296,7 @@ export async function generateReflections(characterName, allMemories, characterS
 
     // Convert unified reflections to memory objects
     const now = deps.Date.now();
-    const newReflections = reflections.map(({ insight, evidence_ids }) => {
+    const newReflections = reflections.map(({ insight, importance: llmImportance, evidence_ids }) => {
         // Detect meta-synthesis: if evidence_ids contain reflection IDs (starting with "ref_"),
         // this is a Level 2+ reflection synthesizing existing reflections
         const hasReflectionEvidence = evidence_ids.some((id) => id.startsWith('ref_'));
@@ -287,7 +308,7 @@ export async function generateReflections(characterName, allMemories, characterS
             type: 'reflection',
             summary: insight,
             tokens: tokenize(insight || ''),
-            importance: 4,
+            importance: Math.max(1, Math.min(5, llmImportance || 4)),
             sequence: now,
             characters_involved: [characterName],
             character: characterName,

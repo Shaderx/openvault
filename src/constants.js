@@ -89,6 +89,7 @@ export const defaultSettings = {
     transientDecayMultiplier: 5.0, // Multiplier for short-term (transient) memory decay
     // Reflection settings
     reflectionThreshold: 40,
+    reflectionContextTokens: 20000,
     maxInsightsPerReflection: 3,
     // World context settings
     worldContextBudget: 2000, // Legacy — overridden by budget split when using shared pool

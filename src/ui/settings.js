@@ -506,6 +506,95 @@ async function handleResetAndBackfill() {
     });
 }
 
+/**
+ * Manually trigger reflection generation for all characters with existing memories.
+ * Bypasses the importance threshold — runs for every character that has at least 3 memories.
+ */
+async function handleGenerateReflections() {
+    const { isWorkerRunning } = await import('../state.js');
+    if (isWorkerRunning()) {
+        showToast('warning', 'Background extraction in progress. Please wait.', 'OpenVault');
+        return;
+    }
+
+    const data = getOpenVaultData();
+    if (!data) {
+        showToast('warning', 'No chat data loaded.', 'OpenVault');
+        return;
+    }
+
+    const memories = data.memories || [];
+    if (memories.length < 3) {
+        showToast('warning', 'Need at least 3 memories to generate reflections.', 'OpenVault');
+        return;
+    }
+
+    const characterSet = new Set();
+    for (const m of memories) {
+        if (m.type === 'event') {
+            for (const c of m.characters_involved || []) characterSet.add(c);
+        }
+    }
+
+    if (characterSet.size === 0) {
+        showToast('warning', 'No characters found in memories.', 'OpenVault');
+        return;
+    }
+
+    const characterNames = [...characterSet];
+    const $btn = $('#openvault_generate_reflections_btn');
+    $btn.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Generating...');
+
+    try {
+        const { generateReflections } = await import('../reflection/reflect.js');
+        const { addMemories } = await import('../store/chat-data.js');
+        const { applySyncChanges } = await import('../extraction/extract.js');
+        const deps = getDeps();
+        const settings = deps.getExtensionSettings()?.[extensionName] || {};
+        const rpmPause = () => new Promise((r) => setTimeout(r, 3000));
+
+        let totalGenerated = 0;
+        for (let i = 0; i < characterNames.length; i++) {
+            const charName = characterNames[i];
+            $btn.html(`<i class="fa-solid fa-spinner fa-spin"></i> ${charName} (${i + 1}/${characterNames.length})...`);
+
+            try {
+                if (i > 0) await rpmPause();
+
+                const { reflections, stChanges } = await generateReflections(
+                    charName,
+                    data.memories || [],
+                    data.character_states || {},
+                    { force: true }
+                );
+
+                if (reflections.length > 0) {
+                    addMemories(reflections);
+                    totalGenerated += reflections.length;
+                }
+                await applySyncChanges(stChanges);
+            } catch (err) {
+                logError(`Manual reflection failed for ${charName}`, err);
+            }
+        }
+
+        await deps.saveChatConditional();
+        refreshAllUI();
+        showToast(
+            totalGenerated > 0 ? 'success' : 'info',
+            totalGenerated > 0
+                ? `Generated ${totalGenerated} reflection${totalGenerated !== 1 ? 's' : ''} for ${characterNames.length} character${characterNames.length !== 1 ? 's' : ''}.`
+                : `No new reflections generated (existing insights may already cover recent events).`,
+            'OpenVault'
+        );
+    } catch (err) {
+        logError('Manual reflection generation failed', err);
+        showToast('error', `Reflection generation failed: ${err.message}`, 'OpenVault');
+    } finally {
+        $btn.prop('disabled', false).html('<i class="fa-solid fa-lightbulb"></i> Generate Reflections Now');
+    }
+}
+
 // Define keys that should be preserved during settings reset
 const PRESERVED_KEYS = [
     'extractionProfile',
@@ -899,6 +988,9 @@ function bindUIElements() {
     $('#openvault_delete_chat_btn').on('click', handleDeleteChatData);
     $('#openvault_reset_backfill_btn').on('click', handleResetAndBackfill);
     $('#openvault_export_debug_btn').on('click', exportToClipboard);
+
+    // Reflection manual trigger
+    $('#openvault_generate_reflections_btn').on('click', handleGenerateReflections);
 
     // Memory browser filters
     $('#openvault_filter_type').on('change', function () {

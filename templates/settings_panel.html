@@ -416,6 +416,14 @@
                         </label>
                         <input type="range" id="openvault_max_reflections" min="10" max="200" step="10" />
                         <small class="openvault-hint">Maximum stored insights per character. Older ones are archived when exceeded</small>
+
+                        <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div id="openvault_reflection_progress" style="margin-bottom: 8px;"></div>
+                            <button id="openvault_generate_reflections_btn" class="menu_button wide">
+                                <i class="fa-solid fa-lightbulb"></i> Generate Reflections Now
+                            </button>
+                            <small class="openvault-hint">Force reflection generation for all characters, bypassing the importance threshold. Requires existing memories.</small>
+                        </div>
                     </div>
                 </details>
 

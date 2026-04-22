@@ -167,10 +167,5 @@ jQuery(() => {
         updateEventListeners();
         setStatus('ready');
         logInfo('Extension initialized successfully');
-
-        // Trigger a test embed to eagerly warm the pipeline cache
-        import('./src/embeddings.js').then(({ getDocumentEmbedding }) => {
-            getDocumentEmbedding('warmup').catch(() => {});
-        });
     });
 });

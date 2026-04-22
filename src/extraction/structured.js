@@ -333,6 +333,7 @@ export const UnifiedReflectionSchema = z.object({
             z.object({
                 question: z.string().min(1, 'Question is required'),
                 insight: z.string().min(1, 'Insight is required'),
+                importance: z.number().int().min(1).max(5).catch(4),
                 evidence_ids: z.array(z.string()).default([]),
             })
         )

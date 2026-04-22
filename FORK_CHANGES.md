@@ -111,8 +111,11 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **What it does:** Excludes the most recent message from automatic extraction to avoid extracting content the user is still regenerating/editing. Backfill and emergency cut pass `includeLatest: true` to override.
 - **Merge strategy:** Touches upstream file. Could be PR'd — prevents premature extraction of in-progress messages.
 
-### ~~FEAT-5: Generate Reflections Button~~ (REMOVED)
-- Removed — was broken dead code (wrong imports, missing HTML button).
+### FEAT-5: Generate Reflections Button (RE-IMPLEMENTED)
+- **Files:** `src/ui/settings.js` (+`handleGenerateReflections`), `templates/settings_panel.html` (+button)
+- **What it does:** Adds a "Generate Reflections Now" button in the Reflection Engine section. Bypasses the importance threshold and runs reflection generation for every character that has at least 3 event memories. Shows per-character progress in the button label, pauses 3s between characters for rate limiting, then saves and refreshes UI.
+- **History:** Original FEAT-5 was removed as broken dead code. This is a clean reimplementation using the correct imports and data access patterns.
+- **Merge strategy:** Handler is self-contained in `settings.js`. Button is 6 lines in the Reflection Engine `<details>` block. Easy to re-add after merge.
 
 ### FEAT-6: Post-History Prompt Injection
 - **Files:** `src/constants.js` (+`postHistoryPrompt` default), `src/retrieval/retrieve.js` (+injection logic), `src/ui/settings.js` (+binding + UI sync), `templates/settings_panel.html` (+textarea)
@@ -175,6 +178,19 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **Design rationale:** A single slider controls the total OpenVault injection footprint, making budget tuning intuitive. The 60/20/20 split prioritizes narrative memories (the largest and most dynamic block) while giving meaningful budgets to reference data (entities) and thematic context (communities). Ratios are exported constants, easy to adjust.
 - **Merge strategy:** `constants.js`: +3 exported ratio constants, -1 setting. `retrieve.js`: ~6 lines changed in `buildRetrievalContext` to compute split, ~1 line in `injectContext`. Minimal diff, could be PR'd upstream.
 
+### FEAT-16: Reflection Quality Overhaul (Dynamic Importance + Richer Context)
+- **Files:** `src/reflection/reflect.js`, `src/prompts/reflection/builder.js`, `src/prompts/reflection/schema.js`, `src/prompts/reflection/examples/en.js`, `src/prompts/reflection/examples/ru.js`, `src/extraction/structured.js`, `src/constants.js`
+- **Problems fixed:**
+  1. **Hardcoded importance:** All reflections were created with `importance: 4` regardless of content. The LLM was never asked to rate importance.
+  2. **No context window budget:** Reflection candidate selection used a fixed count (`REFLECTION_CANDIDATE_LIMIT = 50`) with no token awareness. Long memories could silently overflow context.
+  3. **Missing character context:** The reflection prompt received only memory summaries — no character description, no dedicated view of existing reflections.
+- **Changes:**
+  - **LLM-rated importance (1-5):** Added `importance` field to the reflection output schema (Zod `.catch(4)` for backward compat), prompt schema, and all 10 few-shot examples (EN+RU). The LLM now rates each insight using a durability scale (5=core identity, 1=fleeting observation). Code clamps to 1-5 with fallback to 4.
+  - **Token-budgeted context (`reflectionContextTokens: 20000`):** New setting replaces count-based selection. Budget splits 80/20 between recent events and existing reflections, using `sliceToTokenBudget` for both. Removed `REFLECTION_CANDIDATE_LIMIT` import.
+  - **Character description injection:** Passes the character card description into the prompt via `<character_description>` XML section, giving the LLM grounding on who the character is.
+  - **Dedicated `<existing_reflections>` section:** Previous insights for the character are shown separately from candidate memories, with explicit instruction to build on them or identify contradictions rather than repeat.
+- **Merge strategy:** Touches 7 files, all upstream-adjacent. Schema/examples changes are additive. The `buildUnifiedReflectionPrompt` signature gained 2 new params (`existingReflections`, `characterDescription`) — any upstream callers would need updating.
+
 ### FEAT-13: Narrative Bridge for Hidden Message Gaps
 - **Files:** `src/retrieval/retrieve.js` (+`countHiddenMessages`, +`prependGapNotice`, +`buildEmptyBridge`, modified `injectContext`)
 - **What it does:** When auto-hide removes messages from the middle of chat, the LLM sees a jarring jump from frozen opening messages to recent messages with no explanation. This feature detects the gap (`openvault_hidden` flag) and handles two cases:
@@ -201,10 +217,13 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **What it does:** Deletes `webgpu.powerPreference` to suppress a Chromium/Windows console warning (crbug.com/369219127).
 - **Merge strategy:** Self-contained try/catch block. Could be PR'd.
 
-### PREF-4: Embedding Warmup on Init
-- **Files:** `index.js`
-- **What it does:** Fires a dummy `getDocumentEmbedding('warmup')` call on extension init to eagerly load the transformers pipeline.
-- **Merge strategy:** 3 lines at end of init. Easy to re-add.
+### PREF-4: Loading Order Priority
+- **Files:** `manifest.json`
+- **What it does:** Changes `loading_order` from 100 → 2 so OpenVault initializes early, before most other extensions. Ensures event hooks are registered before chat rendering completes.
+- **Merge strategy:** Single field in `manifest.json`. Will conflict on merge — just re-apply.
+
+### ~~PREF-4-OLD: Embedding Warmup on Init~~ (REMOVED)
+- Removed the dummy `getDocumentEmbedding('warmup')` call on extension init.
 
 ### ~~PREF-5: .gitignore additions~~ (REMOVED)
 - Reverted `.gitignore` to upstream defaults. Removed `sync-upstream.bat`.

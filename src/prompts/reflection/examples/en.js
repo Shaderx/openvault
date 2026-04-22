@@ -20,11 +20,13 @@ Step 4: Evidence — Q1: [1, 3, 4]. Q2: [4, 5]. Check: no IDs in question or ins
     {
       "question": "Why is Kira hiding flasks from the guild she pledged loyalty to, and what does this deception reveal about her shifting priorities?",
       "insight": "Kira's theft of the flasks is driven by the resurrection formula — she is willing to betray the guild to pursue a deeply personal goal she hasn't disclosed to anyone",
+      "importance": 4,
       "evidence_ids": ["1", "3", "4"]
     },
     {
       "question": "How is Kira's obsession with the resurrection formula connected to her unresolved grief?",
       "insight": "The pattern of secrecy and self-harm (burned fingertips from solo practice) suggests Kira is operating under emotional urgency, likely connected to someone she wants to resurrect",
+      "importance": 3,
       "evidence_ids": ["4", "5"]
     }
   ]
@@ -47,11 +49,13 @@ Step 4: Evidence — Q1: [2, 3, 5]. Q2: [4, 5]. Check: no IDs in question or ins
     {
       "question": "Is Mara's refusal of healing and self-isolation after combat a sign of resilience or deepening trauma?",
       "insight": "Mara's trauma manifests as hyper-vigilance (sleeping exposed, nightmares) and a compulsion to push herself to physical exhaustion, suggesting she uses pain as a way to feel in control of her body",
+      "importance": 4,
       "evidence_ids": ["2", "3", "5"]
     },
     {
       "question": "How is the combat numbness Mara describes affecting her ability to form trusting relationships?",
       "insight": "Her attachment to combat companions suggests displacement — she may struggle to distinguish past violence from present safety, putting relationships at risk",
+      "importance": 3,
       "evidence_ids": ["4", "5"]
     }
   ]
@@ -74,11 +78,13 @@ Step 4: Evidence — Q1: [1, 2, 3]. Q2: [4, 5]. Check: no IDs in question or ins
     {
       "question": "What psychological need is Lila fulfilling by escalating physical intensity and requesting dominance from Marcus?",
       "insight": "Lila is using sexual intensity and requested dominance as a way to bypass emotional defenses — physical intensity allows her to feel without confronting why she needs intensity to feel at all",
+      "importance": 4,
       "evidence_ids": ["1", "2", "3"]
     },
     {
       "question": "Is Lila's post-sex breakdown a sign of unprocessed trauma surfacing through intimacy?",
       "insight": "The post-sex breakdown suggests she's approaching an emotional threshold she can't avoid, but her refusal to process it indicates fear that acknowledging the feelings will break the coping mechanism she's built",
+      "importance": 5,
       "evidence_ids": ["4", "5"]
     }
   ]
@@ -101,11 +107,13 @@ Step 4: Evidence — Q1: [3, 4]. Q2: [4, 5]. Check: no IDs in question or insigh
     {
       "question": "What does Daniel's 'untethered' feeling between scenes reveal about what submission is actually doing for him psychologically?",
       "insight": "Submission functions as an anxiety-regulation mechanism for Daniel — Vera's control provides external structure that quiets his internal scatter; without it, the baseline anxiety returns and feels more pronounced by contrast",
+      "importance": 4,
       "evidence_ids": ["3", "4"]
     },
     {
       "question": "When Vera offered to expand the dynamic into daily life and Daniel didn't say no, was that a choice or an avoidance of one?",
       "insight": "Daniel's non-answer is itself a data point — someone who actively wants expansion says yes; his silence suggests he desires the outcome but can't yet take responsibility for choosing it, which places the decision burden on Vera",
+      "importance": 3,
       "evidence_ids": ["4", "5"]
     }
   ]
@@ -128,11 +136,13 @@ Step 4: Evidence — Q1: [2, 4]. Q2: [3, 5]. Check: no IDs in question or insigh
     {
       "question": "Why did Yuen publicly align with Halverson and request reassignment to the northern pass when he spent the night in private conflict?",
       "insight": "Yuen's request for reassignment is not loyalty — it's a tactical move toward proximity and information control; by going north himself, he can manage what happens to Ironhold on his own terms rather than report and lose agency entirely",
+      "importance": 4,
       "evidence_ids": ["2", "4"]
     },
     {
       "question": "What does Yuen's decision to write and then burn the unsent letter to his brother reveal about the line he crossed?",
       "insight": "The letter was the last point at which Yuen could have chosen his brother over Halverson — burning it is the moment of full complicity; his brother at Ironhold has become acceptable collateral, and Yuen knows it",
+      "importance": 5,
       "evidence_ids": ["3", "5"]
     }
   ]
