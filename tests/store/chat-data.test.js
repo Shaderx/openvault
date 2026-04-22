@@ -16,6 +16,7 @@ import {
     updateEntity,
     updateMemory,
 } from '../../src/store/chat-data.js';
+import * as stHelpers from '../../src/utils/st-helpers.js';
 import { buildMockGraphNode } from '../factories.js';
 
 describe('store/chat-data', () => {
@@ -165,6 +166,33 @@ describe('store/chat-data', () => {
                 saveChatConditional: mockSave,
             });
             expect(await saveOpenVaultData('test-chat-123')).toBe(true);
+        });
+
+        it('should call yieldToMain before and after saveChatConditional', async () => {
+            const yieldToMainSpy = vi.spyOn(stHelpers, 'yieldToMain').mockResolvedValue(undefined);
+            const saveChatConditionalSpy = vi.fn().mockResolvedValue(undefined);
+
+            // Mock dependencies
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: { debugMode: true },
+                }),
+                saveChatConditional: saveChatConditionalSpy,
+            });
+
+            await saveOpenVaultData('test-chat-123');
+
+            // Verify yieldToMain was called twice (before and after save)
+            expect(yieldToMainSpy).toHaveBeenCalledTimes(2);
+            expect(yieldToMainSpy.mock.calls[0]).toEqual([]);
+            expect(yieldToMainSpy.mock.calls[1]).toEqual([]);
+
+            // Verify saveChatConditional was called between the yields
+            expect(saveChatConditionalSpy).toHaveBeenCalledTimes(1);
+
+            yieldToMainSpy.mockRestore();
         });
     });
 

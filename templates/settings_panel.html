@@ -187,7 +187,7 @@
                                 <input type="checkbox" id="openvault_request_logging" />
                                 <span>Request Logging</span>
                             </label>
-                            <small class="openvault-hint">Log full LLM request/response payloads to browser console (F12).</small>
+                            <small class="openvault-hint">When ENABLED: Show full LLM response for prompt tuning. When disabled: Show short request stats only.</small>
                         </div>
                     </div>
                 </details>
@@ -269,14 +269,14 @@
                             Cloud API Concurrency: <span id="openvault_max_concurrency_value">1</span>
                             <small class="openvault-default-hint" data-default-key="maxConcurrency"></small>
                         </label>
-                        <input type="range" id="openvault_max_concurrency" min="1" max="5" step="1" />
-                        <small class="openvault-hint">How many simultaneous API calls. Use 1 for local (Ollama/LM Studio), 3-5 for cloud (Kimi/OpenAI)</small>
+                        <input type="range" id="openvault_max_concurrency" min="1" max="2" step="1" />
+                        <small class="openvault-hint">How many simultaneous API calls. Use 1 for local (Ollama/LM Studio), 2 for cloud (Kimi/OpenAI)</small>
 
                         <label for="openvault_backfill_rpm">
-                            Backfill RPM
+                            Backfill RPM: <span id="openvault_backfill_rpm_value">10</span>
                             <small class="openvault-default-hint" data-default-key="backfillRateLimit"></small>
                         </label>
-                        <input type="number" id="openvault_backfill_rpm" class="text_pole" min="1" max="600" />
+                        <input type="range" id="openvault_backfill_rpm" min="5" max="30" step="5" />
                         <small class="openvault-hint">Max requests per minute when processing old messages</small>
                     </div>
                 </details>
@@ -342,15 +342,22 @@
                             Extraction Batch Size: <span id="openvault_extraction_token_budget_value">8000</span> tokens
                             <small class="openvault-default-hint" data-default-key="extractionTokenBudget"></small>
                         </label>
-                        <input type="range" id="openvault_extraction_token_budget" min="4000" max="64000" step="1000" />
-                        <small class="openvault-hint">How much chat history to send to the background AI at once. Larger batches = fewer API calls but longer waits between updates</small>
+                        <input type="range" id="openvault_extraction_token_budget" min="1000" max="32000" step="1000" />
+                        <small class="openvault-hint">Chat history sent to the background AI per extraction call. Larger batches see more story context for better extractions, but LLM quality drops with too much input — past a certain size it starts missing or hallucinating events</small>
+
+                        <label for="openvault_extraction_max_turns">
+                            Max Turns per Batch: <span id="openvault_extraction_max_turns_value">30</span> turns
+                            <small class="openvault-default-hint" data-default-key="extractionMaxTurns"></small>
+                        </label>
+                        <input type="range" id="openvault_extraction_max_turns" min="10" max="100" step="1" />
+                        <small class="openvault-hint">Maximum conversation turns per extraction call. LLMs degrade when processing too many semantically dense exchanges — this caps the count regardless of token budget. The batch stops at whichever limit is hit first</small>
 
                         <label for="openvault_extraction_rearview">
                             Context Window Size: <span id="openvault_extraction_rearview_value">6000</span> tokens
                             <small class="openvault-default-hint" data-default-key="contextWindowSize"></small>
                         </label>
                         <input type="range" id="openvault_extraction_rearview" min="1000" max="32000" step="1000" />
-                        <small class="openvault-hint">How far back the AI reads to extract new memories. Larger = better context, but costs more tokens</small>
+                        <small class="openvault-hint">Existing memories shown to the background AI as context before each extraction batch. Helps it avoid extracting duplicates and maintain consistency. Larger = fewer missed facts, but eats into the background LLM's context window</small>
 
                         <!-- Context & Injection Budgets -->
                         <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
@@ -416,6 +423,15 @@
                         </label>
                         <input type="range" id="openvault_max_reflections" min="10" max="200" step="10" />
                         <small class="openvault-hint">Maximum stored insights per character. Older ones are archived when exceeded</small>
+
+                        <!-- Injection toggle -->
+                        <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                            <label class="checkbox_label">
+                                <input id="openvault_reflection_injection" type="checkbox" />
+                                <span>Inject reflections into context</span>
+                            </label>
+                            <small class="openvault-hint">When disabled, existing reflections will not appear in the AI's context window</small>
+                        </div>
 
                         <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div id="openvault_reflection_progress" style="margin-bottom: 8px;"></div>
@@ -642,6 +658,18 @@
                                 ↓Char is recommended. Memories injected at ↑Char may not affect character behavior in some models.
                             </small>
                         </div>
+                    </div>
+                </details>
+
+                <!-- Reflection Engine -->
+                <details class="openvault-details">
+                    <summary><i class="fa-solid fa-lightbulb"></i> Reflection Engine</summary>
+                    <div class="openvault-settings-group">
+                        <label class="checkbox_label">
+                            <input id="openvault_reflection_generation" type="checkbox" />
+                            <span>Generate reflections automatically</span>
+                        </label>
+                        <small class="openvault-hint">When disabled, no new reflections will be generated. Existing reflections remain untouched.</small>
                     </div>
                 </details>
 

@@ -53,6 +53,7 @@ import {
 import { accumulateImportance, generateReflections, shouldReflect } from '../reflection/reflect.js';
 import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { deleteItemsFromST, isStVectorSource, syncItemsToST } from '../services/st-vector.js';
+import { getSettings } from '../settings.js';
 import { clearAllLocks, getLastApiCallTime, isWorkerRunning, operationState, setLastApiCallTime } from '../state.js';
 import {
     addMemories,
@@ -638,6 +639,13 @@ export async function filterSimilarEvents(
  */
 export async function synthesizeReflections(data, characterNames, settings, options = {}) {
     const { abortSignal = null } = options;
+
+    // Check if reflection generation is enabled
+    if (!getSettings('reflectionGenerationEnabled', true)) {
+        logDebug('[Extraction] Reflection generation disabled, skipping Phase 2');
+        return { stChanges: { toUpsert: [], toDelete: [] } };
+    }
+
     const reflectionThreshold = settings.reflectionThreshold;
     const ladderQueue = await createLadderQueue(settings.maxConcurrency);
     const reflectionPromises = [];
@@ -941,7 +949,13 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
     if (!messageIds || messageIds.length === 0) {
         // Defensive: use scheduler to get next batch if no IDs provided
-        const batch = getNextBatch(chat, data, settings?.extractionTokenBudget || 2000);
+        const batch = getNextBatch(
+            chat,
+            data,
+            settings?.extractionTokenBudget || 2000,
+            false,
+            settings?.extractionMaxTurns || Infinity
+        );
         if (!batch) {
             logDebug('No messages to extract (scheduler returned empty batch)');
             return { status: 'skipped', reason: 'no_new_messages' };
@@ -973,8 +987,10 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             })
             .join('\n\n');
 
-        const characterDescription = context.characters?.[context.characterId]?.description || '';
-        const personaDescription = context.powerUserSettings?.persona_description || '';
+        // Disabled: passing char card / persona descriptions to extraction prompts causes the LLM
+        // to extract static traits from the character sheet instead of actual conversation events.
+        const characterDescription = '';
+        const personaDescription = '';
         const contextParams = {
             messagesText,
             names: { char: characterName, user: userName },
@@ -1275,6 +1291,7 @@ export async function extractAllMessages(optionsOrCallback) {
     let currentBatch = null;
     let retryCount = 0;
     let cumulativeBackoffMs = 0;
+    let remainingUnextracted = initialMessageIds.length;
 
     while (true) {
         // v6: Check abort signal at start of loop
@@ -1306,12 +1323,20 @@ export async function extractAllMessages(optionsOrCallback) {
                 isEmergencyCut // Bypass token budget check for Emergency Cut
             );
 
+            remainingUnextracted = freshIds.length;
+
             logDebug(
                 `Backfill check: ${freshIds.length} unextracted messages available, ${remainingBatches} complete batches remaining`
             );
 
             // Get next batch using token budget
-            currentBatch = getNextBatch(freshChat, freshData, tokenBudget, isEmergencyCut);
+            currentBatch = getNextBatch(
+                freshChat,
+                freshData,
+                tokenBudget,
+                isEmergencyCut,
+                settings.extractionMaxTurns || Infinity
+            );
             if (!currentBatch) {
                 logDebug('Backfill: No more complete batches available');
                 break;
@@ -1319,20 +1344,27 @@ export async function extractAllMessages(optionsOrCallback) {
         }
 
         // Update progress (toast for normal, callback for Emergency Cut)
-        const _progress = Math.round((batchesProcessed / initialBatchCount) * 100);
+        // Adaptive estimate: use actual throughput to predict remaining work
+        const estimatedTotal = messagesProcessed + remainingUnextracted;
+        const progressPercent =
+            estimatedTotal > 0 ? Math.min(Math.round((messagesProcessed / estimatedTotal) * 100), 100) : 0;
+        const avgPerBatch = batchesProcessed > 0 ? messagesProcessed / batchesProcessed : 0;
+        const estimatedBatchesLeft = avgPerBatch > 0 ? Math.ceil(remainingUnextracted / avgPerBatch) : 0;
+        const estimatedTotalBatches = batchesProcessed + estimatedBatchesLeft;
+
         const retryText =
             retryCount > 0
                 ? ` (retry ${retryCount}, backoff ${Math.round(cumulativeBackoffMs / 1000)}s/${Math.round(MAX_BACKOFF_TOTAL_MS / 1000)}s)`
                 : '';
 
         if (!isEmergencyCut) {
-            onProgress?.(batchesProcessed, initialBatchCount, totalEvents, retryText);
+            onProgress?.(batchesProcessed, estimatedTotalBatches, progressPercent, totalEvents, retryText);
         } else if (progressCallback) {
             progressCallback(batchesProcessed + 1, initialBatchCount, totalEvents);
         }
 
         try {
-            logDebug(`Processing batch ${batchesProcessed + 1}/${initialBatchCount}${retryText}...`);
+            logDebug(`Processing batch ${batchesProcessed + 1}/~${estimatedTotalBatches}${retryText}...`);
             const result = await extractMemories(currentBatch, targetChatId, {
                 isBackfill: true,
                 silent: true,

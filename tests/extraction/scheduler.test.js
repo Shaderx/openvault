@@ -3,6 +3,7 @@ import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../../src/constants.js';
 import {
     getBackfillMessageIds,
     getBackfillStats,
+    getExtractionBudgetProgress,
     getFingerprint,
     getNextBatch,
     getProcessedFingerprints,
@@ -571,5 +572,169 @@ describe('trimTailTurns — system messages', () => {
         // So we trim from B(5), removing U(3) U(4) B(5) and leaving [0, 1]
         const result = trimTailTurns(systemChat, [0, 1, 3, 4, 5], 1);
         expect(result).toEqual([0, 1]);
+    });
+});
+
+describe('getNextBatch (turn-limited)', () => {
+    let savedTimestamp;
+
+    beforeEach(() => {
+        savedTimestamp = testTimestamp;
+        testTimestamp = 1000000;
+    });
+
+    afterEach(() => {
+        testTimestamp = savedTimestamp;
+    });
+
+    it('respects turn limit when token budget is unlimited', () => {
+        // 5 turns: U,B × 5
+        const chat = makeChat([
+            ['u1', true],
+            ['b1', false],
+            ['u2', true],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
+            ['u4', true],
+            ['b4', false],
+            ['u5', true],
+            ['b5', false],
+        ]);
+
+        // Unlimited token budget, turn limit of 3
+        // Accumulates 3 turns (6 msgs), swipe protection trims 1 turn → 2 turns (4 msgs)
+        const batch = getNextBatch(chat, {}, 100000, false, 3);
+        expect(batch).not.toBeNull();
+        expect(batch.length).toBe(4);
+        // Should end on bot (complete turn)
+        expect(chat[batch[batch.length - 1]].is_user).toBe(false);
+    });
+
+    it('token budget wins when hit before turn limit', () => {
+        // 5 turns with long messages
+        const chat = makeChat([
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
+            [LONG_USER_MESSAGE, true],
+            [LONG_BOT_MESSAGE, false],
+        ]);
+
+        // Very low token budget, high turn limit → token budget should stop early
+        const batch = getNextBatch(chat, {}, 50, false, 10);
+        expect(batch).not.toBeNull();
+        // Should stop at ~1 turn due to token budget, not all 5
+        expect(batch.length).toBeLessThan(10);
+        // Should end on bot (complete turn)
+        expect(chat[batch[batch.length - 1]].is_user).toBe(false);
+    });
+
+    it('isBatchReady returns true when enough turns exist even if tokens are low', () => {
+        // 5 turns with short messages (low token count)
+        const chat = makeChat([
+            ['u1', true],
+            ['b1', false],
+            ['u2', true],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
+            ['u4', true],
+            ['b4', false],
+            ['u5', true],
+            ['b5', false],
+        ]);
+
+        // Token budget too high for short messages, but turn limit = 2
+        const ready = isBatchReady(chat, {}, 100000, 2);
+        expect(ready).toBe(true);
+    });
+
+    it('isBatchReady returns false when neither threshold met', () => {
+        // 1 turn with short messages
+        const chat = makeChat([
+            ['u1', true],
+            ['b1', false],
+        ]);
+
+        // Token budget too high, turn limit too high
+        const ready = isBatchReady(chat, {}, 100000, 10);
+        expect(ready).toBe(false);
+    });
+
+    it('Emergency Cut bypasses turn limit', () => {
+        // 5 turns
+        const chat = makeChat([
+            ['u1', true],
+            ['b1', false],
+            ['u2', true],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
+            ['u4', true],
+            ['b4', false],
+            ['u5', true],
+            ['b5', false],
+        ]);
+
+        // Emergency cut with turn limit = 1 → should still return all messages
+        const batch = getNextBatch(chat, {}, 10, true, 1);
+        expect(batch).not.toBeNull();
+        expect(batch.length).toBe(10);
+    });
+});
+
+describe('getExtractionBudgetProgress (turn-limited)', () => {
+    let savedTimestamp;
+
+    beforeEach(() => {
+        savedTimestamp = testTimestamp;
+        testTimestamp = 1000000;
+    });
+
+    afterEach(() => {
+        testTimestamp = savedTimestamp;
+    });
+
+    it('includes turn count and progress data', () => {
+        // 3 turns with short messages
+        const chat = makeChat([
+            ['u1', true],
+            ['b1', false],
+            ['u2', true],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
+        ]);
+
+        const progress = getExtractionBudgetProgress(chat, {}, 100, 5);
+        expect(progress).toHaveProperty('unextractedTurns');
+        expect(progress).toHaveProperty('turnPct');
+        expect(progress.unextractedTurns).toBe(3);
+        expect(progress.turnPct).toBe(60); // 3/5 * 100
+    });
+
+    it('turnPct caps at 100', () => {
+        // 5 turns
+        const chat = makeChat([
+            ['u1', true],
+            ['b1', false],
+            ['u2', true],
+            ['b2', false],
+            ['u3', true],
+            ['b3', false],
+            ['u4', true],
+            ['b4', false],
+            ['u5', true],
+            ['b5', false],
+        ]);
+
+        const progress = getExtractionBudgetProgress(chat, {}, 100, 2);
+        expect(progress.turnPct).toBe(100); // 5/2 capped at 100
     });
 });

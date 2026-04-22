@@ -9,7 +9,7 @@ import { PROCESSED_MESSAGES_KEY, SWIPE_PROTECTION_TAIL_MESSAGES } from '../const
 import { cyrb53 } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
 import { getSanitizedTokenCount as getMessageTokenCount, getSanitizedTokenSum as getTokenSum } from '../utils/message-sanitizer.js';
-import { snapToTurnBoundary } from '../utils/tokens.js';
+import { countTurns, snapToTurnBoundary } from '../utils/tokens.js';
 
 /**
  * Get a stable fingerprint for a message.
@@ -64,12 +64,14 @@ export function getUnextractedMessageIds(chat, processedFps, { includeLatest = f
  * @param {number} tokenBudget - Token budget for extraction
  * @returns {Object} Progress data: { unextractedTokens, extractionPct, extractionBudget }
  */
-export function getExtractionBudgetProgress(chat, data, tokenBudget) {
+export function getExtractionBudgetProgress(chat, data, tokenBudget, maxTurns = Infinity) {
     const processedFps = getProcessedFingerprints(data);
     const unextractedIds = getUnextractedMessageIds(chat, processedFps);
     const unextractedTokens = getTokenSum(chat, unextractedIds);
     const extractionPct = Math.min((unextractedTokens / tokenBudget) * 100, 100);
-    return { unextractedTokens, extractionPct, extractionBudget: tokenBudget };
+    const unextractedTurns = countTurns(chat, unextractedIds);
+    const turnPct = maxTurns === Infinity ? 0 : Math.min((unextractedTurns / maxTurns) * 100, 100);
+    return { unextractedTokens, extractionPct, extractionBudget: tokenBudget, unextractedTurns, turnPct };
 }
 
 /**
@@ -79,10 +81,10 @@ export function getExtractionBudgetProgress(chat, data, tokenBudget) {
  * @param {number} tokenBudget - Token budget for extraction
  * @returns {boolean} True if at least one complete batch is ready
  */
-export function isBatchReady(chat, data, tokenBudget) {
+export function isBatchReady(chat, data, tokenBudget, maxTurns = Infinity) {
     const processedFps = getProcessedFingerprints(data);
     const unextractedIds = getUnextractedMessageIds(chat, processedFps);
-    return getTokenSum(chat, unextractedIds) >= tokenBudget;
+    return getTokenSum(chat, unextractedIds) >= tokenBudget || countTurns(chat, unextractedIds) >= maxTurns;
 }
 
 /**
@@ -147,13 +149,13 @@ export function trimTailTurns(chat, messageIds, turnsToTrim) {
  * @param {boolean} [isEmergencyCut=false] - If true, bypass token budget and extract all unextracted messages
  * @returns {number[]|null} Array of message IDs for next batch, or null if no complete batch ready
  */
-export function getNextBatch(chat, data, tokenBudget, isEmergencyCut = false) {
+export function getNextBatch(chat, data, tokenBudget, isEmergencyCut = false, maxTurns = Infinity) {
     const processedFps = getProcessedFingerprints(data);
     const unextractedIds = getUnextractedMessageIds(chat, processedFps, { includeLatest: isEmergencyCut });
 
     const totalTokens = getTokenSum(chat, unextractedIds);
     // Emergency Cut bypasses token budget - extract all unextracted messages
-    if (!isEmergencyCut && totalTokens < tokenBudget) {
+    if (!isEmergencyCut && totalTokens < tokenBudget && countTurns(chat, unextractedIds) < maxTurns) {
         return null;
     }
 
@@ -165,7 +167,7 @@ export function getNextBatch(chat, data, tokenBudget, isEmergencyCut = false) {
         accumulated.push(id);
         currentSum += getMessageTokenCount(chat, id);
 
-        if (!isEmergencyCut && currentSum >= tokenBudget) {
+        if (!isEmergencyCut && (currentSum >= tokenBudget || countTurns(chat, accumulated) >= maxTurns)) {
             break;
         }
     }

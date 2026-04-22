@@ -16,6 +16,7 @@ import { purgeSTCollection } from '../services/st-vector.js';
 import { showToast } from '../utils/dom.js';
 import { cyrb53, deleteEmbedding } from '../utils/embedding-codec.js';
 import { logDebug, logError, logInfo, logWarn } from '../utils/logging.js';
+import { yieldToMain } from '../utils/st-helpers.js';
 import { mergeDescriptions } from '../utils/text.js';
 import { countTokens } from '../utils/tokens.js';
 
@@ -80,7 +81,9 @@ export async function saveOpenVaultData(expectedChatId = null) {
     }
 
     try {
+        await yieldToMain(); // Yield before ST's heavy synchronous save
         await getDeps().saveChatConditional();
+        await yieldToMain(); // Yield after the thread-blocking operation
         record('chat_save', performance.now() - t0);
         logDebug('Data saved to chat metadata');
         return true;

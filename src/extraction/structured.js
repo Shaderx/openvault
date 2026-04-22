@@ -6,7 +6,7 @@ import { ENTITY_TYPES } from '../constants.js';
 // Import base schemas from store/schemas.js
 import { BaseEntitySchema, BaseRelationshipSchema, EventExtractionSchema, EventSchema } from '../store/schemas.js';
 import { logError, logWarn } from '../utils/logging.js';
-import { safeParseJSON, stripMarkdownFences } from '../utils/text.js';
+import { safeParseJSON, stripMarkdownFences, stripThinkingTags } from '../utils/text.js';
 
 // --- Schemas Extended with .catch() Fallbacks for LLM Validation ---
 
@@ -102,7 +102,7 @@ function recoverBareString(data, key) {
  * @returns {Object} Validated parsed data
  * @throws {Error} If JSON parsing or validation fails
  */
-function parseStructuredResponse(content, schema, recoverFn = null) {
+export function parseStructuredResponse(content, schema, recoverFn = null) {
     // Use safeParseJSON with new API (handles thinking tags and markdown internally)
     const result = safeParseJSON(content);
     if (!result.success) {
@@ -117,6 +117,29 @@ function parseStructuredResponse(content, schema, recoverFn = null) {
     }
 
     let parsed = result.data;
+
+    // Auto-unwrap hallucinated OpenAI-style tool call payloads
+    // LLMs sometimes output {"name": "...", "arguments": {...}} instead of the expected schema
+    if (
+        parsed != null &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        'arguments' in parsed &&
+        (parsed.name != null || parsed.tool != null || parsed.function != null)
+    ) {
+        logWarn('LLM returned tool-call wrapper, unwrapping arguments');
+        let args = parsed.arguments;
+        // arguments may be a JSON string (common with some models)
+        if (typeof args === 'string') {
+            const argsResult = safeParseJSON(args);
+            if (argsResult.success) {
+                args = argsResult.data;
+            } else {
+                throw new Error(`Failed to parse tool arguments string: ${argsResult.error.message}`);
+            }
+        }
+        parsed = args;
+    }
 
     // Apply recovery function before array unwrapping (e.g. bare-string → object)
     if (recoverFn) {
@@ -168,6 +191,13 @@ export function getGraphExtractionJsonSchema() {
  * @returns {Object} Validated event extraction response with {events}
  */
 export function parseEventExtractionResponse(content) {
+    // Handle lazy exits: strip thinking tags and check for empty output
+    const stripped = stripThinkingTags(content);
+    if (stripped.trim().length === 0) {
+        logWarn('LLM returned only thinking tags or whitespace, returning empty events');
+        return { events: [] };
+    }
+
     const result = safeParseJSON(content);
     if (!result.success) {
         const start = content.slice(0, 500);
@@ -220,6 +250,13 @@ export function parseEventExtractionResponse(content) {
  * @returns {Object} Validated graph extraction response with {entities, relationships}
  */
 export function parseGraphExtractionResponse(content) {
+    // Handle lazy exits: strip thinking tags and check for empty output
+    const stripped = stripThinkingTags(content);
+    if (stripped.trim().length === 0) {
+        logWarn('LLM returned only thinking tags or whitespace, returning empty entities and relationships');
+        return { entities: [], relationships: [] };
+    }
+
     const result = safeParseJSON(content);
     if (!result.success) {
         const start = content.slice(0, 500);
@@ -355,6 +392,13 @@ export function getUnifiedReflectionJsonSchema() {
  * @returns {Object} Validated unified reflection with reflections array
  */
 export function parseUnifiedReflectionResponse(content) {
+    // Handle lazy exits: strip thinking tags and check for empty output
+    const stripped = stripThinkingTags(content);
+    if (stripped.trim().length === 0) {
+        logWarn('LLM returned only thinking tags or whitespace, returning empty reflections');
+        return { reflections: [] };
+    }
+
     const result = parseStructuredResponse(content, UnifiedReflectionSchema);
     return {
         reflections: result.reflections.map((r) => ({

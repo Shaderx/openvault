@@ -361,22 +361,21 @@ async function handleExtractAll() {
         onComplete: updateEventListeners,
         onStart: (batchCount) => {
             setStatus('extracting');
-            toastr?.info(`Backfill: 0/${batchCount} batches (0%)`, 'OpenVault - Extracting', {
+            toastr?.info(`Backfill: 0% (~${batchCount} batches estimated)`, 'OpenVault - Extracting', {
                 timeOut: 0,
                 extendedTimeOut: 0,
                 tapToDismiss: false,
                 toastClass: 'toast openvault-backfill-toast',
             });
         },
-        onProgress: (batchNum, totalBatches, _eventsCreated, retryText) => {
-            const progress = Math.round((batchNum / totalBatches) * 100);
+        onProgress: (batchNum, totalBatches, progressPercent, _eventsCreated, retryText) => {
             $('.openvault-backfill-toast .toast-message').text(
-                `Backfill: ${batchNum}/${totalBatches} batches (${Math.min(progress, 100)}%) - Processing...${retryText}`
+                `Backfill: ${progressPercent}% (${batchNum}/~${totalBatches} batches) - Processing...${retryText}`
             );
         },
-        onBatchRetryWait: (batchNum, totalBatches, backoffSeconds, retryCount) => {
+        onBatchRetryWait: (batchNum, _totalBatches, backoffSeconds, retryCount) => {
             $('.openvault-backfill-toast .toast-message').text(
-                `Backfill: ${batchNum}/${totalBatches} batches - Waiting ${backoffSeconds}s before retry ${retryCount}...`
+                `Backfill: batch ${batchNum} - Waiting ${backoffSeconds}s before retry ${retryCount}...`
             );
         },
         onPhase2Start: () => {
@@ -471,15 +470,14 @@ async function handleResetAndBackfill() {
                 toastClass: 'toast openvault-backfill-toast',
             });
         },
-        onProgress: (batchNum, totalBatches, _eventsCreated, retryText) => {
-            const progress = Math.round((batchNum / totalBatches) * 100);
+        onProgress: (batchNum, totalBatches, progressPercent, _eventsCreated, retryText) => {
             $('.openvault-backfill-toast .toast-message').text(
-                `Reset & Backfill: ${batchNum}/${totalBatches} batches (${Math.min(progress, 100)}%) - Processing...${retryText}`
+                `Reset & Backfill: ${progressPercent}% (${batchNum}/~${totalBatches} batches) - Processing...${retryText}`
             );
         },
-        onBatchRetryWait: (batchNum, totalBatches, backoffSeconds, retryCount) => {
+        onBatchRetryWait: (batchNum, _totalBatches, backoffSeconds, retryCount) => {
             $('.openvault-backfill-toast .toast-message').text(
-                `Reset & Backfill: ${batchNum}/${totalBatches} batches - Waiting ${backoffSeconds}s before retry ${retryCount}...`
+                `Reset & Backfill: batch ${batchNum} - Waiting ${backoffSeconds}s before retry ${retryCount}...`
             );
         },
         onPhase2Start: () => {
@@ -616,6 +614,7 @@ const PRESERVED_KEYS = [
 // Define fine-tune keys that should be reset to defaults
 const RESETTABLE_KEYS = [
     'extractionTokenBudget',
+    'extractionMaxTurns',
     'extractionRearviewTokens',
     'retrievalFinalTokens',
     'visibleChatBudget',
@@ -823,6 +822,7 @@ function bindUIElements() {
 
     // Extraction settings
     bindSetting('extraction_token_budget', 'extractionTokenBudget', 'int', () => updatePayloadCalculator());
+    bindSetting('extraction_max_turns', 'extractionMaxTurns', 'int', () => updatePayloadCalculator());
     bindSetting('extraction_rearview', 'extractionRearviewTokens', 'int', (v) => {
         updateWordsDisplay(v, 'openvault_extraction_rearview_words');
         updatePayloadCalculator();
@@ -852,11 +852,12 @@ function bindUIElements() {
     bindSetting('entity_boost', 'entityBoostWeight', 'float');
 
     // Backfill settings
-    $('#openvault_backfill_rpm').on('change', function () {
+    $('#openvault_backfill_rpm').on('input', function () {
         let value = $(this).val();
-        value = validateRPM(value, 30);
+        value = validateRPM(value, 10);
         setSetting('backfillMaxRPM', value);
         $(this).val(value);
+        $('#openvault_backfill_rpm_value').text(value);
     });
 
     // Concurrency settings
@@ -962,6 +963,9 @@ function bindUIElements() {
     // Feature settings
     bindSetting('reflection_threshold', 'reflectionThreshold');
     bindSetting('max_insights', 'maxInsightsPerReflection');
+    // NEW: Reflection control toggles
+    bindSetting('reflection_generation', 'reflectionGenerationEnabled', 'bool');
+    bindSetting('reflection_injection', 'reflectionInjectionEnabled', 'bool');
     bindSetting('world_context_budget', 'worldContextBudget', 'int', (v) =>
         updateWordsDisplay(v, 'openvault_world_context_budget_words')
     );
@@ -1129,6 +1133,9 @@ export function updateUI() {
     $('#openvault_extraction_token_budget').val(settings.extractionTokenBudget);
     $('#openvault_extraction_token_budget_value').text(settings.extractionTokenBudget);
 
+    $('#openvault_extraction_max_turns').val(settings.extractionMaxTurns);
+    $('#openvault_extraction_max_turns_value').text(settings.extractionMaxTurns);
+
     $('#openvault_extraction_rearview').val(settings.extractionRearviewTokens);
     $('#openvault_extraction_rearview_value').text(settings.extractionRearviewTokens);
     updateWordsDisplay(settings.extractionRearviewTokens, 'openvault_extraction_rearview_words');
@@ -1178,6 +1185,7 @@ export function updateUI() {
 
     // Backfill settings
     $('#openvault_backfill_rpm').val(settings.backfillMaxRPM);
+    $('#openvault_backfill_rpm_value').text(settings.backfillMaxRPM);
 
     // Embedding settings
     $('#openvault_embedding_source').val(settings.embeddingSource);
@@ -1202,6 +1210,10 @@ export function updateUI() {
 
     $('#openvault_max_insights').val(settings.maxInsightsPerReflection);
     $('#openvault_max_insights_value').text(settings.maxInsightsPerReflection);
+
+    // NEW: Reflection control toggles
+    $('#openvault_reflection_generation').prop('checked', settings.reflectionGenerationEnabled);
+    $('#openvault_reflection_injection').prop('checked', settings.reflectionInjectionEnabled);
 
     $('#openvault_world_context_budget').val(settings.worldContextBudget);
     $('#openvault_world_context_budget_value').text(settings.worldContextBudget);
@@ -1265,7 +1277,8 @@ export async function updateBudgetIndicators() {
     const { unextractedTokens, extractionPct, extractionBudget } = getExtractionBudgetProgress(
         chat,
         data,
-        settings.extractionTokenBudget
+        settings.extractionTokenBudget,
+        settings.extractionMaxTurns || Infinity
     );
 
     $('#openvault_extraction_budget_fill').css('width', `${extractionPct}%`);

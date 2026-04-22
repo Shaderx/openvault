@@ -57,16 +57,17 @@ export const defaultSettings = {
     debugMode: false,
     requestLogging: false,
     // Extraction settings
-    extractionTokenBudget: 8000, // Token threshold for extraction batches
-    extractionRearviewTokens: 6000, // Token budget for extraction memory context
+    extractionTokenBudget: 6000, // Token threshold for extraction batches
+    extractionRearviewTokens: 3000, // Token budget for extraction memory context
+    extractionMaxTurns: 20, // Max conversation turns per extraction batch
     // Retrieval pipeline settings (token-based)
-    retrievalFinalTokens: 10000, // Final context budget
+    retrievalFinalTokens: 8000, // Final context budget
     // Auto-hide settings
     autoHideEnabled: true,
     visibleChatBudget: 16000, // Maximum tokens visible in chat history
     frozenReplies: 0, // Number of initial bot replies to keep always-visible (0 = disabled)
     // Backfill settings
-    backfillMaxRPM: 20,
+    backfillMaxRPM: 10,
     // Concurrency settings (Phase 2 parallelism)
     maxConcurrency: 1, // Default to 1 to protect local/VRAM-bound LLM users
     // Embedding settings (Local RAG)
@@ -108,6 +109,9 @@ export const defaultSettings = {
     maxReflectionsPerCharacter: 50,
     maxReflectionLevel: 3, // Maximum reflection tree depth
     reflectionLevelMultiplier: 2.0, // Decay slows by 2x per level
+    // Reflection control toggles
+    reflectionGenerationEnabled: true, // Enable automatic reflection generation
+    reflectionInjectionEnabled: true, // Enable reflection injection into context
     // Bucket balance settings (score-first budgeting with soft chronological balancing)
     bucketMinRepresentation: 0.2, // 20% minimum per bucket
     bucketSoftBalanceBudget: 0.05, // 5% budget for soft balancing
@@ -246,6 +250,7 @@ export const NON_GROUNDED_BOOST_RATIO = 0.4;
 export const UI_DEFAULT_HINTS = {
     // Extraction
     extractionTokenBudget: defaultSettings.extractionTokenBudget,
+    extractionMaxTurns: defaultSettings.extractionMaxTurns,
 
     // Context budget
     retrievalFinalTokens: defaultSettings.retrievalFinalTokens,

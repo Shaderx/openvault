@@ -1,11 +1,12 @@
 {
     "display_name": "OpenVault",
-    "loading_order": 2,
+    "loading_order": 100,
     "requires": [],
     "optional": [],
     "js": "index.js",
     "css": "style.css",
     "author": "OpenVault",
-    "version": "22.00",
-    "homePage": "https://github.com/shaderx/openvault"
+    "version": "23.00",
+    "homePage": "https://github.com/vadash/openvault",
+    "auto_update": false
 }

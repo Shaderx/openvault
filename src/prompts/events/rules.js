@@ -64,12 +64,12 @@ temporal_anchor: Look for timestamp headers in messages (e.g., time/date markers
 is_transient: Set to true ONLY for short-term intentions, temporary states, or immediate plans (e.g., "going to wash up", "waiting for 10 minutes", "be right back", "let's meet at 7 PM"). Set to false for permanent facts, completed actions, or durable relationship changes (e.g., "revealed a secret", "professed love", "moved to a new city").
 </field_instructions>
 
-<thinking_process>
-Follow these steps IN ORDER. Keep your reasoning VERY CONCISE — one line per step, no more than 5 actions considered. Do NOT debate, refine, or second-guess your decisions. Make a choice and move on immediately. Write your work inside <think tags BEFORE outputting the JSON:
+<draft_process>
+Think step by step, but only keep a minimal draft for each step, with 8 words at most per step. Use symbols: -> for causation/actions, + for conjunction, != for contrast. Write your work inside <think/> tags BEFORE outputting the JSON:
 
-Step 1: List a maximum of 5 specific actions, emotions, facts, promises, stated preferences, or ongoing rules from the new messages.
-Step 2: Check <established_memories>. Is any of this already recorded?
-Step 3: Apply dedup rules. If this is a continuation, look for the newest progression. If there is none at all, plan to output "events": [].
-Step 4: For genuinely NEW events, assign importance (1-5), write a specific factual summary, and identify ALL witnesses (not just participants).
-Step 5: Output the final JSON object with the "events" key.
-</thinking_process>`;
+Step 1: List <=5 actions/emotions/facts/promises/preferences from new messages.
+Step 2: Check <established_memories> -> any already recorded?
+Step 3: Continuation != new event -> find newest progression | output [].
+Step 4: NEW events -> assign importance(1-5) + specific summary + witnesses.
+Step 5: Output final JSON with "events" key.
+</draft_process>`;

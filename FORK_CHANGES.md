@@ -3,7 +3,7 @@
 Tracks all differences between this fork and [upstream](https://github.com/vadash/openvault).
 Use this document to manage merges, decide what to PR upstream, and avoid regressions.
 
-Last audited against: `upstream/master` on 2026-04-10
+Last audited against: `upstream/master` on 2026-04-22
 
 ---
 
@@ -217,10 +217,8 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **What it does:** Deletes `webgpu.powerPreference` to suppress a Chromium/Windows console warning (crbug.com/369219127).
 - **Merge strategy:** Self-contained try/catch block. Could be PR'd.
 
-### PREF-4: Loading Order Priority
-- **Files:** `manifest.json`
-- **What it does:** Changes `loading_order` from 100 → 2 so OpenVault initializes early, before most other extensions. Ensures event hooks are registered before chat rendering completes.
-- **Merge strategy:** Single field in `manifest.json`. Will conflict on merge — just re-apply.
+### ~~PREF-4: Loading Order Priority~~ (REVERTED)
+- Reverted to upstream `loading_order: 100`. No longer needed.
 
 ### ~~PREF-4-OLD: Embedding Warmup on Init~~ (REMOVED)
 - Removed the dummy `getDocumentEmbedding('warmup')` call on extension init.
@@ -237,11 +235,15 @@ After every `git merge upstream/master`, verify:
 1. [ ] `style.css` still has `@import` for `entities.css`, `entity-crud.css`, `side-panel.css`
 2. [ ] `src/ui/render.js` `refreshAllUI()` still calls `refreshSidePanel()` via lazy import
 3. [ ] `index.js` still inits side panel and binds toggle
-4. [ ] `templates/settings_panel.html` still has Reset & Backfill button
-5. [ ] `src/ui/settings.js` still has `handleResetAndBackfill` and button binding
-6. [ ] `src/extraction/extract.js` still has `rpmDelay` before Phase 2 calls
+4. [ ] `templates/settings_panel.html` still has Reset & Backfill button + Generate Reflections button
+5. [ ] `src/ui/settings.js` still has `handleResetAndBackfill`, `handleGenerateReflections`, and button bindings
+6. [ ] `src/extraction/extract.js` still has `rpmDelay` before Phase 2 calls + `sanitizeMessageContent` in message formatting + `getLastApiCallTime`/`setLastApiCallTime` imports from state.js
 7. [ ] `src/state.js` still has `lastApiCallTime` exports
 8. [ ] `src/llm.js` still calls `setLastApiCallTime` after responses
-9. [ ] No duplicate function declarations (check `git diff --check` for conflict markers)
-10. [ ] `src/extraction/extract.js` still uses `sanitizeMessageContent` from `message-sanitizer.js` in message formatting
-11. [ ] Extension loads without console errors
+9. [ ] No duplicate function declarations or imports (check `git diff --check` for conflict markers)
+10. [ ] `src/extraction/scheduler.js` still imports sanitized token functions from `message-sanitizer.js` (not raw from `tokens.js`)
+11. [ ] `src/extraction/worker.js` has single `refreshAllUI` import (no duplicates)
+12. [ ] `src/ui/settings.js` `onProgress` callbacks match 5-param signature `(batchNum, totalBatches, progressPercent, eventsCreated, retryText)`
+13. [ ] `src/prompts/reflection/examples/*.js` — all examples have both CoD-style thinking AND `importance` field in output JSON
+14. [ ] `src/extraction/structured.js` — `UnifiedReflectionSchema` has `importance` field
+15. [ ] Extension loads without console errors

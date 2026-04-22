@@ -35,6 +35,7 @@ import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import { getFingerprint } from '../extraction/scheduler.js';
 import { cachedContent } from '../injection/macros.js';
 import { filterMemoriesByPOV, getActiveCharacters, getPOVContext } from '../pov.js';
+import { getSettings } from '../settings.js';
 import { getOpenVaultData } from '../store/chat-data.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled, safeSetExtensionPrompt } from '../utils/st-helpers.js';
@@ -509,8 +510,9 @@ export async function retrieveAndInjectContext() {
 
         // Filter to memories from hidden messages only (visible messages are already in context)
         const hiddenMemories = _getHiddenMemories(chat, memories);
-        // Include reflections (which have no message_ids) in candidate set
-        const reflections = memories.filter((m) => m.type === 'reflection');
+        // Include reflections (which have no message_ids) in candidate set - respecting user toggle
+        const includeReflections = getSettings('reflectionInjectionEnabled', true);
+        const reflections = includeReflections ? memories.filter((m) => m.type === 'reflection') : [];
         const candidateMemories = _deduplicateById([...hiddenMemories, ...reflections]);
 
         // Filter memories by POV
@@ -622,8 +624,9 @@ export async function updateInjection(pendingUserMessage = '') {
 
     // Filter to memories from hidden messages only (visible messages are already in context)
     const hiddenMemories = _getHiddenMemories(context.chat, memories);
-    // Include reflections (which have no message_ids) in candidate set
-    const reflections = memories.filter((m) => m.type === 'reflection');
+    // Include reflections (which have no message_ids) in candidate set - respecting user toggle
+    const includeReflections = getSettings('reflectionInjectionEnabled', true);
+    const reflections = includeReflections ? memories.filter((m) => m.type === 'reflection') : [];
     const candidateMemories = _deduplicateById([...hiddenMemories, ...reflections]);
 
     // Filter memories by POV

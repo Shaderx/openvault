@@ -67,14 +67,19 @@ export function logError(msg, error, context) {
 }
 
 /**
- * Log full LLM request/response to console when request logging is enabled.
+ * Log LLM request/response to console.
+ *
+ * Behavior:
+ * - requestLogging DISABLED (default): Short debug stats for monitoring
+ * - requestLogging ENABLED: Full request/response for prompt tuning
+ *
  * Uses console.groupCollapsed for clean F12 experience.
  * @param {string} label - Context label (e.g., "Extraction")
  * @param {Object} data - { messages, maxTokens, profileId, response?, error? }
  */
 export function logRequest(label, data) {
     const settings = getDeps().getExtensionSettings()[extensionName];
-    if (!settings?.requestLogging) return;
+    const requestLoggingEnabled = settings?.requestLogging ?? false;
 
     const isError = !!data.error;
     const prefix = isError ? '❌' : '✅';
@@ -83,7 +88,7 @@ export function logRequest(label, data) {
     const groupEnd = c.groupEnd ? c.groupEnd.bind(c) : () => {};
 
     if (isError) {
-        // Full verbose output for failures
+        // Always show full verbose output for failures (regardless of setting)
         group(`[OpenVault] ${prefix} ${label} — FAILED`);
         c.log('Profile:', data.profileId);
         c.log('Max Tokens:', data.maxTokens);
@@ -96,8 +101,22 @@ export function logRequest(label, data) {
             c.error('Caused by:', data.error.cause);
         }
         groupEnd();
+        return;
+    }
+
+    // Success case: behavior depends on requestLogging setting
+    if (requestLoggingEnabled) {
+        // FULL OUTPUT: Show complete request/response for prompt tuning
+        const responseLength = typeof data.response === 'string' ? data.response.length : 0;
+        const messageCount = Array.isArray(data.messages) ? data.messages.length : 0;
+        group(`[OpenVault] ✅ ${label} — FULL (${responseLength} chars, ${messageCount} messages)`);
+        c.log('Profile:', data.profileId);
+        c.log('Max Tokens:', data.maxTokens);
+        c.log('Messages:', data.messages);
+        c.log('Response:', data.response);
+        groupEnd();
     } else {
-        // Compact summary for successful calls
+        // SHORT STATS: Compact summary for monitoring (default behavior)
         const responseLength = typeof data.response === 'string' ? data.response.length : 0;
         const messageCount = Array.isArray(data.messages) ? data.messages.length : 0;
         group(`[OpenVault] ✅ ${label} — OK (${responseLength} chars, ${messageCount} messages)`);

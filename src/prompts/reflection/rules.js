@@ -8,14 +8,14 @@ export const UNIFIED_REFLECTION_RULES = `1. Generate 1-3 salient high-level ques
 4. Quality over quantity — generate only as many reflections as you can support with strong evidence.
 5. NEVER include memory or event IDs (e.g. event_123, ref_456) inside "question" or "insight" text. Reference memories by their content, not by ID. IDs belong ONLY in the "evidence_ids" array.
 
-<thinking_process>
-Follow these steps IN ORDER. Write your work inside <think/> tags BEFORE outputting the JSON:
+<draft_process>
+Think step by step, but only keep a minimal draft for each step, with 8 words at most per step. Use symbols: -> for causation/actions, + for conjunction, != for contrast. Write your work inside <think/> tags BEFORE outputting the JSON:
 
-Step 1: Pattern scan — Identify recurring themes, emotional patterns, and behavioral clusters. Note a MAXIMUM of 5 relevant memory IDs. Do NOT list every ID.
-Step 2: Causal chains — Trace cause-effect sequences linking memories together.
-Step 3: Synthesis — For each question, formulate a high-level insight that connects multiple memories. Describe memories by their CONTENT (what happened, who did what), never by their ID.
-Step 4: Evidence — Assign specific memory IDs as evidence for each insight. Double-check: no IDs leaked into question or insight text.
-</thinking_process>`;
+Step 1: Pattern scan -> themes + emotions + behaviors; <=5 IDs.
+Step 2: Causal chains -> cause-effect links between memories.
+Step 3: Synthesis -> question + insight connecting memories by CONTENT.
+Step 4: Evidence -> assign IDs per insight; != IDs in question/insight text.
+</draft_process>`;
 
 export const QUESTIONS_RULES = `1. Questions should be answerable from the provided memory stream.
 2. Focus on patterns, changes, and emotional arcs — not individual events.
