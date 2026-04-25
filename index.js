@@ -8,6 +8,7 @@
  */
 
 // Import from modular structure
+console.log('[OpenVault:boot] Stage 0 — module evaluation start (static imports resolving)');
 import { extensionName, MEMORIES_KEY } from './src/constants.js';
 import { getDeps } from './src/deps.js';
 import { updateEventListeners } from './src/events.js';
@@ -18,6 +19,7 @@ import { loadSettings } from './src/ui/settings.js';
 import { setStatus } from './src/ui/status.js';
 import { showToast } from './src/utils/dom.js';
 import { logDebug, logError, logInfo } from './src/utils/logging.js';
+console.log('[OpenVault:boot] Stage 1 — static imports resolved, module body executing');
 
 // Re-export extensionName for external use
 export { extensionName };
@@ -119,36 +121,48 @@ function registerCommands() {
 }
 
 /**
- * Initialize the extension
- *
- * Uses jQuery DOM-ready pattern to self-initialize when the script loads.
- * Event listeners are registered synchronously to avoid race conditions.
+ * Core initialization — called by APP_READY or the safety-net fallback timer.
+ * Guarded so it only runs once.
  */
-jQuery(() => {
-    // Register APP_READY listener synchronously to avoid race conditions
-    const { eventSource, eventTypes } = getDeps();
-    eventSource.on(eventTypes.APP_READY, async () => {
-        // Check SillyTavern version
-        try {
-            const response = await fetch('/version');
-            const version = await response.json();
-            const [_major, minor] = version.pkgVersion.split('.').map(Number);
+let _initDone = false;
+async function initExtension(source) {
+    if (_initDone) return;
+    _initDone = true;
+    console.log(`[OpenVault:boot] Stage 4 — init starting (source: ${source})`);
 
-            if (minor < 13) {
-                showToast('error', 'OpenVault requires SillyTavern 1.13.0 or later');
-                return;
-            }
-        } catch (error) {
-            console.error('[OpenVault] Failed to check SillyTavern version:', error);
-            logError('Failed to check SillyTavern version', error);
-            showToast('error', 'OpenVault failed to verify SillyTavern version');
+    try {
+        const response = await fetch('/version');
+        const version = await response.json();
+        const [_major, minor] = version.pkgVersion.split('.').map(Number);
+        console.log(`[OpenVault:boot] Stage 5 — version check passed (1.${minor})`);
+
+        if (minor < 13) {
+            showToast('error', 'OpenVault requires SillyTavern 1.13.0 or later');
             return;
         }
+    } catch (error) {
+        console.error('[OpenVault:boot] FAILED at Stage 5 — version check:', error);
+        logError('Failed to check SillyTavern version', error);
+        showToast('error', 'OpenVault failed to verify SillyTavern version');
+        return;
+    }
 
+    try {
         await loadSettings();
-        registerCommands();
+        console.log('[OpenVault:boot] Stage 6 — loadSettings() complete');
+    } catch (error) {
+        console.error('[OpenVault:boot] FAILED at Stage 6 — loadSettings():', error);
+        return;
+    }
 
-        // Initialize side panel and bind toggle button
+    try {
+        registerCommands();
+        console.log('[OpenVault:boot] Stage 7 — registerCommands() complete');
+    } catch (error) {
+        console.error('[OpenVault:boot] FAILED at Stage 7 — registerCommands():', error);
+    }
+
+    try {
         const { initSidePanel, openSidePanel, toggleSidePanel } = await import('./src/ui/side-panel.js');
         await initSidePanel();
         $('#openvault_side_panel_toggle').off('click').on('click', (e) => {
@@ -156,16 +170,48 @@ jQuery(() => {
             toggleSidePanel();
         });
         openSidePanel();
+        console.log('[OpenVault:boot] Stage 8 — side panel initialized');
+    } catch (error) {
+        console.error('[OpenVault:boot] FAILED at Stage 8 — side panel:', error);
+    }
 
-        // Load perf data from current chat into memory store
+    try {
         const { loadFromChat } = await import('./src/perf/store.js');
         loadFromChat();
+        console.log('[OpenVault:boot] Stage 9 — perf data loaded');
+    } catch (error) {
+        console.error('[OpenVault:boot] FAILED at Stage 9 — perf store:', error);
+    }
 
-        // Set cooldown during initial load to prevent extraction from MESSAGE_RECEIVED events
-        setChatLoadingCooldown(2000, logDebug);
+    setChatLoadingCooldown(2000, logDebug);
+    updateEventListeners();
+    setStatus('ready');
+    console.log('[OpenVault:boot] Stage 10 — INIT COMPLETE ✓');
+    logInfo('Extension initialized successfully');
+}
 
-        updateEventListeners();
-        setStatus('ready');
-        logInfo('Extension initialized successfully');
-    });
+/**
+ * Initialize the extension
+ *
+ * Registers for APP_READY (normal path) and starts a fallback timer.
+ * If SillyTavern's init pipeline stalls before emitting APP_READY,
+ * the fallback self-initializes after FALLBACK_TIMEOUT_MS.
+ */
+const FALLBACK_TIMEOUT_MS = 15_000;
+
+jQuery(() => {
+    console.log('[OpenVault:boot] Stage 2 — jQuery DOM-ready fired');
+    const { eventSource, eventTypes } = getDeps();
+    console.log('[OpenVault:boot] Stage 3 — getDeps() OK, registering APP_READY listener');
+
+    // Normal path: APP_READY
+    eventSource.on(eventTypes.APP_READY, () => initExtension('APP_READY'));
+
+    // Safety net: if APP_READY never fires, self-initialize after timeout
+    setTimeout(() => {
+        if (!_initDone) {
+            console.warn(`[OpenVault:boot] APP_READY not received after ${FALLBACK_TIMEOUT_MS / 1000}s — forcing init`);
+            initExtension('fallback-timer');
+        }
+    }, FALLBACK_TIMEOUT_MS);
 });

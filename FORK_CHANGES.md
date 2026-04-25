@@ -217,7 +217,28 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **What it does:** Deletes `webgpu.powerPreference` to suppress a Chromium/Windows console warning (crbug.com/369219127).
 - **Merge strategy:** Self-contained try/catch block. Could be PR'd.
 
-### ~~PREF-4: Loading Order Priority~~ (REVERTED)
+### PREF-4: Boot Stage Logging + APP_READY Safety Net
+- **Files:** `index.js`
+- **What it does:** Two changes:
+  1. **Boot stage logging:** Adds `[OpenVault:boot] Stage N` console.log messages at each init step. Stages:
+     - `0` — Module evaluation start (before static imports resolve)
+     - `1` — Static imports resolved, module body executing
+     - `2` — jQuery DOM-ready fired
+     - `3` — `getDeps()` OK, registering `APP_READY` listener
+     - `4` — Init starting (logs whether triggered by `APP_READY` or `fallback-timer`)
+     - `5` — Version check passed
+     - `6` — `loadSettings()` complete (settings panel HTML loaded)
+     - `7` — `registerCommands()` complete
+     - `8` — Side panel initialized
+     - `9` — Perf data loaded
+     - `10` — **INIT COMPLETE** ✓
+     - Failed stages log `FAILED at Stage N` with the error.
+  2. **APP_READY safety net:** If SillyTavern's init pipeline stalls before emitting `APP_READY` (observed: other extensions or ST core init steps can hang/throw, blocking all downstream events), a 15-second fallback timer self-initializes the extension. The init function is guarded (`_initDone` flag) so it only runs once — whichever trigger arrives first wins.
+- **Why:** Diagnosed that the extension loads fine (stages 0–3) but `APP_READY` sometimes never fires because SillyTavern's `firstLoadInit` has ~35 init steps between `activateExtensions()` and the `APP_READY` emit. Any one of those hanging kills the event.
+- **Merge strategy:** Init logic extracted to `initExtension()` function. ~40 lines added to `index.js`. No upstream logic changes.
+- **Constant:** `FALLBACK_TIMEOUT_MS = 15000` (15 seconds). Tunable if needed.
+
+### ~~PREF-4-OLD: Loading Order Priority~~ (REVERTED)
 - Reverted to upstream `loading_order: 100`. No longer needed.
 
 ### ~~PREF-4-OLD: Embedding Warmup on Init~~ (REMOVED)
