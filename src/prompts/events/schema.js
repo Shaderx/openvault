@@ -25,7 +25,7 @@ FIELD DEFINITIONS:
 - characters_involved: Characters who actively participated or were directly affected (the main actors).
 - witnesses: ALL characters who would know this event occurred. MUST include characters_involved PLUS any present/observers. In a 1-on-1 scene, BOTH characters are witnesses.
 - is_secret: true ONLY for hidden actions (internal thoughts, secret plots). Most events are false.
-- temporal_anchor: Extract timestamp/date from message headers if present (e.g., "Friday, June 14, 3:40 PM"). null if no time stated.
+- temporal_anchor: REQUIRED FIELD — always include in output. Extract the date (and time if present) from message headers. Prefer date over bare time. Examples: "Friday, June 14, 3:40 PM", "Wednesday, 30 October 2024". If only a time exists with no date: "3:40 PM". null ONLY if no temporal information exists at all.
 - is_transient: true for short-term plans or temporary states ("going to wash up", "waiting 10 min"). false for permanent facts or completed actions.
 
 FORMAT RULES:

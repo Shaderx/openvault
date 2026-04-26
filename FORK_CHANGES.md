@@ -75,6 +75,17 @@ These fix real issues in upstream and should ideally be contributed back.
 - **Problem:** The JSON example in `EVENT_SCHEMA` (the authoritative "output this shape" shown to every extraction model) only listed 7 fields — `temporal_anchor` and `is_transient` were absent. While `EVENT_RULES` described both fields in prose and all few-shot examples included them, weaker/local models prioritize the example shape over rules text and omit any field not present in the schema example. This caused inconsistent `temporal_anchor: null` (missing entirely, not explicitly null) across extractions depending on model capability.
 - **Fix:** Added `"temporal_anchor": null` and `"is_transient": false` to the JSON example, plus brief field definitions in the FIELD DEFINITIONS section. Now all models — regardless of instruction-following strength — see the fields in the canonical output shape.
 
+### BUG-10: temporal_anchor not required and no date-vs-time priority
+- **Files:** `src/prompts/events/schema.js`, `src/prompts/events/rules.js`, `src/store/schemas.js`
+- **Problem:** Three issues with temporal_anchor handling:
+  1. **Field marked optional in Zod:** `EventSchema` used `.nullable().optional().default(null)`, so the field could be omitted entirely from the JSON reply. Weaker models that skip optional fields would produce events with no `temporal_anchor` key at all.
+  2. **Prompt didn't require the field:** Both `EVENT_SCHEMA` and `EVENT_RULES` described temporal_anchor as extract-if-present with `null` as default, but never stated the field itself must always appear in output.
+  3. **No priority between date and time:** When message headers contain both a date and a bare time, or only one of the two, the prompt gave no guidance on which to prefer. A date ("Friday, June 14") is far more useful for temporal anchoring than a bare time ("3:40 PM"), but models treated them equally.
+- **Fix:**
+  - `schema.js`: Field definition now says "REQUIRED FIELD — always include in output" with date > time priority and examples.
+  - `rules.js`: `<field_instructions>` section now has a numbered priority list (date+time → date only → time only → null) with explicit "A date alone is more valuable than a time alone."
+  - `schemas.js`: Removed `.optional()` from `temporal_anchor` in `EventSchema` — now `z.string().nullable().default(null)` (required key, null value permitted).
+
 ---
 
 ## Personal Features (keep separate)

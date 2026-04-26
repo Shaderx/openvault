@@ -59,7 +59,13 @@ witnesses: ALL named characters from the lore who would know this event occurred
 
 is_secret: Set to true ONLY if the event is explicitly hidden from the main character (e.g., user's internal thoughts, secret actions behind character's back, hidden plots). Most events are NOT secrets.
 
-temporal_anchor: Look for timestamp headers in messages (e.g., time/date markers). Extract ONLY the concise date and time as written by the user (e.g., "Friday, June 14, 3:40 PM" or "Wednesday, 30 October 2024. 4:43 PM"). Strip decorative elements like emojis, locations, and weather if present, but preserve the verbatim date/time format chosen by the user. If no time is stated, return null.
+temporal_anchor: ALWAYS include this field in output. Look for date/time markers in message headers.
+Priority order:
+  1. Date + time (best): "Friday, June 14, 3:40 PM", "Wednesday, 30 October 2024. 4:43 PM"
+  2. Date only: "Friday, June 14", "30 October 2024"
+  3. Time only (no date available): "3:40 PM", "11:20"
+  4. null — ONLY when no temporal information exists at all
+Strip decorative elements (emojis, locations, weather) but preserve the verbatim date/time format chosen by the user. A date alone is more valuable than a time alone.
 
 is_transient: Set to true ONLY for short-term intentions, temporary states, or immediate plans (e.g., "going to wash up", "waiting for 10 minutes", "be right back", "let's meet at 7 PM"). Set to false for permanent facts, completed actions, or durable relationship changes (e.g., "revealed a secret", "professed love", "moved to a new city").
 </field_instructions>

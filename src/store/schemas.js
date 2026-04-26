@@ -123,7 +123,7 @@ export const EventSchema = z.object({
     witnesses: z.array(z.string().trim()).default([]),
     location: z.string().nullable().default(null),
     is_secret: z.boolean().default(false),
-    temporal_anchor: z.string().nullable().optional().default(null),
+    temporal_anchor: z.string().nullable().default(null),
     is_transient: z.boolean().optional().default(false),
     emotional_impact: z.record(z.string().trim(), z.string()).optional().default({}),
     relationship_impact: z.record(z.string().trim(), z.string()).optional().default({}),
