@@ -13,9 +13,48 @@
     border-radius: 4px;
 }
 
+.openvault-character-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.openvault-character-header .openvault-entity-action-btn {
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.openvault-character-item:hover .openvault-character-header .openvault-entity-action-btn {
+    opacity: 0.6;
+}
+
+.openvault-character-header .openvault-entity-action-btn:hover {
+    opacity: 1;
+}
+
 .openvault-character-name {
     font-weight: bold;
-    margin-bottom: 6px;
+}
+
+.openvault-character-rename-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.openvault-character-rename-input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 4px;
+    background: var(--SmartThemeBlurTintColor, rgba(0, 0, 0, 0.3));
+    color: var(--SmartThemeBodyColor, #eee);
+    font-size: 0.95em;
+}
+
+.openvault-character-editing {
+    border: 1px solid var(--SmartThemeQuoteColor, rgba(74, 170, 74, 0.4));
 }
 
 /* Emotions */

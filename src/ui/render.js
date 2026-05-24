@@ -13,6 +13,7 @@ import {
     deleteMemory as deleteMemoryAction,
     getOpenVaultData,
     mergeEntities,
+    renameCharacter,
     updateEntity,
     updateMemory as updateMemoryAction,
 } from '../store/chat-data.js';
@@ -30,6 +31,7 @@ import { renderPerfTab, updateBudgetIndicators } from './settings.js';
 import { refreshStats } from './status.js';
 import {
     renderCharacterState,
+    renderCharacterStateEdit,
     renderCommunityAccordion,
     renderEntityCard,
     renderEntityEdit,
@@ -334,6 +336,87 @@ export function renderCharacterStates() {
         .join('');
 
     $container.html(html);
+}
+
+function initCharacterEditBindings() {
+    const $container = $(SELECTORS.CHARACTER_STATES);
+
+    $container.on('click', '.openvault-edit-character', (e) => {
+        const name = $(e.currentTarget).data('char-name');
+        const data = getOpenVaultData();
+        const characters = data?.[CHARACTERS_KEY] || {};
+        if (!characters[name]) return;
+        const charData = buildCharacterStateData(name, characters[name]);
+        const $item = $container.find(`.openvault-character-item[data-char-name="${name}"]`);
+        $item.replaceWith(renderCharacterStateEdit(charData));
+        $container.find(`.openvault-character-editing[data-char-name="${name}"] .openvault-character-rename-input`).focus().select();
+    });
+
+    $container.on('click', '.openvault-cancel-character-rename', (e) => {
+        const name = $(e.currentTarget).data('char-name');
+        const data = getOpenVaultData();
+        const characters = data?.[CHARACTERS_KEY] || {};
+        if (!characters[name]) return;
+        const charData = buildCharacterStateData(name, characters[name]);
+        const $item = $container.find(`.openvault-character-editing[data-char-name="${name}"]`);
+        $item.replaceWith(renderCharacterState(charData));
+    });
+
+    $container.on('click', '.openvault-save-character-rename', async (e) => {
+        const oldName = $(e.currentTarget).data('char-name');
+        await handleCharacterRename($container, oldName);
+    });
+
+    $container.on('keypress', '.openvault-character-rename-input', async (e) => {
+        if (e.which === 13) {
+            const oldName = $(e.currentTarget).data('old-name');
+            await handleCharacterRename($container, oldName);
+        }
+    });
+
+    $container.on('keydown', '.openvault-character-rename-input', (e) => {
+        if (e.key === 'Escape') {
+            const oldName = $(e.currentTarget).data('old-name');
+            const data = getOpenVaultData();
+            const characters = data?.[CHARACTERS_KEY] || {};
+            if (!characters[oldName]) return;
+            const charData = buildCharacterStateData(oldName, characters[oldName]);
+            const $item = $container.find(`.openvault-character-editing[data-char-name="${oldName}"]`);
+            $item.replaceWith(renderCharacterState(charData));
+        }
+    });
+}
+
+async function handleCharacterRename($container, oldName) {
+    const $editing = $container.find(`.openvault-character-editing[data-char-name="${oldName}"]`);
+    const newName = $editing.find('.openvault-character-rename-input').val()?.toString().trim();
+
+    if (!newName) {
+        showToast('warning', 'Name cannot be empty');
+        return;
+    }
+    if (newName === oldName) {
+        renderCharacterStates();
+        return;
+    }
+
+    const $btn = $editing.find('.openvault-save-character-rename');
+    $btn.prop('disabled', true);
+
+    const result = await renameCharacter(oldName, newName);
+    if (result.success) {
+        if (result.stChanges) {
+            const { applySyncChanges } = await import('../extraction/extract.js');
+            await applySyncChanges(result.stChanges);
+        }
+        renderCharacterStates();
+        renderMemoryList();
+        populateCharacterFilter();
+        refreshStats();
+        import('./side-panel.js').then(({ refreshSidePanel }) => refreshSidePanel());
+        showToast('success', `Renamed "${oldName}" → "${newName}"`);
+    }
+    $btn.prop('disabled', false);
 }
 
 // =============================================================================
@@ -815,6 +898,7 @@ async function confirmEntityMerge(sourceKey) {
 export function initBrowser() {
     bindMemoryListEvents();
     initEntityEventBindings();
+    initCharacterEditBindings();
     initPositionBadges();
     renderMemoryList();
     renderCharacterStates();

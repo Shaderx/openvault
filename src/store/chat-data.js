@@ -483,6 +483,78 @@ export async function deleteCommunity(id) {
 }
 
 /**
+ * Rename a character across all data: character_states, reflection_state,
+ * and every memory's characters_involved / witnesses arrays.
+ * Optionally updates the matching graph PERSON entity.
+ * @param {string} oldName - Current character name
+ * @param {string} newName - Desired character name
+ * @returns {Promise<{success: boolean, stChanges?: {toDelete?: {hash: number}[], toSync?: {hash: number, text: string, item: any}[]}}>}
+ */
+export async function renameCharacter(oldName, newName) {
+    const data = getOpenVaultData();
+    if (!data) {
+        showToast('warning', 'No chat loaded');
+        return { success: false };
+    }
+
+    if (!oldName || !newName || oldName === newName) {
+        return { success: false };
+    }
+
+    const characters = data[CHARACTERS_KEY] || {};
+    if (characters[newName]) {
+        showToast('warning', `Character "${newName}" already exists`);
+        return { success: false };
+    }
+
+    // 1. Rename key in character_states
+    if (characters[oldName]) {
+        characters[newName] = { ...characters[oldName], name: newName };
+        delete characters[oldName];
+    }
+
+    // 2. Rename key in reflection_state
+    const reflectionState = data.reflection_state || {};
+    if (reflectionState[oldName]) {
+        reflectionState[newName] = reflectionState[oldName];
+        delete reflectionState[oldName];
+    }
+
+    // 3. Update characters_involved and witnesses in all memories
+    const memories = data[MEMORIES_KEY] || [];
+    for (const memory of memories) {
+        if (memory.characters_involved) {
+            memory.characters_involved = memory.characters_involved.map(
+                (c) => c === oldName ? newName : c
+            );
+        }
+        if (memory.witnesses) {
+            memory.witnesses = memory.witnesses.map(
+                (c) => c === oldName ? newName : c
+            );
+        }
+    }
+
+    // 4. Update matching graph PERSON entity if one exists
+    let entityResult = null;
+    const graph = data.graph;
+    if (graph?.nodes) {
+        const oldKey = normalizeKey(oldName);
+        if (graph.nodes[oldKey] && graph.nodes[oldKey].type === 'PERSON') {
+            entityResult = await updateEntity(oldKey, { name: newName });
+        }
+    }
+
+    await getDeps().saveChatConditional();
+    logInfo(`Renamed character "${oldName}" → "${newName}"`);
+
+    return {
+        success: true,
+        stChanges: entityResult?.stChanges,
+    };
+}
+
+/**
  * Append new memories to the store.
  * @param {Memory[]} newMemories - Memory objects to add
  * @returns {void}

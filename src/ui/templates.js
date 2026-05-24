@@ -215,9 +215,15 @@ export function renderMemoryEdit(memory) {
  * Render a single character state as HTML
  */
 export function renderCharacterState(charData) {
+    const eName = escapeHtml(charData.name);
     return `
-        <div class="openvault-character-item">
-            <div class="openvault-character-name">${escapeHtml(charData.name)}</div>
+        <div class="openvault-character-item" data-char-name="${eName}">
+            <div class="openvault-character-header">
+                <div class="openvault-character-name">${eName}</div>
+                <button class="openvault-entity-action-btn openvault-edit-character" data-char-name="${eName}" title="Rename character">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+            </div>
             <div class="openvault-emotion">
                 <span class="openvault-emotion-label">${escapeHtml(charData.emotion)}${charData.emotionSource || ''}</span>
                 <div class="openvault-emotion-bar">
@@ -225,6 +231,26 @@ export function renderCharacterState(charData) {
                 </div>
             </div>
             <div class="openvault-memory-witnesses">Known events: ${charData.knownCount}</div>
+        </div>
+    `;
+}
+
+/**
+ * Render inline rename form for a character state
+ */
+export function renderCharacterStateEdit(charData) {
+    const eName = escapeHtml(charData.name);
+    return `
+        <div class="openvault-character-item openvault-character-editing" data-char-name="${eName}">
+            <div class="openvault-character-rename-row">
+                <input type="text" class="openvault-character-rename-input" value="${eName}" data-old-name="${eName}">
+                <button class="openvault-entity-action-btn openvault-save-character-rename" data-char-name="${eName}" title="Save">
+                    <i class="fa-solid fa-check"></i>
+                </button>
+                <button class="openvault-entity-action-btn openvault-cancel-character-rename" data-char-name="${eName}" title="Cancel">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
         </div>
     `;
 }

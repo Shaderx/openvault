@@ -15,12 +15,14 @@ import {
     mergeEntities,
     updateCommunity,
     deleteCommunity,
+    renameCharacter,
 } from '../store/chat-data.js';
 import { escapeHtml, showToast } from '../utils/dom.js';
 import { buildCharacterStateData, filterEntities, formatMemoryDate, formatMemoryImportance } from './helpers.js';
 import { refreshStats } from './status.js';
 import {
     renderCharacterState,
+    renderCharacterStateEdit,
     renderCommunityAccordion,
     renderEntityCard,
     renderEntityEdit,
@@ -317,6 +319,83 @@ function bindSidePanelEvents() {
             showToast('success', 'Community deleted');
         }
     });
+
+    // =========================================================================
+    // Character rename actions (sidebar)
+    // =========================================================================
+
+    $panel.on('click', '.openvault-edit-character', (e) => {
+        const name = $(e.currentTarget).data('char-name');
+        const data = getOpenVaultData();
+        const characters = data?.[CHARACTERS_KEY] || {};
+        if (!characters[name]) return;
+        const charData = buildCharacterStateData(name, characters[name]);
+        const $item = $panel.find(`.openvault-character-item[data-char-name="${name}"]`);
+        $item.replaceWith(renderCharacterStateEdit(charData));
+        $panel.find(`.openvault-character-editing[data-char-name="${name}"] .openvault-character-rename-input`).focus().select();
+    });
+
+    $panel.on('click', '.openvault-cancel-character-rename', (e) => {
+        const name = $(e.currentTarget).data('char-name');
+        const data = getOpenVaultData();
+        const characters = data?.[CHARACTERS_KEY] || {};
+        if (!characters[name]) return;
+        const charData = buildCharacterStateData(name, characters[name]);
+        const $item = $panel.find(`.openvault-character-editing[data-char-name="${name}"]`);
+        $item.replaceWith(renderCharacterState(charData));
+    });
+
+    $panel.on('click', '.openvault-save-character-rename', async (e) => {
+        const oldName = $(e.currentTarget).data('char-name');
+        await handleSideCharacterRename($panel, oldName);
+    });
+
+    $panel.on('keypress', '.openvault-character-rename-input', async (e) => {
+        if (e.which === 13) {
+            const oldName = $(e.currentTarget).data('old-name');
+            await handleSideCharacterRename($panel, oldName);
+        }
+    });
+
+    $panel.on('keydown', '.openvault-character-rename-input', (e) => {
+        if (e.key === 'Escape') {
+            const oldName = $(e.currentTarget).data('old-name');
+            const data = getOpenVaultData();
+            const characters = data?.[CHARACTERS_KEY] || {};
+            if (!characters[oldName]) return;
+            const charData = buildCharacterStateData(oldName, characters[oldName]);
+            const $item = $panel.find(`.openvault-character-editing[data-char-name="${oldName}"]`);
+            $item.replaceWith(renderCharacterState(charData));
+        }
+    });
+}
+
+async function handleSideCharacterRename($panel, oldName) {
+    const $editing = $panel.find(`.openvault-character-editing[data-char-name="${oldName}"]`);
+    const newName = $editing.find('.openvault-character-rename-input').val()?.toString().trim();
+
+    if (!newName) {
+        showToast('warning', 'Name cannot be empty');
+        return;
+    }
+    if (newName === oldName) {
+        renderSideCharacters();
+        return;
+    }
+
+    const $btn = $editing.find('.openvault-save-character-rename');
+    $btn.prop('disabled', true);
+
+    const result = await renameCharacter(oldName, newName);
+    if (result.success) {
+        if (result.stChanges) {
+            const { applySyncChanges } = await import('../extraction/extract.js');
+            await applySyncChanges(result.stChanges);
+        }
+        refreshSidePanel();
+        showToast('success', `Renamed "${oldName}" → "${newName}"`);
+    }
+    $btn.prop('disabled', false);
 }
 
 function getSideMemoryById(id) {

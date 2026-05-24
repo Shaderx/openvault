@@ -202,6 +202,17 @@ These are fork-only features. Isolate in dedicated files where possible.
   - **Dedicated `<existing_reflections>` section:** Previous insights for the character are shown separately from candidate memories, with explicit instruction to build on them or identify contradictions rather than repeat.
 - **Merge strategy:** Touches 7 files, all upstream-adjacent. Schema/examples changes are additive. The `buildUnifiedReflectionPrompt` signature gained 2 new params (`existingReflections`, `characterDescription`) — any upstream callers would need updating.
 
+### FEAT-17: Character Rename (Propagated to Tags)
+- **Files:** `src/store/chat-data.js` (+`renameCharacter`), `src/ui/templates.js` (+`renderCharacterStateEdit`, modified `renderCharacterState`), `src/ui/render.js` (+`initCharacterEditBindings`, +`handleCharacterRename`), `src/ui/side-panel.js` (+character rename bindings, +`handleSideCharacterRename`), `css/world.css` (+character edit styles)
+- **What it does:** Adds a rename button (pencil icon, visible on hover) to each character state card in both the settings panel and sidebar. Clicking it shows an inline text input. On save, `renameCharacter(oldName, newName)` propagates the change to:
+  1. `character_states` key
+  2. `reflection_state` key
+  3. `characters_involved` on every memory
+  4. `witnesses` on every memory
+  5. Matching graph `PERSON` entity (if one exists) — reuses existing `updateEntity` rename logic (edges, merge redirects, embeddings)
+- **Why:** When the LLM misspells or misnames a character during extraction, all subsequent memories carry the wrong name in their character tags. Previously there was no way to fix this without manually editing chat metadata.
+- **Merge strategy:** Store function is self-contained. Template change adds a wrapper div + button to existing `renderCharacterState`. Event bindings are additive in both `render.js` and `side-panel.js`. CSS is in upstream-owned `world.css` but non-conflicting (new selectors only).
+
 ### FEAT-13: Narrative Bridge for Hidden Message Gaps
 - **Files:** `src/retrieval/retrieve.js` (+`countHiddenMessages`, +`prependGapNotice`, +`buildEmptyBridge`, modified `injectContext`)
 - **What it does:** When auto-hide removes messages from the middle of chat, the LLM sees a jarring jump from frozen opening messages to recent messages with no explanation. This feature detects the gap (`openvault_hidden` flag) and handles two cases:
@@ -278,4 +289,8 @@ After every `git merge upstream/master`, verify:
 12. [ ] `src/ui/settings.js` `onProgress` callbacks match 5-param signature `(batchNum, totalBatches, progressPercent, eventsCreated, retryText)`
 13. [ ] `src/prompts/reflection/examples/*.js` — all examples have both CoD-style thinking AND `importance` field in output JSON
 14. [ ] `src/extraction/structured.js` — `UnifiedReflectionSchema` has `importance` field
-15. [ ] Extension loads without console errors
+15. [ ] `src/store/chat-data.js` still exports `renameCharacter`
+16. [ ] `src/ui/templates.js` still exports `renderCharacterStateEdit` and `renderCharacterState` includes edit button
+17. [ ] `src/ui/render.js` still calls `initCharacterEditBindings()` in `initBrowser()`
+18. [ ] `src/ui/side-panel.js` still has character rename bindings in `bindSidePanelEvents()`
+19. [ ] Extension loads without console errors
