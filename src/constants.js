@@ -71,9 +71,12 @@ export const defaultSettings = {
     // Concurrency settings (Phase 2 parallelism)
     maxConcurrency: 1, // Default to 1 to protect local/VRAM-bound LLM users
     // Embedding settings (Local RAG)
-    embeddingSource: 'multilingual-e5-small', // model name, 'ollama', or 'st_vector'
+    embeddingSource: 'multilingual-e5-small', // model name, 'ollama', 'openai_api', or 'st_vector'
     ollamaUrl: '',
     embeddingModel: '',
+    embeddingApiUrl: '', // OpenAI-compatible API base URL (e.g. https://api.openai.com/v1)
+    embeddingApiKey: '', // Bearer token for OpenAI-compatible API
+    embeddingApiModel: '', // Model name for OpenAI-compatible API (e.g. text-embedding-3-small)
     embeddingQueryPrefix: '', // Empty by default — e5-small works best without prefixes
     embeddingDocPrefix: '', // Empty by default — e5-small works best without prefixes
     // Alpha-blend scoring
@@ -144,6 +147,7 @@ export const embeddingModelPrefixes = {
 export const EMBEDDING_SOURCES = Object.freeze({
     LOCAL: 'local',
     OLLAMA: 'ollama',
+    OPENAI_API: 'openai_api',
     ST_VECTOR: 'st_vector',
 });
 
@@ -232,11 +236,10 @@ export const ENTITY_MERGE_THRESHOLD = 0.9;
 export const GRAPH_JACCARD_DUPLICATE_THRESHOLD = 0.6;
 export const ENTITY_TOKEN_OVERLAP_MIN_RATIO = 0.5;
 
-// Budget split ratios for the shared Final Context Budget pool.
-// scene_memory gets the lion's share; entities and world split the rest.
-export const BUDGET_RATIO_SCENE = 0.60;
-export const BUDGET_RATIO_ENTITY = 0.20;
-export const BUDGET_RATIO_WORLD = 0.20;
+// Soft-cap ratios for entity and world context within the shared Final Context Budget.
+// These are maximum shares — actual usage is measured first and the remainder goes to scene_memory.
+export const MAX_RATIO_ENTITY = 0.20;
+export const MAX_RATIO_WORLD = 0.20;
 
 export const REFLECTION_SKIP_SIMILARITY = 0.85;
 export const REFLECTION_MIN_MEMORIES = 40;

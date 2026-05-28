@@ -207,6 +207,7 @@
                             </optgroup>
                             <optgroup label="External">
                                 <option value="ollama">Ollama (Custom server)</option>
+                                <option value="openai_api">OpenAI-Compatible API (Custom endpoint)</option>
                                 <option value="st_vector">ST Vector Storage (SillyTavern)</option>
                             </optgroup>
                         </select>
@@ -242,6 +243,25 @@
 
                             <label for="openvault_embedding_model">Model Name</label>
                             <input type="text" id="openvault_embedding_model" class="text_pole" placeholder="nomic-embed-text" />
+                        </div>
+
+                        <!-- OpenAI-Compatible API Settings (hidden by default) -->
+                        <div id="openvault_openai_api_settings" style="display: none; margin-top: 10px;">
+                            <label for="openvault_embedding_api_url">
+                                API Base URL
+                                <button id="openvault_test_openai_api_btn" class="menu_button openvault-test-btn">
+                                    <i class="fa-solid fa-plug"></i> Test
+                                </button>
+                            </label>
+                            <input type="text" id="openvault_embedding_api_url" class="text_pole" placeholder="https://api.openai.com/v1" />
+                            <small class="openvault-hint">Base URL for the embeddings endpoint. Appends <code>/embeddings</code> automatically. Works with OpenAI, Together AI, Mistral, and other compatible providers.</small>
+
+                            <label for="openvault_embedding_api_key">API Key</label>
+                            <input type="password" id="openvault_embedding_api_key" class="text_pole" placeholder="sk-..." />
+                            <small class="openvault-hint">Bearer token for authentication. Stored in extension settings.</small>
+
+                            <label for="openvault_embedding_api_model">Model Name</label>
+                            <input type="text" id="openvault_embedding_api_model" class="text_pole" placeholder="text-embedding-3-small" />
                         </div>
 
                         <!-- WebGPU Help -->

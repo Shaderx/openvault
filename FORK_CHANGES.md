@@ -183,11 +183,12 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **Design rationale:** Entities are static reference material (like Lorebook entries), while communities are dynamic thematic summaries. Entities belong at the system level; communities belong near/in chat. This separation mirrors how SillyTavern's own World Info uses "Before/After Char Defs" positions for reference data.
 - **Merge strategy:** One new file (`entity-context.js`). `retrieve.js`: +1 helper function, ~12 lines added to `injectContext`. Could be PR'd upstream.
 
-### FEAT-15: Shared Context Budget Pool (60/20/20 Split)
-- **Files:** `src/constants.js` (+`BUDGET_RATIO_SCENE/ENTITY/WORLD`, removed `entityContextBudget`), `src/retrieval/retrieve.js` (modified `buildRetrievalContext` + `injectContext`)
-- **What it does:** Replaces the separate fixed-cap budgets for scene memories, entities, and world context with a single shared pool derived from "Final Context Budget" (`retrievalFinalTokens`). The pool is split: **60% scene memories**, **20% entity context**, **20% world/communities**. With the default 10,000 pool this gives scene=6000, entity=2000, world=2000 tokens. With a 15,000 pool: scene=9000, entity=3000, world=3000.
-- **Design rationale:** A single slider controls the total OpenVault injection footprint, making budget tuning intuitive. The 60/20/20 split prioritizes narrative memories (the largest and most dynamic block) while giving meaningful budgets to reference data (entities) and thematic context (communities). Ratios are exported constants, easy to adjust.
-- **Merge strategy:** `constants.js`: +3 exported ratio constants, -1 setting. `retrieve.js`: ~6 lines changed in `buildRetrievalContext` to compute split, ~1 line in `injectContext`. Minimal diff, could be PR'd upstream.
+### FEAT-15: Demand-Based Context Budget Allocation
+- **Files:** `src/constants.js` (`MAX_RATIO_ENTITY`, `MAX_RATIO_WORLD` soft caps), `src/retrieval/retrieve.js` (new `_buildEntityText`, `_buildWorldText` helpers; rewritten `selectFormatAndInject` pipeline; simplified `injectContext`), `src/events.js` (fixed schema migration gate)
+- **What it does:** Replaces the rigid 60/20/20 fixed-ratio budget split with demand-based allocation. Entity and world context are built first (each with a 20% soft cap), their actual token usage is measured, and scene_memory gets all remaining tokens. With a 15,000 pool and typical entity (400 tokens) + world (800 tokens) usage, scene gets ~13,800 tokens instead of the previous fixed 9,000.
+- **Pipeline order:** (1) Build entity context with cap → measure actual tokens, (2) Build world context with cap → measure actual tokens, (3) sceneBudget = totalPool - entityActual - worldActual, (4) Score & select memories with dynamic sceneBudget, (5) Format memories, (6) Inject all three.
+- **Also fixes:** Schema migration gate in `events.js` was hardcoded to `schema_version < 2`, preventing V3+ migrations (fingerprint backfill) from running. Changed to `< CURRENT_SCHEMA_VERSION`.
+- **Design rationale:** The old fixed split wasted tokens — entity context typically uses 200-500 tokens and world context 300-1000, but each reserved 20% (3,000 tokens at 15k pool). The unused budget was lost to scene_memory, starving "The Story So Far" summaries. Demand-based allocation lets scene absorb whatever entity and world don't need.
 
 ### FEAT-16: Reflection Quality Overhaul (Dynamic Importance + Richer Context)
 - **Files:** `src/reflection/reflect.js`, `src/prompts/reflection/builder.js`, `src/prompts/reflection/schema.js`, `src/prompts/reflection/examples/en.js`, `src/prompts/reflection/examples/ru.js`, `src/extraction/structured.js`, `src/constants.js`
@@ -212,6 +213,12 @@ These are fork-only features. Isolate in dedicated files where possible.
   5. Matching graph `PERSON` entity (if one exists) — reuses existing `updateEntity` rename logic (edges, merge redirects, embeddings)
 - **Why:** When the LLM misspells or misnames a character during extraction, all subsequent memories carry the wrong name in their character tags. Previously there was no way to fix this without manually editing chat metadata.
 - **Merge strategy:** Store function is self-contained. Template change adds a wrapper div + button to existing `renderCharacterState`. Event bindings are additive in both `render.js` and `side-panel.js`. CSS is in upstream-owned `world.css` but non-conflicting (new selectors only).
+
+### FEAT-18: OpenAI-Compatible Embedding API
+- **Files:** `src/constants.js` (+`OPENAI_API` source, +3 default settings), `src/embeddings.js` (+`OpenAICompatibleStrategy` class, +`testOpenAIApiConnection` export, updated 5 call sites), `templates/settings_panel.html` (+dropdown option, +settings section), `src/ui/settings.js` (+bindings, +test handler, +PRESERVED_KEYS, +updateUI sync)
+- **What it does:** Adds a new "OpenAI-Compatible API" embedding source that calls the standard `/v1/embeddings` endpoint. Configurable via three fields: API Base URL, API Key, and Model Name. Compatible with OpenAI, Together AI, Voyage AI, Mistral, and any provider implementing the OpenAI embeddings format. Includes a "Test" button to verify connectivity. Settings survive reset (added to `PRESERVED_KEYS`). Switching to/from this source triggers the standard embedding invalidation and auto-backfill flow.
+- **Settings added:** `embeddingApiUrl`, `embeddingApiKey`, `embeddingApiModel`
+- **Merge strategy:** `constants.js`: +1 enum value, +3 defaults. `embeddings.js`: new class + 1-line registry entry + 3 extra options per call site (non-breaking — other strategies ignore unknown options). `settings_panel.html`: +1 `<option>`, +1 settings `<div>`. `settings.js`: +15 lines bindings, +30 lines test handler. All additive, no existing logic modified.
 
 ### FEAT-13: Narrative Bridge for Hidden Message Gaps
 - **Files:** `src/retrieval/retrieve.js` (+`countHiddenMessages`, +`prependGapNotice`, +`buildEmptyBridge`, modified `injectContext`)
@@ -293,4 +300,7 @@ After every `git merge upstream/master`, verify:
 16. [ ] `src/ui/templates.js` still exports `renderCharacterStateEdit` and `renderCharacterState` includes edit button
 17. [ ] `src/ui/render.js` still calls `initCharacterEditBindings()` in `initBrowser()`
 18. [ ] `src/ui/side-panel.js` still has character rename bindings in `bindSidePanelEvents()`
-19. [ ] Extension loads without console errors
+19. [ ] `src/embeddings.js` still has `OpenAICompatibleStrategy` registered in `strategies` map and `testOpenAIApiConnection` export
+20. [ ] `src/ui/settings.js` still has `handleOpenAIApiTestClick`, OpenAI API field bindings, and `embeddingApiUrl/Key/Model` in `PRESERVED_KEYS`
+21. [ ] `templates/settings_panel.html` still has `openai_api` option in embedding source dropdown and `#openvault_openai_api_settings` section
+22. [ ] Extension loads without console errors

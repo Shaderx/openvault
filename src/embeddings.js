@@ -474,6 +474,128 @@ export async function testOllamaConnection(url) {
 }
 
 // =============================================================================
+// OpenAI-Compatible API Strategy
+// =============================================================================
+
+class OpenAICompatibleStrategy extends EmbeddingStrategy {
+    getId() {
+        return EMBEDDING_SOURCES.OPENAI_API;
+    }
+
+    #getSettings() {
+        const settings = getDeps().getExtensionSettings()[extensionName];
+        return {
+            apiUrl: settings?.embeddingApiUrl,
+            apiKey: settings?.embeddingApiKey,
+            apiModel: settings?.embeddingApiModel,
+        };
+    }
+
+    isEnabled() {
+        const { apiUrl, apiKey, apiModel } = this.#getSettings();
+        return !!(apiUrl && apiKey && apiModel);
+    }
+
+    getStatus() {
+        const { apiUrl, apiModel } = this.#getSettings();
+        if (apiUrl && apiModel) {
+            return `API: ${apiModel}`;
+        }
+        return 'API: Not configured';
+    }
+
+    async getEmbedding(text, { signal, apiUrl, apiKey, apiModel } = {}) {
+        if (!apiUrl || !apiKey || !apiModel) {
+            return null;
+        }
+
+        if (!text || text.trim().length === 0) {
+            return null;
+        }
+
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+        try {
+            const cleanUrl = apiUrl.replace(/\/+$/, '');
+            const endpoint = cleanUrl.endsWith('/v1')
+                ? `${cleanUrl}/embeddings`
+                : `${cleanUrl}/v1/embeddings`;
+
+            const response = await getDeps().fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                    model: apiModel,
+                    input: text.trim(),
+                }),
+                signal,
+            });
+
+            if (!response.ok) {
+                logDebug(`OpenAI API embedding request failed: ${response.status} ${response.statusText}`);
+                return null;
+            }
+
+            const data = await response.json();
+            const embedding = data?.data?.[0]?.embedding;
+            return embedding ? new Float32Array(embedding) : null;
+        } catch (error) {
+            if (error.name === 'AbortError') throw error;
+            logError('OpenAI API embedding failed', error, {
+                modelName: apiModel,
+                textSnippet: text?.slice(0, 100),
+            });
+            return null;
+        }
+    }
+
+    async getQueryEmbedding(text, options = {}) {
+        return this.getEmbedding(text, options);
+    }
+
+    async getDocumentEmbedding(text, options = {}) {
+        return this.getEmbedding(text, options);
+    }
+}
+
+/**
+ * Test OpenAI-compatible API connection by sending a minimal embedding request
+ * @param {string} apiUrl - API base URL (e.g., 'https://api.openai.com/v1')
+ * @param {string} apiKey - Bearer token
+ * @param {string} apiModel - Model name
+ * @returns {Promise<boolean>} True if connection successful
+ * @throws {Error} If HTTP error or network error occurs
+ */
+export async function testOpenAIApiConnection(apiUrl, apiKey, apiModel) {
+    const cleanUrl = apiUrl.replace(/\/+$/, '');
+    const endpoint = cleanUrl.endsWith('/v1')
+        ? `${cleanUrl}/embeddings`
+        : `${cleanUrl}/v1/embeddings`;
+
+    const response = await getDeps().fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: apiModel,
+            input: 'test',
+        }),
+    });
+
+    if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`HTTP ${response.status}: ${body.slice(0, 200)}`);
+    }
+
+    return true;
+}
+
+// =============================================================================
 // ST Vector Storage Strategy
 // =============================================================================
 
@@ -542,6 +664,7 @@ const strategies = {
     'bge-small-en-v1.5': new TransformersStrategy(),
     'embeddinggemma-300m': new TransformersStrategy(),
     [EMBEDDING_SOURCES.OLLAMA]: new OllamaStrategy(),
+    [EMBEDDING_SOURCES.OPENAI_API]: new OpenAICompatibleStrategy(),
     [EMBEDDING_SOURCES.ST_VECTOR]: new StVectorStrategy(),
 };
 
@@ -676,6 +799,9 @@ export async function getQueryEmbedding(text, { signal } = {}) {
         prefix: settings.embeddingQueryPrefix,
         url: settings.ollamaUrl,
         model: settings.embeddingModel,
+        apiUrl: settings.embeddingApiUrl,
+        apiKey: settings.embeddingApiKey,
+        apiModel: settings.embeddingApiModel,
     });
 
     if (embeddingCache.size >= MAX_CACHE_SIZE) {
@@ -714,6 +840,9 @@ export async function getDocumentEmbedding(summary, { signal } = {}) {
         prefix: settings.embeddingDocPrefix,
         url: settings.ollamaUrl,
         model: settings.embeddingModel,
+        apiUrl: settings.embeddingApiUrl,
+        apiKey: settings.embeddingApiKey,
+        apiModel: settings.embeddingApiModel,
     });
 
     if (embeddingCache.size >= MAX_CACHE_SIZE) {
@@ -779,6 +908,9 @@ export async function generateEmbeddingsForMemories(memories, { signal } = {}) {
             prefix: settings.embeddingDocPrefix,
             url: settings.ollamaUrl,
             model: settings.embeddingModel,
+            apiUrl: settings.embeddingApiUrl,
+            apiKey: settings.embeddingApiKey,
+            apiModel: settings.embeddingApiModel,
         });
     });
 
@@ -829,6 +961,9 @@ export async function enrichEventsWithEmbeddings(events, { signal } = {}) {
             prefix: settings.embeddingDocPrefix,
             url: settings.ollamaUrl,
             model: settings.embeddingModel,
+            apiUrl: settings.embeddingApiUrl,
+            apiKey: settings.embeddingApiKey,
+            apiModel: settings.embeddingApiModel,
         });
     });
 
@@ -972,6 +1107,9 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
                     prefix: settings.embeddingDocPrefix,
                     url: settings.ollamaUrl,
                     model: settings.embeddingModel,
+                    apiUrl: settings.embeddingApiUrl,
+                    apiKey: settings.embeddingApiKey,
+                    apiModel: settings.embeddingApiModel,
                 });
             });
             for (let i = 0; i < nodes.length; i++) {

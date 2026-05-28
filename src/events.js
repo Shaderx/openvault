@@ -8,6 +8,7 @@ import { extensionName, MEMORIES_KEY, METADATA_KEY, RETRIEVAL_TIMEOUT_MS } from 
 import { getDeps } from './deps.js';
 import './settings.js'; // Side-effect import to initialize settings with lodash.merge
 import { loadFromChat as loadPerfFromChat, record } from './perf/store.js';
+import { CURRENT_SCHEMA_VERSION } from './store/migrations/index.js';
 import {
     clearGenerationLock,
     isChatLoadingCooldown,
@@ -265,7 +266,7 @@ export async function onChatChanged() {
     }
 
     // Run schema migration if needed
-    if (data && (!data.schema_version || data.schema_version < 2)) {
+    if (data && (!data.schema_version || data.schema_version < CURRENT_SCHEMA_VERSION)) {
         const backup = structuredClone(data);
 
         try {

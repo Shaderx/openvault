@@ -23,6 +23,7 @@ import {
     isEmbeddingsEnabled,
     setEmbeddingStatusCallback,
     testOllamaConnection,
+    testOpenAIApiConnection,
 } from '../embeddings.js';
 import { updateEventListeners } from '../events.js';
 import { executeEmergencyCut } from '../extraction/extract.js';
@@ -171,6 +172,8 @@ async function handleOllamaTestClick() {
         return;
     }
 
+    setSetting('ollamaUrl', url);
+
     $btn.removeClass('success error');
     $btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Testing...');
 
@@ -178,10 +181,55 @@ async function handleOllamaTestClick() {
         await testOllamaConnection(url);
         $btn.removeClass('error').addClass('success');
         $btn.html('<i class="fa-solid fa-check"></i> Connected');
+        updateEmbeddingStatusDisplay(getEmbeddingStatus());
     } catch (err) {
         $btn.removeClass('success').addClass('error');
         $btn.html('<i class="fa-solid fa-xmark"></i> Failed');
         logError('Ollama test failed', err);
+    }
+
+    setTimeout(() => {
+        $btn.removeClass('success error');
+        $btn.html('<i class="fa-solid fa-plug"></i> Test');
+    }, 3000);
+}
+
+/**
+ * Handle OpenAI API test button click.
+ */
+async function handleOpenAIApiTestClick() {
+    const $btn = $('#openvault_test_openai_api_btn');
+    const apiUrl = $('#openvault_embedding_api_url').val().trim();
+    const apiKey = $('#openvault_embedding_api_key').val().trim();
+    const apiModel = $('#openvault_embedding_api_model').val().trim();
+
+    if (!apiUrl || !apiKey || !apiModel) {
+        $btn.removeClass('success').addClass('error');
+        $btn.html('<i class="fa-solid fa-xmark"></i> Missing fields');
+        setTimeout(() => {
+            $btn.removeClass('success error');
+            $btn.html('<i class="fa-solid fa-plug"></i> Test');
+        }, 3000);
+        return;
+    }
+
+    // Persist current field values before testing (change event may not have fired yet)
+    setSetting('embeddingApiUrl', apiUrl);
+    setSetting('embeddingApiKey', apiKey);
+    setSetting('embeddingApiModel', apiModel);
+
+    $btn.removeClass('success error');
+    $btn.html('<i class="fa-solid fa-spinner fa-spin"></i> Testing...');
+
+    try {
+        await testOpenAIApiConnection(apiUrl, apiKey, apiModel);
+        $btn.removeClass('error').addClass('success');
+        $btn.html('<i class="fa-solid fa-check"></i> Connected');
+        updateEmbeddingStatusDisplay(getEmbeddingStatus());
+    } catch (err) {
+        $btn.removeClass('success').addClass('error');
+        $btn.html('<i class="fa-solid fa-xmark"></i> Failed');
+        logError('OpenAI API test failed', err);
     }
 
     setTimeout(() => {
@@ -603,6 +651,9 @@ const PRESERVED_KEYS = [
     'embeddingSource',
     'ollamaUrl',
     'embeddingModel',
+    'embeddingApiUrl',
+    'embeddingApiKey',
+    'embeddingApiModel',
     'embeddingQueryPrefix',
     'embeddingDocPrefix',
     'maxConcurrency',
@@ -880,6 +931,19 @@ function bindUIElements() {
         setSetting('embeddingDocPrefix', $(this).val());
     });
 
+    // OpenAI-compatible API settings
+    $('#openvault_embedding_api_url').on('change', function () {
+        setSetting('embeddingApiUrl', $(this).val().trim());
+    });
+
+    $('#openvault_embedding_api_key').on('change', function () {
+        setSetting('embeddingApiKey', $(this).val().trim());
+    });
+
+    $('#openvault_embedding_api_model').on('change', function () {
+        setSetting('embeddingApiModel', $(this).val().trim());
+    });
+
     $('#openvault_embedding_source').on('change', async function () {
         const value = $(this).val();
 
@@ -930,6 +994,7 @@ function bindUIElements() {
         }
 
         $('#openvault_ollama_settings').toggle(value === 'ollama');
+        $('#openvault_openai_api_settings').toggle(value === 'openai_api');
         updateEmbeddingStatusDisplay(getEmbeddingStatus());
 
         // Reset strategy so the new model loads on next embed
@@ -1014,6 +1079,9 @@ function bindUIElements() {
 
     // Test Ollama connection button
     $('#openvault_test_ollama_btn').on('click', handleOllamaTestClick);
+
+    // Test OpenAI API connection button
+    $('#openvault_test_openai_api_btn').on('click', handleOpenAIApiTestClick);
 
     // Perf tab clipboard copy button
     $('#openvault_copy_perf_btn').on('click', () => {
@@ -1190,8 +1258,12 @@ export function updateUI() {
     // Embedding settings
     $('#openvault_embedding_source').val(settings.embeddingSource);
     $('#openvault_ollama_settings').toggle(settings.embeddingSource === 'ollama');
+    $('#openvault_openai_api_settings').toggle(settings.embeddingSource === 'openai_api');
     $('#openvault_ollama_url').val(settings.ollamaUrl);
     $('#openvault_embedding_model').val(settings.embeddingModel);
+    $('#openvault_embedding_api_url').val(settings.embeddingApiUrl);
+    $('#openvault_embedding_api_key').val(settings.embeddingApiKey);
+    $('#openvault_embedding_api_model').val(settings.embeddingApiModel);
     $('#openvault_embedding_query_prefix').val(settings.embeddingQueryPrefix);
     $('#openvault_embedding_doc_prefix').val(settings.embeddingDocPrefix);
     updateEmbeddingStatusDisplay(getEmbeddingStatus());

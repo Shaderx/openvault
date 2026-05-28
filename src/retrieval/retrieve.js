@@ -20,13 +20,12 @@
  */
 
 import {
-    BUDGET_RATIO_ENTITY,
-    BUDGET_RATIO_SCENE,
-    BUDGET_RATIO_WORLD,
     CHARACTERS_KEY,
     COMBINED_BOOST_WEIGHT,
     extensionName,
     IMPORTANCE_5_FLOOR,
+    MAX_RATIO_ENTITY,
+    MAX_RATIO_WORLD,
     MEMORIES_KEY,
     REFLECTION_DECAY_THRESHOLD,
 } from '../constants.js';
@@ -39,6 +38,7 @@ import { getSettings } from '../settings.js';
 import { getOpenVaultData } from '../store/chat-data.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled, safeSetExtensionPrompt } from '../utils/st-helpers.js';
+import { countTokens } from '../utils/tokens.js';
 import { cacheRetrievalDebug } from './debug-cache.js';
 import { buildEntityContextFromRetrieval } from './entity-context.js';
 import { formatContextForInjection } from './formatting.js';
@@ -157,13 +157,7 @@ export function buildRetrievalContext(opts = {}) {
         transientDecayMultiplier: settings.transientDecayMultiplier,
     };
 
-    // Shared budget pool: split retrievalFinalTokens into scene / entity / world
     const totalPool = settings.retrievalFinalTokens || 10000;
-    const sceneBudget = Math.floor(totalPool * BUDGET_RATIO_SCENE);
-    const entityBudget = Math.floor(totalPool * BUDGET_RATIO_ENTITY);
-    const worldBudget = Math.floor(totalPool * BUDGET_RATIO_WORLD);
-
-    logDebug(`Budget split: total=${totalPool} → scene=${sceneBudget} (${BUDGET_RATIO_SCENE * 100}%) entity=${entityBudget} (${BUDGET_RATIO_ENTITY * 100}%) world=${worldBudget} (${BUDGET_RATIO_WORLD * 100}%)`);
 
     return {
         recentContext,
@@ -179,9 +173,7 @@ export function buildRetrievalContext(opts = {}) {
         primaryCharacter,
         activeCharacters: getActiveCharacters(),
         headerName: isGroupChat ? povCharacters[0] : 'Scene',
-        finalTokens: sceneBudget,
-        worldContextBudget: worldBudget,
-        entityContextBudget: entityBudget,
+        totalPool,
         graphNodes: data?.graph?.nodes || {},
         graphEdges: data?.graph?.edges || {},
         allAvailableMemories: data?.[MEMORIES_KEY] || [], // Full memory list for IDF
@@ -297,11 +289,66 @@ function _buildMinimalRetrievalContext(deps, settings, data) {
 }
 
 /**
- * Inject retrieved context into the prompt
- * @param {string} contextText - Formatted context to inject
- * @param {string} [worldText] - World context to inject
+ * Build entity context text with a token budget cap.
+ * Cheap operation (no LLM, no embeddings) — just graph node lookup.
+ * @param {number} tokenCap - Maximum tokens for entity context
+ * @returns {{ text: string, tokens: number }}
  */
-export function injectContext(contextText, worldText = '') {
+function _buildEntityText(tokenCap) {
+    const deps = getDeps();
+    const settings = deps.getExtensionSettings()[extensionName];
+    const data = getOpenVaultData();
+    const graphNodes = data?.graph?.nodes;
+    if (!graphNodes || Object.keys(graphNodes).length === 0) {
+        return { text: '', tokens: 0 };
+    }
+    const ctx = _buildMinimalRetrievalContext(deps, settings, data);
+    const text = buildEntityContextFromRetrieval(ctx, tokenCap);
+    return { text: text || '', tokens: text ? countTokens(text) : 0 };
+}
+
+/**
+ * Build world context text with a token budget cap.
+ * @param {Object} data - OpenVault data object
+ * @param {string} userMessages - User messages for intent detection / embedding
+ * @param {string} recentContext - Recent context fallback for embedding
+ * @param {number} tokenCap - Maximum tokens for world context
+ * @param {string[]|null} stCommunityIds - Pre-selected community IDs from ST Vector scoring
+ * @returns {Promise<{ text: string, tokens: number, communityIds: string[], isMacroIntent: boolean }>}
+ */
+async function _buildWorldText(data, userMessages, recentContext, tokenCap, stCommunityIds = null) {
+    const communities = data?.communities;
+    if (!communities || Object.keys(communities).length === 0) {
+        return { text: '', tokens: 0, communityIds: [], isMacroIntent: false };
+    }
+    let worldQueryEmbedding = null;
+    if (isEmbeddingsEnabled()) {
+        worldQueryEmbedding = await getQueryEmbedding(userMessages || recentContext?.slice(-500));
+    }
+    const result = retrieveWorldContext(
+        communities,
+        data.global_world_state || null,
+        userMessages || '',
+        worldQueryEmbedding,
+        tokenCap,
+        stCommunityIds,
+    );
+    const text = result.text || '';
+    return {
+        text,
+        tokens: text ? countTokens(text) : 0,
+        communityIds: result.communityIds || [],
+        isMacroIntent: result.isMacroIntent || false,
+    };
+}
+
+/**
+ * Inject retrieved context into the prompt
+ * @param {string} contextText - Formatted scene memory to inject
+ * @param {string} [worldText] - World context to inject
+ * @param {string} [entityText] - Pre-built entity context to inject
+ */
+export function injectContext(contextText, worldText = '', entityText = '') {
     const deps = getDeps();
     const settings = deps.getExtensionSettings()[extensionName];
 
@@ -359,20 +406,8 @@ export function injectContext(contextText, worldText = '') {
         safeSetExtensionPrompt(worldText, 'openvault_world', worldPosition, worldDepth);
     }
 
-    // Build and inject entity context at ↓Main (after system prompt)
-    // Entities are independent of memories — always inject when graph data exists.
-    // Budget comes from the shared pool (20% of retrievalFinalTokens).
-    const data = getOpenVaultData();
-    const graphNodes = data?.graph?.nodes;
-    if (graphNodes && Object.keys(graphNodes).length > 0) {
-        const totalPool = settings?.retrievalFinalTokens || 10000;
-        const entityBudget = Math.floor(totalPool * BUDGET_RATIO_ENTITY);
-        const ctx = _buildMinimalRetrievalContext(deps, settings, data);
-        const entityText = buildEntityContextFromRetrieval(ctx, entityBudget);
-        safeSetExtensionPrompt(entityText || '', 'openvault_entities', 1, 0);
-    } else {
-        safeSetExtensionPrompt('', 'openvault_entities', 1, 0);
-    }
+    // Inject pre-built entity context at ↓Main (after system prompt)
+    safeSetExtensionPrompt(entityText || '', 'openvault_entities', 1, 0);
 
     // Inject post-history prompt (IN_CHAT at depth 0 = after all messages)
     const postHistoryPrompt = (settings?.postHistoryPrompt || '').trim();
@@ -380,23 +415,67 @@ export function injectContext(contextText, worldText = '') {
 }
 
 /**
- * Core retrieval logic: select relevant memories, format, and inject
+ * Core retrieval logic with demand-based budget allocation.
+ *
+ * Pipeline order:
+ *   1. Build entity context (cheap, no LLM) → measure actual tokens
+ *   2. Build world context (embedding lookup)  → measure actual tokens
+ *   3. sceneBudget = totalPool - entityActual - worldActual
+ *   4. Score & select memories within sceneBudget
+ *   5. Format memories
+ *   6. Inject all three
+ *
  * @param {Object[]} memoriesToUse - Pre-filtered memories to select from
  * @param {Object} data - OpenVault data object
  * @param {RetrievalContext} ctx - Retrieval context
  * @returns {Promise<{memories: Object[], context: string}|null>}
  */
 async function selectFormatAndInject(memoriesToUse, data, ctx) {
-    const { primaryCharacter, activeCharacters, headerName, finalTokens, chatLength, userMessages } = ctx;
+    const { primaryCharacter, activeCharacters, headerName, chatLength, userMessages, totalPool } = ctx;
 
-    const selectionResult = await selectRelevantMemories(memoriesToUse, ctx);
+    // --- Phase 1: Build entity and world with soft caps ---
+    const entityCap = Math.floor(totalPool * MAX_RATIO_ENTITY);
+    const worldCap = Math.floor(totalPool * MAX_RATIO_WORLD);
+
+    const entity = _buildEntityText(entityCap);
+    const world = await _buildWorldText(data, userMessages, ctx.recentContext, worldCap);
+
+    // --- Phase 2: Compute dynamic scene budget ---
+    const sceneBudget = Math.max(0, totalPool - entity.tokens - world.tokens);
+
+    logDebug(
+        `Budget: total=${totalPool} → entity=${entity.tokens} (cap ${entityCap}) world=${world.tokens} (cap ${worldCap}) → scene=${sceneBudget}`
+    );
+
+    // Cache budget breakdown for debug export
+    cacheRetrievalDebug({
+        budgetAllocation: {
+            totalPool,
+            entityCap, entityActual: entity.tokens,
+            worldCap, worldActual: world.tokens,
+            sceneBudget,
+        },
+    });
+
+    if (world.text) {
+        cacheRetrievalDebug({
+            injectedWorldContext: world.text,
+            isMacroIntent: world.isMacroIntent,
+        });
+    }
+
+    // --- Phase 3: Score & select memories with the full remaining budget ---
+    // Pass sceneBudget as finalTokens so scoring.js respects the dynamic budget
+    const selectionResult = await selectRelevantMemories(memoriesToUse, {
+        ...ctx,
+        finalTokens: sceneBudget,
+    });
     const relevantMemories = selectionResult.memories;
 
     if (!relevantMemories || relevantMemories.length === 0) {
-        // Clear cachedContent and world context if no memories found
         cachedContent.memory = '';
         cachedContent.world = '';
-        injectContext('', '');
+        injectContext('', world.text, entity.text);
         return null;
     }
 
@@ -407,51 +486,20 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
         fromMessages: primaryCharState?.emotion_from_messages || null,
     };
 
-    // Get present characters (excluding POV)
     const presentCharacters = activeCharacters.filter((c) => c !== primaryCharacter);
 
-    // Format and inject memories
     const formattedContext = formatContextForInjection(
         relevantMemories,
         presentCharacters,
         emotionalInfo,
         headerName,
-        finalTokens,
+        sceneBudget,
         chatLength
     );
 
-    // Prepare world context for injection
-    let worldText = '';
-    const worldCommunities = data.communities;
-    if (worldCommunities && Object.keys(worldCommunities).length > 0) {
-        let worldQueryEmbedding = null;
-        if (isEmbeddingsEnabled()) {
-            worldQueryEmbedding = await getQueryEmbedding(userMessages || ctx.recentContext?.slice(-500));
-        }
-        // Always call retrieveWorldContext - it handles macro intent detection
-        // even when embeddings are null (e.g., for st_vector source)
-        const worldResult = retrieveWorldContext(
-            worldCommunities,
-            data.global_world_state || null,
-            userMessages || '',
-            worldQueryEmbedding, // May be null for st_vector
-            ctx.worldContextBudget,
-            selectionResult.communityIds || null // ST Vector community IDs from scoring
-        );
-        worldText = worldResult.text || '';
-        // Cache world context result for debug export
-        if (worldResult?.text) {
-            cacheRetrievalDebug({
-                injectedWorldContext: worldResult.text,
-                isMacroIntent: worldResult.isMacroIntent,
-            });
-        }
-    }
+    // --- Phase 4: Inject all three ---
+    injectContext(formattedContext, world.text, entity.text);
 
-    // Inject memory and world content (entity context is built inside injectContext)
-    injectContext(formattedContext, worldText);
-
-    // Cache injected context for debug export
     cacheRetrievalDebug({
         injectedContext: formattedContext,
         selectedCount: relevantMemories.length,
@@ -555,9 +603,7 @@ export async function retrieveAndInjectContext() {
                 chatLength: ctx.chatLength,
                 primaryCharacter: ctx.primaryCharacter,
                 activeCharacters: ctx.activeCharacters,
-                sceneBudget: ctx.finalTokens,
-                worldBudget: ctx.worldContextBudget,
-                entityBudget: ctx.entityContextBudget,
+                totalPool: ctx.totalPool,
             },
         });
 
@@ -565,9 +611,6 @@ export async function retrieveAndInjectContext() {
 
         if (!result) {
             logDebug('No relevant memories found');
-            cachedContent.memory = '';
-            cachedContent.world = '';
-            injectContext('', '');
             return null;
         }
 
