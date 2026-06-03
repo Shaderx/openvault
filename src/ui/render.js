@@ -17,7 +17,7 @@ import {
     updateEntity,
     updateMemory as updateMemoryAction,
 } from '../store/chat-data.js';
-import { escapeHtml, showToast } from '../utils/dom.js';
+import { escapeCSSAttr, escapeHtml, showToast } from '../utils/dom.js';
 import { hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
 import {
     buildCharacterStateData,
@@ -347,9 +347,9 @@ function initCharacterEditBindings() {
         const characters = data?.[CHARACTERS_KEY] || {};
         if (!characters[name]) return;
         const charData = buildCharacterStateData(name, characters[name]);
-        const $item = $container.find(`.openvault-character-item[data-char-name="${name}"]`);
+        const $item = $container.find(`.openvault-character-item[data-char-name="${escapeCSSAttr(name)}"]`);
         $item.replaceWith(renderCharacterStateEdit(charData));
-        $container.find(`.openvault-character-editing[data-char-name="${name}"] .openvault-character-rename-input`).focus().select();
+        $container.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(name)}"] .openvault-character-rename-input`).focus().select();
     });
 
     $container.on('click', '.openvault-cancel-character-rename', (e) => {
@@ -358,7 +358,7 @@ function initCharacterEditBindings() {
         const characters = data?.[CHARACTERS_KEY] || {};
         if (!characters[name]) return;
         const charData = buildCharacterStateData(name, characters[name]);
-        const $item = $container.find(`.openvault-character-editing[data-char-name="${name}"]`);
+        const $item = $container.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(name)}"]`);
         $item.replaceWith(renderCharacterState(charData));
     });
 
@@ -381,14 +381,14 @@ function initCharacterEditBindings() {
             const characters = data?.[CHARACTERS_KEY] || {};
             if (!characters[oldName]) return;
             const charData = buildCharacterStateData(oldName, characters[oldName]);
-            const $item = $container.find(`.openvault-character-editing[data-char-name="${oldName}"]`);
+            const $item = $container.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(oldName)}"]`);
             $item.replaceWith(renderCharacterState(charData));
         }
     });
 }
 
 async function handleCharacterRename($container, oldName) {
-    const $editing = $container.find(`.openvault-character-editing[data-char-name="${oldName}"]`);
+    const $editing = $container.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(oldName)}"]`);
     const newName = $editing.find('.openvault-character-rename-input').val()?.toString().trim();
 
     if (!newName) {
@@ -589,7 +589,7 @@ function enterEntityEditMode(key) {
     entityEditState.set(key, { ...entity });
 
     // Replace card with edit form
-    const $card = $(`.openvault-entity-card[data-key="${key}"]`);
+    const $card = $(`.openvault-entity-card[data-key="${escapeCSSAttr(key)}"]`);
     const editHtml = renderEntityEdit(entity, key);
     $card.replaceWith(editHtml);
 }
@@ -605,7 +605,7 @@ function cancelEntityEdit(key) {
 
     entityEditState.delete(key);
 
-    const $edit = $(`.openvault-entity-edit[data-key="${key}"]`);
+    const $edit = $(`.openvault-entity-edit[data-key="${escapeCSSAttr(key)}"]`);
     const viewHtml = renderEntityCard(entity, key);
     $edit.replaceWith(viewHtml);
 }
@@ -616,7 +616,7 @@ function cancelEntityEdit(key) {
  * @param {HTMLElement} btn - Save button element
  */
 async function saveEntityEdit(key, btn) {
-    const $edit = $(`.openvault-entity-edit[data-key="${key}"]`);
+    const $edit = $(`.openvault-entity-edit[data-key="${escapeCSSAttr(key)}"]`);
     const name = $edit.find('.openvault-edit-name').val()?.toString().trim();
     const type = $edit.find('.openvault-edit-type').val()?.toString();
     const description = $edit.find('.openvault-edit-description').val()?.toString().trim();
@@ -714,7 +714,7 @@ async function deleteEntityAction(key) {
         entityEditState.delete(key);
 
         // Remove from DOM
-        $(`.openvault-entity-card[data-key="${key}"]`).remove();
+        $(`.openvault-entity-card[data-key="${escapeCSSAttr(key)}"]`).remove();
 
         // Clean up ST Vector if needed
         if (result.stChanges) {
@@ -735,8 +735,8 @@ async function deleteEntityAction(key) {
  * @param {string} alias - Alias to remove
  */
 function removeAliasChip(key, alias) {
-    const $edit = $(`.openvault-entity-edit[data-key="${key}"]`);
-    $edit.find(`.openvault-remove-alias[data-alias="${alias}"]`).closest('.openvault-alias-chip').remove();
+    const $edit = $(`.openvault-entity-edit[data-key="${escapeCSSAttr(key)}"]`);
+    $edit.find(`.openvault-remove-alias[data-alias="${escapeCSSAttr(alias)}"]`).closest('.openvault-alias-chip').remove();
 }
 
 /**
@@ -744,7 +744,7 @@ function removeAliasChip(key, alias) {
  * @param {string} key - Entity key
  */
 function addAliasChip(key) {
-    const $edit = $(`.openvault-entity-edit[data-key="${key}"]`);
+    const $edit = $(`.openvault-entity-edit[data-key="${escapeCSSAttr(key)}"]`);
     const $input = $edit.find('.openvault-alias-input');
     const alias = $input.val()?.toString().trim();
 
@@ -794,7 +794,7 @@ function enterEntityMergeMode(sourceKey) {
     const pickerHtml = renderEntityMergePicker(sourceKey, sourceNode, graph.nodes);
 
     // Replace the entity card with the picker
-    const $card = $(`.openvault-entity-card[data-key="${sourceKey}"]`);
+    const $card = $(`.openvault-entity-card[data-key="${escapeCSSAttr(sourceKey)}"]`);
     $card.replaceWith(pickerHtml);
 
     // Focus the search input
@@ -850,7 +850,7 @@ async function confirmEntityMerge(sourceKey) {
     }
 
     // Get the input value and find the target
-    const $panel = $(`.openvault-entity-merge-panel[data-source-key="${sourceKey}"]`);
+    const $panel = $(`.openvault-entity-merge-panel[data-source-key="${escapeCSSAttr(sourceKey)}"]`);
     const inputText = $panel.find('.openvault-merge-search').val();
     const targetKey = findMergeTargetFromInput(inputText, graph.nodes);
 

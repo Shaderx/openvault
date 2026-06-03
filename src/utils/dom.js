@@ -1,6 +1,16 @@
 import { getDeps } from '../deps.js';
 
 /**
+ * Escape a value for use inside a CSS attribute selector: [attr="value"]
+ * @param {string} str - String to escape
+ * @returns {string}
+ */
+export function escapeCSSAttr(str) {
+    if (!str) return '';
+    return String(str).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
  * Escape HTML to prevent XSS
  * @param {string} str - String to escape
  * @returns {string}

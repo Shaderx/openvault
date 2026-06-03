@@ -17,7 +17,7 @@ import {
     deleteCommunity,
     renameCharacter,
 } from '../store/chat-data.js';
-import { escapeHtml, showToast } from '../utils/dom.js';
+import { escapeCSSAttr, escapeHtml, showToast } from '../utils/dom.js';
 import { buildCharacterStateData, filterEntities, formatMemoryDate, formatMemoryImportance } from './helpers.js';
 import { refreshStats } from './status.js';
 import {
@@ -142,7 +142,7 @@ function bindSidePanelEvents() {
         const graph = getOpenVaultData()?.graph;
         const entity = graph?.nodes?.[key];
         if (!entity) return;
-        const $card = $panel.find(`.openvault-entity-card[data-key="${key}"]`);
+        const $card = $panel.find(`.openvault-entity-card[data-key="${escapeCSSAttr(key)}"]`);
         $card.replaceWith(renderEntityEdit(entity, key));
     });
 
@@ -150,13 +150,13 @@ function bindSidePanelEvents() {
         const key = $(e.currentTarget).data('key');
         const entity = getOpenVaultData()?.graph?.nodes?.[key];
         if (!entity) return;
-        const $edit = $panel.find(`.openvault-entity-edit[data-key="${key}"]`);
+        const $edit = $panel.find(`.openvault-entity-edit[data-key="${escapeCSSAttr(key)}"]`);
         $edit.replaceWith(renderEntityCard(entity, key));
     });
 
     $panel.on('click', '.openvault-save-entity-edit', async (e) => {
         const key = $(e.currentTarget).data('key');
-        const $edit = $panel.find(`.openvault-entity-edit[data-key="${key}"]`);
+        const $edit = $panel.find(`.openvault-entity-edit[data-key="${escapeCSSAttr(key)}"]`);
         const name = $edit.find('.openvault-edit-name').val()?.toString().trim();
         const type = $edit.find('.openvault-edit-type').val()?.toString();
         const description = $edit.find('.openvault-edit-description').val()?.toString().trim();
@@ -209,7 +209,7 @@ function bindSidePanelEvents() {
                 const { applySyncChanges } = await import('../extraction/extract.js');
                 await applySyncChanges(result.stChanges);
             }
-            $panel.find(`.openvault-entity-card[data-key="${key}"]`).remove();
+            $panel.find(`.openvault-entity-card[data-key="${escapeCSSAttr(key)}"]`).remove();
             showToast('success', 'Entity deleted');
             refreshStats();
         }
@@ -221,7 +221,7 @@ function bindSidePanelEvents() {
 
     $panel.on('click', '.openvault-add-alias', (e) => {
         const key = $(e.currentTarget).data('key');
-        const $edit = $panel.find(`.openvault-entity-edit[data-key="${key}"]`);
+        const $edit = $panel.find(`.openvault-entity-edit[data-key="${escapeCSSAttr(key)}"]`);
         const $input = $edit.find('.openvault-alias-input');
         const alias = $input.val()?.toString().trim();
         if (!alias) return;
@@ -242,7 +242,7 @@ function bindSidePanelEvents() {
         const graph = getOpenVaultData()?.graph;
         const node = graph?.nodes?.[key];
         if (!node) return;
-        const $card = $panel.find(`.openvault-entity-card[data-key="${key}"]`);
+        const $card = $panel.find(`.openvault-entity-card[data-key="${escapeCSSAttr(key)}"]`);
         $card.replaceWith(renderEntityMergePicker(key, node, graph.nodes));
         $panel.find('.openvault-merge-search').focus();
     });
@@ -330,9 +330,9 @@ function bindSidePanelEvents() {
         const characters = data?.[CHARACTERS_KEY] || {};
         if (!characters[name]) return;
         const charData = buildCharacterStateData(name, characters[name]);
-        const $item = $panel.find(`.openvault-character-item[data-char-name="${name}"]`);
+        const $item = $panel.find(`.openvault-character-item[data-char-name="${escapeCSSAttr(name)}"]`);
         $item.replaceWith(renderCharacterStateEdit(charData));
-        $panel.find(`.openvault-character-editing[data-char-name="${name}"] .openvault-character-rename-input`).focus().select();
+        $panel.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(name)}"] .openvault-character-rename-input`).focus().select();
     });
 
     $panel.on('click', '.openvault-cancel-character-rename', (e) => {
@@ -341,7 +341,7 @@ function bindSidePanelEvents() {
         const characters = data?.[CHARACTERS_KEY] || {};
         if (!characters[name]) return;
         const charData = buildCharacterStateData(name, characters[name]);
-        const $item = $panel.find(`.openvault-character-editing[data-char-name="${name}"]`);
+        const $item = $panel.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(name)}"]`);
         $item.replaceWith(renderCharacterState(charData));
     });
 
@@ -364,14 +364,14 @@ function bindSidePanelEvents() {
             const characters = data?.[CHARACTERS_KEY] || {};
             if (!characters[oldName]) return;
             const charData = buildCharacterStateData(oldName, characters[oldName]);
-            const $item = $panel.find(`.openvault-character-editing[data-char-name="${oldName}"]`);
+            const $item = $panel.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(oldName)}"]`);
             $item.replaceWith(renderCharacterState(charData));
         }
     });
 }
 
 async function handleSideCharacterRename($panel, oldName) {
-    const $editing = $panel.find(`.openvault-character-editing[data-char-name="${oldName}"]`);
+    const $editing = $panel.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(oldName)}"]`);
     const newName = $editing.find('.openvault-character-rename-input').val()?.toString().trim();
 
     if (!newName) {
