@@ -46,16 +46,16 @@ import { selectRelevantMemories } from './scoring.js';
 import { retrieveWorldContext } from './world-context.js';
 
 /**
- * Get memories from hidden (system) messages that need retrieval
+ * Get memories from hidden (system) messages that need retrieval.
  * Memories from visible messages are already in context and don't need injection.
  *
- * Uses MIN message_id check: memory is injectable once the oldest message in its
- * batch is hidden. This is more aggressive than checking all message_ids, allowing
- * earlier injection with minimal overlap risk.
+ * Uses MAX message_id check: memory is only injectable when its newest source
+ * message is hidden. This prevents overlap when a batch spans both hidden and
+ * visible messages.
  *
  * @param {Object[]} chat - Chat messages array
  * @param {Object[]} memories - All memories
- * @returns {Object[]} Memories whose oldest source message is hidden
+ * @returns {Object[]} Memories whose source messages are all hidden
  */
 function _getHiddenMemories(chat, memories) {
     // Build fingerprint→index map for current chat
@@ -72,8 +72,8 @@ function _getHiddenMemories(chat, memories) {
                 .map((fp) => fpMap.get(fp))
                 .filter((idx) => idx !== undefined);
             if (resolvedIndices.length > 0) {
-                const minId = Math.min(...resolvedIndices);
-                return chat[minId]?.is_system;
+                const maxId = Math.max(...resolvedIndices);
+                return chat[maxId]?.is_system;
             }
             // Fingerprints exist but resolve to nothing — source messages were deleted.
             // They are no longer visible, so the memory is injectable.
@@ -81,8 +81,8 @@ function _getHiddenMemories(chat, memories) {
         }
         // Fall back to message_ids ONLY when fingerprints are absent (unmigrated v2 data)
         if (!m.message_ids?.length) return false;
-        const minId = Math.min(...m.message_ids);
-        return chat[minId]?.is_system;
+        const maxId = Math.max(...m.message_ids);
+        return chat[maxId]?.is_system;
     });
 }
 
@@ -390,6 +390,9 @@ export function injectContext(contextText, worldText = '', entityText = '') {
         }
     }
 
+    // Inject entity context right before scene_memory (same position/depth)
+    safeSetExtensionPrompt(entityText || '', 'openvault_entities', memoryPosition, memoryDepth);
+
     // Inject memory / bridge content
     if (!effectiveContent) {
         safeSetExtensionPrompt('', 'openvault', memoryPosition, memoryDepth);
@@ -405,9 +408,6 @@ export function injectContext(contextText, worldText = '', entityText = '') {
     } else {
         safeSetExtensionPrompt(worldText, 'openvault_world', worldPosition, worldDepth);
     }
-
-    // Inject pre-built entity context at ↓Main (after system prompt)
-    safeSetExtensionPrompt(entityText || '', 'openvault_entities', 1, 0);
 
     // Inject post-history prompt (IN_CHAT at depth 0 = after all messages)
     const postHistoryPrompt = (settings?.postHistoryPrompt || '').trim();
