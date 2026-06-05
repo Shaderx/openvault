@@ -56,14 +56,13 @@ describe('Phase 2 End-to-End Integration', () => {
                     sequence: 2500,
                 },
             ];
-            const presentCharacters = ['Bob'];
             const emotionalInfo = null;
             const tokenBudget = 1000;
             const chatLength = 100;
 
             const result = formatContextForInjection(
                 memories,
-                presentCharacters,
+                [],
                 emotionalInfo,
                 'Alice',
                 tokenBudget,

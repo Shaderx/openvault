@@ -225,6 +225,19 @@ These are fork-only features. Isolate in dedicated files where possible.
 - **Settings added:** `embeddingApiUrl`, `embeddingApiKey`, `embeddingApiModel`
 - **Merge strategy:** `constants.js`: +1 enum value, +3 defaults. `embeddings.js`: new class + 1-line registry entry + 3 extra options per call site (non-breaking — other strategies ignore unknown options). `settings_panel.html`: +1 `<option>`, +1 settings `<div>`. `settings.js`: +15 lines bindings, +30 lines test handler. All additive, no existing logic modified.
 
+### FEAT-19: Disable "Present:" Character Injection (NPC Detection Broken)
+- **Files:** `src/retrieval/formatting.js` (removed `formatPresent` helper + all `presentLine` usage), `src/retrieval/retrieve.js` (removed `activeCharacters.filter` → passes `[]`)
+- **What it does:** Removes the `Present: Bob, Charlie` line from the `## Current Scene` bucket inside `<scene_memory>`. The line was built from SillyTavern's group chat `activeCharacters` API, which does not reliably detect which NPCs are present in the current scene.
+- **What is NOT removed:** All character tracking, state management, and emotional injection remain fully intact:
+  - Extraction still populates `characters_involved`, `witnesses`, and `character_states` with emotions per memory
+  - Scoring still boosts memories by `primaryCharacter` relevance
+  - Entity context still uses `activeCharacters` for filtering entity injection
+  - `formatEmotionalTrajectory` still renders `Emotions:` line when `characterEmotions` is provided
+  - `renameCharacter` and all CRUD operations on character states are unchanged
+- **Signature preserved:** `formatContextForInjection` still accepts a `presentCharacters` parameter (as `_presentCharacters`) to avoid breaking any external callers — the parameter is simply ignored.
+- **Temp fix:** This is a workaround until NPC presence detection is improved. The parameter can be re-enabled by restoring the `formatPresent` helper and wiring `presentCharacters` back through.
+- **Merge strategy:** Only 2 files touched. Changes are subtractive (removal), easy to revert.
+
 ### FEAT-13: Narrative Bridge for Hidden Message Gaps
 - **Files:** `src/retrieval/retrieve.js` (+`countHiddenMessages`, +`prependGapNotice`, +`buildEmptyBridge`, modified `injectContext`)
 - **What it does:** When auto-hide removes messages from the middle of chat, the LLM sees a jarring jump from frozen opening messages to recent messages with no explanation. This feature detects the gap (`openvault_hidden` flag) and handles two cases:

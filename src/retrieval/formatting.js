@@ -1,7 +1,7 @@
 /**
  * OpenVault Context Formatting
  *
- * Formats memories and character presence for injection into prompts.
+ * Formats memories for injection into prompts.
  */
 
 import { assignMemoriesToBuckets, getMemoryPosition } from '../utils/text.js';
@@ -80,7 +80,7 @@ export function formatMemory(memory) {
 /**
  * Format context for injection into prompt using timeline buckets
  * @param {Object[]} memories - Selected memories
- * @param {string[]} presentCharacters - Characters present in the scene (excluding POV)
+ * @param {string[]} _presentCharacters - Unused (NPC detection disabled)
  * @param {Object} emotionalInfo - Emotional state info { emotion, fromMessages }
  * @param {string} characterName - Character name for header
  * @param {number} tokenBudget - Maximum token budget
@@ -89,7 +89,7 @@ export function formatMemory(memory) {
  */
 export function formatContextForInjection(
     memories,
-    presentCharacters,
+    _presentCharacters,
     emotionalInfo,
     _characterName,
     tokenBudget,
@@ -111,12 +111,6 @@ export function formatContextForInjection(
     // Assign only events to buckets (reflections go to subconscious_drives)
     const buckets = assignMemoriesToBuckets(events, chatLength);
 
-    // Helper to format present characters
-    const formatPresent = () => {
-        if (!presentCharacters || presentCharacters.length === 0) return null;
-        return `Present: ${presentCharacters.join(', ')}`;
-    };
-
     // Calculate token overhead for non-empty bucket headers
     const bucketHeaders = {
         old: '## The Story So Far',
@@ -125,9 +119,8 @@ export function formatContextForInjection(
     };
 
     // Determine which buckets will be rendered
-    const presentLine = formatPresent();
     const emotionsLine = formatEmotionalTrajectory(emotionalInfo);
-    const hasRecentContent = buckets.recent.length > 0 || presentLine || emotionsLine;
+    const hasRecentContent = buckets.recent.length > 0 || emotionsLine;
 
     // Calculate overhead tokens
     let overheadTokens = countTokens(lines.join('\n') + '</scene_memory>');
@@ -135,7 +128,6 @@ export function formatContextForInjection(
     if (buckets.mid.length > 0) overheadTokens += countTokens(bucketHeaders.mid);
     if (hasRecentContent) {
         overheadTokens += countTokens(bucketHeaders.recent);
-        if (presentLine) overheadTokens += countTokens(presentLine);
         if (emotionsLine) overheadTokens += countTokens(emotionsLine);
     }
 
@@ -195,23 +187,18 @@ export function formatContextForInjection(
         lines.push('');
     }
 
-    // Render RECENT bucket (always if has content: memories, emotion, or present characters)
-    const hasFilteredRecentContent = filteredBuckets.recent.length > 0 || presentLine || emotionsLine;
+    // Render RECENT bucket (always if has content: memories or emotion)
+    const hasFilteredRecentContent = filteredBuckets.recent.length > 0 || emotionsLine;
     if (hasFilteredRecentContent) {
         lines.push(bucketHeaders.recent);
 
-        // Present characters first
-        if (presentLine) {
-            lines.push(presentLine);
-        }
-
-        // Character emotions second
+        // Character emotions
         if (emotionsLine) {
             lines.push(emotionsLine);
         }
 
         // Add blank line before memories if we have context above
-        if ((presentLine || emotionsLine) && filteredBuckets.recent.length > 0) {
+        if (emotionsLine && filteredBuckets.recent.length > 0) {
             lines.push('');
         }
 

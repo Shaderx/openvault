@@ -401,31 +401,6 @@ describe('formatting', () => {
             });
         });
 
-        // Present characters in RECENT bucket
-        it('includes present characters in RECENT bucket', () => {
-            const memories = [
-                { id: '1', summary: 'Recent event', message_ids: [450], sequence: 450000, importance: 3 },
-            ];
-            const presentCharacters = ['Bob'];
-            const result = formatContextForInjection(memories, presentCharacters, null, 'Alice', 10000, 500);
-
-            expect(result).toContain('## Current Scene');
-            expect(result).toContain('Present: Bob');
-
-            // Present characters should appear before memories in RECENT
-            const presentIndex = result.indexOf('Present:');
-            const memoryIndex = result.indexOf('Recent event');
-            expect(presentIndex).toBeLessThan(memoryIndex);
-        });
-
-        it('formats multiple present characters', () => {
-            const memories = [{ id: '1', summary: 'Event', message_ids: [450], sequence: 450000, importance: 3 }];
-            const presentCharacters = ['Bob', 'Charlie', 'Dave'];
-            const result = formatContextForInjection(memories, presentCharacters, null, 'Alice', 10000, 500);
-
-            expect(result).toContain('Present: Bob, Charlie, Dave');
-        });
-
         // Token budget tests
         it('truncates memories to fit token budget', () => {
             const memories = [];
@@ -666,7 +641,6 @@ describe('formatting', () => {
                     { id: '8', summary: 'Goblin is cornered', message_ids: [4985], sequence: 498500, importance: 4 },
                 ];
 
-                const presentCharacters = ['Goblin'];
                 const emotionalInfo = {
                     emotion: 'anxious',
                     characterEmotions: { Hero: 'determined', Goblin: 'terrified' },
@@ -674,7 +648,7 @@ describe('formatting', () => {
 
                 const result = formatContextForInjection(
                     memories,
-                    presentCharacters,
+                    [],
                     emotionalInfo,
                     'Hero',
                     10000,
@@ -702,8 +676,8 @@ describe('formatting', () => {
                 // Character emotions in Current Scene
                 expect(result).toContain('Emotions: Hero determined, Goblin terrified');
 
-                // Present characters in recent
-                expect(result).toContain('Present: Goblin');
+                // Present characters removed (NPC detection disabled)
+                expect(result).not.toContain('Present:');
 
                 // Memories should NOT have [Secret] tags (inverted)
                 expect(result).not.toContain('[Secret]');

@@ -486,11 +486,9 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
         fromMessages: primaryCharState?.emotion_from_messages || null,
     };
 
-    const presentCharacters = activeCharacters.filter((c) => c !== primaryCharacter);
-
     const formattedContext = formatContextForInjection(
         relevantMemories,
-        presentCharacters,
+        [],
         emotionalInfo,
         headerName,
         sceneBudget,
