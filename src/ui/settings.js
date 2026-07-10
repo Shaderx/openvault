@@ -469,10 +469,10 @@ async function handleResetAndBackfill() {
     if (
         !confirm(
             'This will:\n' +
-            '1. Un-hide all messages that OpenVault previously hid\n' +
-            '2. Delete all OpenVault data (memories, entities, graph)\n' +
-            '3. Re-extract the entire chat from scratch\n\n' +
-            'This uses LLM API calls. Continue?'
+                '1. Un-hide all messages that OpenVault previously hid\n' +
+                '2. Delete all OpenVault data (memories, entities, graph)\n' +
+                '3. Re-extract the entire chat from scratch\n\n' +
+                'This uses LLM API calls. Continue?'
         )
     ) {
         return;
@@ -596,7 +596,7 @@ async function handleGenerateReflections() {
         const { addMemories } = await import('../store/chat-data.js');
         const { applySyncChanges } = await import('../extraction/extract.js');
         const deps = getDeps();
-        const settings = deps.getExtensionSettings()?.[extensionName] || {};
+        const _settings = deps.getExtensionSettings()?.[extensionName] || {};
         const rpmPause = () => new Promise((r) => setTimeout(r, 3000));
 
         let totalGenerated = 0;

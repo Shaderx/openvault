@@ -524,14 +524,10 @@ export async function renameCharacter(oldName, newName) {
     const memories = data[MEMORIES_KEY] || [];
     for (const memory of memories) {
         if (memory.characters_involved) {
-            memory.characters_involved = memory.characters_involved.map(
-                (c) => c === oldName ? newName : c
-            );
+            memory.characters_involved = memory.characters_involved.map((c) => (c === oldName ? newName : c));
         }
         if (memory.witnesses) {
-            memory.witnesses = memory.witnesses.map(
-                (c) => c === oldName ? newName : c
-            );
+            memory.witnesses = memory.witnesses.map((c) => (c === oldName ? newName : c));
         }
     }
 

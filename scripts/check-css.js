@@ -78,6 +78,8 @@ function extractCssClasses() {
         'checkbox_label',
         'menu_button',
         'inline-drawer-header',
+        'openvault-entity-footer',
+        'openvault-memory-card-actions',
     ]);
 
     for (const file of readdirSync(CSS_DIR)) {

@@ -60,14 +60,7 @@ describe('Phase 2 End-to-End Integration', () => {
             const tokenBudget = 1000;
             const chatLength = 100;
 
-            const result = formatContextForInjection(
-                memories,
-                [],
-                emotionalInfo,
-                'Alice',
-                tokenBudget,
-                chatLength
-            );
+            const result = formatContextForInjection(memories, [], emotionalInfo, 'Alice', tokenBudget, chatLength);
 
             // Should contain scene_memory with events only
             expect(result).toContain('<scene_memory>');

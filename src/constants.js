@@ -238,8 +238,8 @@ export const ENTITY_TOKEN_OVERLAP_MIN_RATIO = 0.5;
 
 // Soft-cap ratios for entity and world context within the shared Final Context Budget.
 // These are maximum shares — actual usage is measured first and the remainder goes to scene_memory.
-export const MAX_RATIO_ENTITY = 0.20;
-export const MAX_RATIO_WORLD = 0.20;
+export const MAX_RATIO_ENTITY = 0.2;
+export const MAX_RATIO_WORLD = 0.2;
 
 export const REFLECTION_SKIP_SIMILARITY = 0.85;
 export const REFLECTION_MIN_MEMORIES = 40;

@@ -8,6 +8,7 @@ export type Memory = {
     embedding?: number[] | undefined;
     message_id: number;
     timestamp: number;
+    characters_involved?: string[] | undefined;
     witnesses?: string[] | undefined;
     type?: ("event" | "reflection" | "global_synthesis") | undefined;
     level?: number | undefined;
@@ -99,6 +100,7 @@ export type ScoredMemory = {
         embedding?: number[] | undefined;
         message_id: number;
         timestamp: number;
+        characters_involved?: string[] | undefined;
         witnesses?: string[] | undefined;
         type?: ("event" | "reflection" | "global_synthesis") | undefined;
         level?: number | undefined;
@@ -154,7 +156,7 @@ export type ExtractedEvent = {
     witnesses: string[];
     location: string | null;
     is_secret: boolean;
-    temporal_anchor: (string | null) | undefined;
+    temporal_anchor: string | null;
     is_transient: boolean | undefined;
     emotional_impact: {
         [key: string]: string;
@@ -172,7 +174,7 @@ export type EventExtraction = {
         witnesses: string[];
         location: string | null;
         is_secret: boolean;
-        temporal_anchor: (string | null) | undefined;
+        temporal_anchor: string | null;
         is_transient: boolean | undefined;
         emotional_impact: {
             [key: string]: string;
@@ -218,6 +220,7 @@ export type OpenVaultData = {
         embedding?: number[] | undefined;
         message_id: number;
         timestamp: number;
+        characters_involved?: string[] | undefined;
         witnesses?: string[] | undefined;
         type?: ("event" | "reflection" | "global_synthesis") | undefined;
         level?: number | undefined;
@@ -344,6 +347,7 @@ export type StSyncChanges = {
             embedding?: number[] | undefined;
             message_id: number;
             timestamp: number;
+            characters_involved?: string[] | undefined;
             witnesses?: string[] | undefined;
             type?: ("event" | "reflection" | "global_synthesis") | undefined;
             level?: number | undefined;
@@ -429,6 +433,7 @@ export type GenerateReflectionsResult = {
         embedding?: number[] | undefined;
         message_id: number;
         timestamp: number;
+        characters_involved?: string[] | undefined;
         witnesses?: string[] | undefined;
         type?: ("event" | "reflection" | "global_synthesis") | undefined;
         level?: number | undefined;
@@ -454,6 +459,7 @@ export type GenerateReflectionsResult = {
                 embedding?: number[] | undefined;
                 message_id: number;
                 timestamp: number;
+                characters_involved?: string[] | undefined;
                 witnesses?: string[] | undefined;
                 type?: ("event" | "reflection" | "global_synthesis") | undefined;
                 level?: number | undefined;
@@ -513,6 +519,7 @@ export type ConsolidateEdgesResult = {
                 embedding?: number[] | undefined;
                 message_id: number;
                 timestamp: number;
+                characters_involved?: string[] | undefined;
                 witnesses?: string[] | undefined;
                 type?: ("event" | "reflection" | "global_synthesis") | undefined;
                 level?: number | undefined;
@@ -572,6 +579,7 @@ export type MergeEntityResult = {
                 embedding?: number[] | undefined;
                 message_id: number;
                 timestamp: number;
+                characters_involved?: string[] | undefined;
                 witnesses?: string[] | undefined;
                 type?: ("event" | "reflection" | "global_synthesis") | undefined;
                 level?: number | undefined;
@@ -715,6 +723,7 @@ export type RetrievalContext = {
         embedding?: number[] | undefined;
         message_id: number;
         timestamp: number;
+        characters_involved?: string[] | undefined;
         witnesses?: string[] | undefined;
         type?: ("event" | "reflection" | "global_synthesis") | undefined;
         level?: number | undefined;
@@ -780,6 +789,7 @@ export type PromptContext = {
         embedding?: number[] | undefined;
         message_id: number;
         timestamp: number;
+        characters_involved?: string[] | undefined;
         witnesses?: string[] | undefined;
         type?: ("event" | "reflection" | "global_synthesis") | undefined;
         level?: number | undefined;
@@ -812,6 +822,7 @@ export type BasePromptParams = {
             embedding?: number[] | undefined;
             message_id: number;
             timestamp: number;
+            characters_involved?: string[] | undefined;
             witnesses?: string[] | undefined;
             type?: ("event" | "reflection" | "global_synthesis") | undefined;
             level?: number | undefined;
@@ -848,6 +859,7 @@ export type GraphPromptParams = {
             embedding?: number[] | undefined;
             message_id: number;
             timestamp: number;
+            characters_involved?: string[] | undefined;
             witnesses?: string[] | undefined;
             type?: ("event" | "reflection" | "global_synthesis") | undefined;
             level?: number | undefined;
@@ -896,6 +908,7 @@ export type ReflectionPromptParams = {
         embedding?: number[] | undefined;
         message_id: number;
         timestamp: number;
+        characters_involved?: string[] | undefined;
         witnesses?: string[] | undefined;
         type?: ("event" | "reflection" | "global_synthesis") | undefined;
         level?: number | undefined;

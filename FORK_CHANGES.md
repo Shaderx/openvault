@@ -91,6 +91,17 @@ These fix real issues in upstream and should ideally be contributed back.
 - **Problem:** `_getHiddenMemories` used `Math.min` to check only the **oldest** source message in a memory's extraction batch. If that oldest message was hidden (`is_system = true`), the memory was injected — even when newer source messages from the same batch were still visible in chat. This caused overlapping content between injected `<scene_memory>` entries and visible chat messages, particularly noticeable when a third-party extension (not OpenVault's auto-hide) hides messages using ST's native `is_system` flag.
 - **Fix:** Changed `Math.min` → `Math.max` on both code paths (fingerprint-based and legacy `message_ids`). Now checks the **newest** source message in the batch — a memory is only injectable when all of its source messages are hidden. Eliminates overlap regardless of which extension performs the hiding.
 
+### BUG-12: Reflections generated despite reflectionGenerationEnabled being off
+- **Files:** `src/extraction/extract.js`, `templates/settings_panel.html`
+- **Problem:** Two issues allowed reflection generation to bypass the user's toggle:
+  1. **`synthesizeReflections` used `getSettings()` instead of passed `settings` parameter:** The function called `getSettings('reflectionGenerationEnabled', true)` which reads from the module-level settings import. Upstream identified this as a stale-value race condition — when `settings.js` loads early, `getSettings()` can return the default `true` instead of the user's saved `false`. The `settings` object already passed into the function is the correct, freshly-read reference.
+  2. **`accumulateImportance` ran unconditionally:** Even with generation disabled, importance kept accumulating for every extracted event. While this alone didn't trigger generation, it caused confusion and violated the "disabled means fully stopped" expectation. Any momentary re-enable would trigger a burst of reflections from all the silently accumulated importance.
+  3. **UI discoverability:** The "Generate reflections automatically" toggle was buried in the Advanced tab, while the "Inject reflections into context" toggle was in the Reflection Engine section on Tab 2. Users would disable injection (thinking it stopped everything) while generation continued silently from the Advanced tab.
+- **Fix:**
+  - `synthesizeReflections`: Now reads `settings?.reflectionGenerationEnabled` from the passed parameter first, falling back to `getSettings()` only if undefined (matches upstream fix `49edb8a`).
+  - `accumulateImportance`: Gated by `settings.reflectionGenerationEnabled !== false` — stops accumulator growth when generation is disabled (matches upstream fix `c1b805b`).
+  - UI: Moved the generation toggle from the Advanced tab into the Reflection Engine section on Tab 2, directly above the injection toggle. Removed the orphaned duplicate from Advanced.
+
 ---
 
 ## Personal Features (keep separate)

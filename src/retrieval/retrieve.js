@@ -238,10 +238,7 @@ function countHiddenMessages(chat) {
  */
 function prependGapNotice(contextText, hiddenCount, hiddenTurns) {
     const notice = `[The following summarizes ${hiddenCount} messages (~${hiddenTurns} exchanges) not shown in chat. Use these memories to maintain narrative continuity across the gap.]`;
-    return contextText.replace(
-        '<scene_memory>',
-        `<scene_memory>\n${notice}`,
-    );
+    return contextText.replace('<scene_memory>', `<scene_memory>\n${notice}`);
 }
 
 /**
@@ -331,7 +328,7 @@ async function _buildWorldText(data, userMessages, recentContext, tokenCap, stCo
         userMessages || '',
         worldQueryEmbedding,
         tokenCap,
-        stCommunityIds,
+        stCommunityIds
     );
     const text = result.text || '';
     return {
@@ -451,8 +448,10 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
     cacheRetrievalDebug({
         budgetAllocation: {
             totalPool,
-            entityCap, entityActual: entity.tokens,
-            worldCap, worldActual: world.tokens,
+            entityCap,
+            entityActual: entity.tokens,
+            worldCap,
+            worldActual: world.tokens,
             sceneBudget,
         },
     });

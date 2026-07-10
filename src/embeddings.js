@@ -294,7 +294,9 @@ class TransformersStrategy extends EmbeddingStrategy {
                     if (webgpu && 'powerPreference' in webgpu) {
                         delete webgpu.powerPreference;
                     }
-                } catch { /* ignore */ }
+                } catch {
+                    /* ignore */
+                }
 
                 let lastReportedPct = 0;
                 const pipe = await pipeline('feature-extraction', modelConfig.name, {
@@ -517,15 +519,13 @@ class OpenAICompatibleStrategy extends EmbeddingStrategy {
 
         try {
             const cleanUrl = apiUrl.replace(/\/+$/, '');
-            const endpoint = cleanUrl.endsWith('/v1')
-                ? `${cleanUrl}/embeddings`
-                : `${cleanUrl}/v1/embeddings`;
+            const endpoint = cleanUrl.endsWith('/v1') ? `${cleanUrl}/embeddings` : `${cleanUrl}/v1/embeddings`;
 
             const response = await getDeps().fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
+                    Authorization: `Bearer ${apiKey}`,
                 },
                 body: JSON.stringify({
                     model: apiModel,
@@ -571,15 +571,13 @@ class OpenAICompatibleStrategy extends EmbeddingStrategy {
  */
 export async function testOpenAIApiConnection(apiUrl, apiKey, apiModel) {
     const cleanUrl = apiUrl.replace(/\/+$/, '');
-    const endpoint = cleanUrl.endsWith('/v1')
-        ? `${cleanUrl}/embeddings`
-        : `${cleanUrl}/v1/embeddings`;
+    const endpoint = cleanUrl.endsWith('/v1') ? `${cleanUrl}/embeddings` : `${cleanUrl}/v1/embeddings`;
 
     const response = await getDeps().fetch(endpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
+            Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
             model: apiModel,

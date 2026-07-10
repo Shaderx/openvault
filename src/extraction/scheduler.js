@@ -8,7 +8,10 @@
 import { PROCESSED_MESSAGES_KEY, SWIPE_PROTECTION_TAIL_MESSAGES } from '../constants.js';
 import { cyrb53 } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
-import { getSanitizedTokenCount as getMessageTokenCount, getSanitizedTokenSum as getTokenSum } from '../utils/message-sanitizer.js';
+import {
+    getSanitizedTokenCount as getMessageTokenCount,
+    getSanitizedTokenSum as getTokenSum,
+} from '../utils/message-sanitizer.js';
 import { countTurns, snapToTurnBoundary } from '../utils/tokens.js';
 
 /**

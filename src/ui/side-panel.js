@@ -5,17 +5,17 @@
  * communities, and entities with infinite scroll.
  */
 
-import { CHARACTERS_KEY, MEMORIES_KEY, extensionFolderPath } from '../constants.js';
+import { CHARACTERS_KEY, extensionFolderPath, MEMORIES_KEY } from '../constants.js';
 import {
+    deleteCommunity,
+    deleteEntity as deleteEntityAction,
     deleteMemory as deleteMemoryAction,
     getOpenVaultData,
-    updateMemory as updateMemoryAction,
-    updateEntity,
-    deleteEntity as deleteEntityAction,
     mergeEntities,
-    updateCommunity,
-    deleteCommunity,
     renameCharacter,
+    updateCommunity,
+    updateEntity,
+    updateMemory as updateMemoryAction,
 } from '../store/chat-data.js';
 import { escapeCSSAttr, escapeHtml, showToast } from '../utils/dom.js';
 import { buildCharacterStateData, filterEntities, formatMemoryDate, formatMemoryImportance } from './helpers.js';
@@ -23,7 +23,6 @@ import { refreshStats } from './status.js';
 import {
     renderCharacterState,
     renderCharacterStateEdit,
-    renderCommunityAccordion,
     renderEntityCard,
     renderEntityEdit,
     renderEntityMergePicker,
@@ -161,12 +160,17 @@ function bindSidePanelEvents() {
         const type = $edit.find('.openvault-edit-type').val()?.toString();
         const description = $edit.find('.openvault-edit-description').val()?.toString().trim();
 
-        if (!name) { showToast('warning', 'Entity name cannot be empty'); return; }
+        if (!name) {
+            showToast('warning', 'Entity name cannot be empty');
+            return;
+        }
 
-        const aliases = $edit.find('.openvault-alias-chip')
-            .map((_, chip) => $(chip).text().replace('×', '').trim()).get();
+        const aliases = $edit
+            .find('.openvault-alias-chip')
+            .map((_, chip) => $(chip).text().replace('×', '').trim())
+            .get();
         const pending = $edit.find('.openvault-alias-input').val()?.toString()?.trim();
-        if (pending && !aliases.map(a => a.toLowerCase()).includes(pending.toLowerCase())) {
+        if (pending && !aliases.map((a) => a.toLowerCase()).includes(pending.toLowerCase())) {
             aliases.push(pending);
         }
 
@@ -198,10 +202,13 @@ function bindSidePanelEvents() {
         const graph = getOpenVaultData()?.graph;
         const entity = graph?.nodes?.[key];
         if (!entity) return;
-        const edgeCount = Object.values(graph.edges || {}).filter(ed => ed.source === key || ed.target === key).length;
-        const msg = edgeCount > 0
-            ? `Delete "${entity.name}"? This will also remove ${edgeCount} connected relationship(s).`
-            : `Delete "${entity.name}"?`;
+        const edgeCount = Object.values(graph.edges || {}).filter(
+            (ed) => ed.source === key || ed.target === key
+        ).length;
+        const msg =
+            edgeCount > 0
+                ? `Delete "${entity.name}"? This will also remove ${edgeCount} connected relationship(s).`
+                : `Delete "${entity.name}"?`;
         if (!confirm(msg)) return;
         const result = await deleteEntityAction(key);
         if (result.success) {
@@ -225,9 +232,14 @@ function bindSidePanelEvents() {
         const $input = $edit.find('.openvault-alias-input');
         const alias = $input.val()?.toString().trim();
         if (!alias) return;
-        const existing = $edit.find('.openvault-alias-chip')
-            .map((_, chip) => $(chip).text().replace('×', '').trim().toLowerCase()).get();
-        if (existing.includes(alias.toLowerCase())) { $input.val(''); return; }
+        const existing = $edit
+            .find('.openvault-alias-chip')
+            .map((_, chip) => $(chip).text().replace('×', '').trim().toLowerCase())
+            .get();
+        if (existing.includes(alias.toLowerCase())) {
+            $input.val('');
+            return;
+        }
         $edit.find('.openvault-alias-list').append(`
             <span class="openvault-alias-chip">
                 ${escapeHtml(alias)}
@@ -257,11 +269,20 @@ function bindSidePanelEvents() {
         if (!graph) return;
         const inputText = $panel.find('.openvault-merge-search').val();
         const targetKey = findMergeTarget(inputText, graph.nodes);
-        if (!targetKey) { showToast('error', 'Please select a valid target entity'); return; }
-        if (targetKey === sourceKey) { showToast('error', 'Cannot merge an entity into itself'); return; }
+        if (!targetKey) {
+            showToast('error', 'Please select a valid target entity');
+            return;
+        }
+        if (targetKey === sourceKey) {
+            showToast('error', 'Cannot merge an entity into itself');
+            return;
+        }
         try {
             const result = await mergeEntities(sourceKey, targetKey);
-            if (!result.success) { showToast('error', 'Failed to merge entities'); return; }
+            if (!result.success) {
+                showToast('error', 'Failed to merge entities');
+                return;
+            }
             if (result.stChanges) {
                 const { applySyncChanges } = await import('../extraction/extract.js');
                 await applySyncChanges(result.stChanges);
@@ -299,7 +320,10 @@ function bindSidePanelEvents() {
         const $edit = $panel.find(`.openvault-community-editing[data-id="${id}"]`);
         const title = $edit.find('.openvault-community-edit-title').val().trim();
         const summary = $edit.find('.openvault-community-edit-summary').val().trim();
-        if (!title) { showToast('warning', 'Title cannot be empty'); return; }
+        if (!title) {
+            showToast('warning', 'Title cannot be empty');
+            return;
+        }
         const result = await updateCommunity(id, { title, summary });
         if (result) {
             const community = getOpenVaultData()?.communities?.[id];
@@ -332,7 +356,12 @@ function bindSidePanelEvents() {
         const charData = buildCharacterStateData(name, characters[name]);
         const $item = $panel.find(`.openvault-character-item[data-char-name="${escapeCSSAttr(name)}"]`);
         $item.replaceWith(renderCharacterStateEdit(charData));
-        $panel.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(name)}"] .openvault-character-rename-input`).focus().select();
+        $panel
+            .find(
+                `.openvault-character-editing[data-char-name="${escapeCSSAttr(name)}"] .openvault-character-rename-input`
+            )
+            .focus()
+            .select();
     });
 
     $panel.on('click', '.openvault-cancel-character-rename', (e) => {
@@ -405,10 +434,14 @@ function getSideMemoryById(id) {
 
 function findMergeTarget(inputText, nodes) {
     if (!inputText) return null;
-    const clean = inputText.toLowerCase().trim().replace(/\s*\[[^\]]+\]$/, '').trim();
+    const clean = inputText
+        .toLowerCase()
+        .trim()
+        .replace(/\s*\[[^\]]+\]$/, '')
+        .trim();
     for (const [key, node] of Object.entries(nodes)) {
         if ((node.name || '').toLowerCase() === clean) return key;
-        if ((node.aliases || []).some(a => a.toLowerCase() === clean)) return key;
+        if ((node.aliases || []).some((a) => a.toLowerCase() === clean)) return key;
     }
     return null;
 }
@@ -464,7 +497,8 @@ function renderSideMemoryItem(memory) {
     // Reflections don't have time anchors — show a reflection badge in that slot instead
     let leadBadge = '';
     if (isReflection) {
-        leadBadge = '<span class="openvault-memory-card-badge reflection"><i class="fa-solid fa-lightbulb"></i> Reflection</span>';
+        leadBadge =
+            '<span class="openvault-memory-card-badge reflection"><i class="fa-solid fa-lightbulb"></i> Reflection</span>';
     } else if (memory.temporal_anchor) {
         leadBadge = `<span class="openvault-side-mem-date" style="color: var(--SmartThemeQuoteColor);"><i class="fa-solid fa-clock"></i> ${escapeHtml(memory.temporal_anchor)}</span>`;
     }

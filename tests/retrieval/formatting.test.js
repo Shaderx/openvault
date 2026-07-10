@@ -646,14 +646,7 @@ describe('formatting', () => {
                     characterEmotions: { Hero: 'determined', Goblin: 'terrified' },
                 };
 
-                const result = formatContextForInjection(
-                    memories,
-                    [],
-                    emotionalInfo,
-                    'Hero',
-                    10000,
-                    5000
-                );
+                const result = formatContextForInjection(memories, [], emotionalInfo, 'Hero', 10000, 5000);
 
                 // Structure checks
                 expect(result).toContain('## The Story So Far');

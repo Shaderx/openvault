@@ -235,7 +235,10 @@ export async function generateReflections(characterName, allMemories, characterS
     const eventBudget = Math.floor(contextBudget * 0.8);
     const reflectionBudget = contextBudget - eventBudget;
 
-    const sortedRecent = sortMemoriesBySequence(accessibleMemories.filter((m) => m.type !== 'reflection'), false);
+    const sortedRecent = sortMemoriesBySequence(
+        accessibleMemories.filter((m) => m.type !== 'reflection'),
+        false
+    );
     const recentMemories = sliceToTokenBudget(sortedRecent, eventBudget);
 
     // Existing reflections for this character (separate section in prompt)
@@ -288,7 +291,9 @@ export async function generateReflections(characterName, allMemories, characterS
         prefill
     );
 
-    logDebug(`Reflection: Context for ${characterName}: ${recentMemories.length} events (${eventBudget}tk), ${budgetedReflections.length} existing reflections (${reflectionBudget}tk), charDesc=${charDesc.length > 0 ? 'yes' : 'no'}`);
+    logDebug(
+        `Reflection: Context for ${characterName}: ${recentMemories.length} events (${eventBudget}tk), ${budgetedReflections.length} existing reflections (${reflectionBudget}tk), charDesc=${charDesc.length > 0 ? 'yes' : 'no'}`
+    );
     const reflectionResponse = await callLLM(reflectionPrompt, LLM_CONFIGS.reflection, { structured: true });
     const { reflections } = parseUnifiedReflectionResponse(reflectionResponse);
 

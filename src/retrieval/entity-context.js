@@ -7,8 +7,8 @@
  * reads any chat messages — similar to how Lorebook entries work.
  */
 
-import { countTokens } from '../utils/tokens.js';
 import { logDebug } from '../utils/logging.js';
+import { countTokens } from '../utils/tokens.js';
 import { extractQueryContext, parseRecentMessages } from './query-context.js';
 
 /**
@@ -118,14 +118,8 @@ export function buildEntityContextFromRetrieval(ctx, tokenBudget) {
         recentMessages,
         ctx.activeCharacters,
         ctx.graphNodes || {},
-        ctx.queryConfig,
+        ctx.queryConfig
     );
 
-    return buildEntityContext(
-        ctx.graphNodes,
-        ctx.graphEdges,
-        queryContext.entities,
-        ctx.activeCharacters,
-        tokenBudget,
-    );
+    return buildEntityContext(ctx.graphNodes, ctx.graphEdges, queryContext.entities, ctx.activeCharacters, tokenBudget);
 }

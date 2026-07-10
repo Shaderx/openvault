@@ -23,6 +23,7 @@ export const MemorySchema = z.object({
     embedding: z.array(z.number()).optional(),
     message_id: z.number(),
     timestamp: z.number(),
+    characters_involved: z.array(z.string()).optional(),
     witnesses: z.array(z.string()).optional(),
     type: z.enum(['event', 'reflection', 'global_synthesis']).optional(),
     level: z.number().optional(),

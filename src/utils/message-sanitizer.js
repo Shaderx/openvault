@@ -11,8 +11,8 @@
  * Isolated in its own module to minimize upstream merge conflicts.
  */
 
-import { stripThinkingTags } from './text.js';
 import { logDebug } from './logging.js';
+import { stripThinkingTags } from './text.js';
 import { countTokens } from './tokens.js';
 
 /** @type {{ getRegexedString: Function, regex_placement: Object } | null} */
@@ -41,9 +41,7 @@ ensureRegexEngine();
 function applyOutgoingRegex(text, isUser) {
     try {
         if (!_regexEngine) return text;
-        const placement = isUser
-            ? _regexEngine.regex_placement.USER_INPUT
-            : _regexEngine.regex_placement.AI_OUTPUT;
+        const placement = isUser ? _regexEngine.regex_placement.USER_INPUT : _regexEngine.regex_placement.AI_OUTPUT;
         return _regexEngine.getRegexedString(text, placement, { isPrompt: true });
     } catch {
         return text;

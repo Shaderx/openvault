@@ -92,7 +92,9 @@
     cursor: pointer;
     opacity: 0;
     color: var(--SmartThemeEmColor, #888);
-    transition: opacity 0.15s, color 0.15s;
+    transition:
+        opacity 0.15s,
+        color 0.15s;
 }
 
 .openvault-memory-card:hover .openvault-memory-card-actions i {
@@ -100,12 +102,12 @@
 }
 
 .openvault-memory-card-actions i:hover {
-    opacity: 1 !important;
+    opacity: 1;
     color: var(--SmartThemeBodyColor, #ccc);
 }
 
 .openvault-memory-card-actions .openvault-delete-memory:hover {
-    color: var(--error-color, #c44) !important;
+    color: var(--error-color, #c44);
 }
 
 .openvault-memory-card-summary {

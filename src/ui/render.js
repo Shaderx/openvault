@@ -349,7 +349,12 @@ function initCharacterEditBindings() {
         const charData = buildCharacterStateData(name, characters[name]);
         const $item = $container.find(`.openvault-character-item[data-char-name="${escapeCSSAttr(name)}"]`);
         $item.replaceWith(renderCharacterStateEdit(charData));
-        $container.find(`.openvault-character-editing[data-char-name="${escapeCSSAttr(name)}"] .openvault-character-rename-input`).focus().select();
+        $container
+            .find(
+                `.openvault-character-editing[data-char-name="${escapeCSSAttr(name)}"] .openvault-character-rename-input`
+            )
+            .focus()
+            .select();
     });
 
     $container.on('click', '.openvault-cancel-character-rename', (e) => {
@@ -736,7 +741,10 @@ async function deleteEntityAction(key) {
  */
 function removeAliasChip(key, alias) {
     const $edit = $(`.openvault-entity-edit[data-key="${escapeCSSAttr(key)}"]`);
-    $edit.find(`.openvault-remove-alias[data-alias="${escapeCSSAttr(alias)}"]`).closest('.openvault-alias-chip').remove();
+    $edit
+        .find(`.openvault-remove-alias[data-alias="${escapeCSSAttr(alias)}"]`)
+        .closest('.openvault-alias-chip')
+        .remove();
 }
 
 /**

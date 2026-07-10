@@ -176,7 +176,9 @@
     border-radius: 6px;
     padding: 10px 12px;
     margin-bottom: 6px;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.15s ease;
 }
 
 .openvault-entity-card:hover {

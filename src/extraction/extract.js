@@ -66,9 +66,9 @@ import {
 import { showToast } from '../utils/dom.js';
 import { cyrb53, getEmbedding, hasEmbedding, isStSynced, markStSynced } from '../utils/embedding-codec.js';
 import { logDebug, logError, logInfo } from '../utils/logging.js';
+import { sanitizeMessageContent } from '../utils/message-sanitizer.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
-import { sanitizeMessageContent } from '../utils/message-sanitizer.js';
 import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 import { countTokens } from '../utils/tokens.js';
 import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
@@ -108,7 +108,10 @@ const MAX_EMPTY_RETRIES = 2;
  * @returns {string}
  */
 function _getBatchKey(messages) {
-    const fps = messages.map((m) => getFingerprint(m)).sort().join('|');
+    const fps = messages
+        .map((m) => getFingerprint(m))
+        .sort()
+        .join('|');
     return String(cyrb53(fps));
 }
 
@@ -640,9 +643,10 @@ export async function filterSimilarEvents(
 export async function synthesizeReflections(data, characterNames, settings, options = {}) {
     const { abortSignal = null } = options;
 
-    // Check if reflection generation is enabled
-    if (!getSettings('reflectionGenerationEnabled', true)) {
-        logDebug('[Extraction] Reflection generation disabled, skipping Phase 2');
+    // Check if reflection generation is enabled (prefer passed settings to avoid stale getSettings race)
+    const generationEnabled = settings?.reflectionGenerationEnabled ?? getSettings('reflectionGenerationEnabled', true);
+    if (!generationEnabled) {
+        logDebug('[Extraction] Reflection generation disabled, skipping');
         return { stChanges: { toUpsert: [], toDelete: [] } };
     }
 
@@ -1035,9 +1039,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             _emptyExtractionAttempts.set(batchKey, attempts);
 
             if (attempts <= MAX_EMPTY_RETRIES) {
-                logDebug(
-                    `LLM returned 0 events (attempt ${attempts}/${MAX_EMPTY_RETRIES + 1}), will retry batch`
-                );
+                logDebug(`LLM returned 0 events (attempt ${attempts}/${MAX_EMPTY_RETRIES + 1}), will retry batch`);
                 return {
                     status: 'no_events_retry',
                     attempt: attempts,
@@ -1109,7 +1111,10 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         try {
             // Stage 5: Reflection check (per character in new events)
             if (events.length > 0) {
-                accumulateImportance(data.reflection_state, events);
+                // Only accumulate importance if reflection generation is enabled
+                if (settings.reflectionGenerationEnabled !== false) {
+                    accumulateImportance(data.reflection_state, events);
+                }
 
                 // ===== Backfill guard: skip Phase 2 LLM synthesis =====
                 if (options.isBackfill) {
