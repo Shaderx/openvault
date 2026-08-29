@@ -49,7 +49,7 @@ Memories get injected into the prompt in chronological buckets: *The Story So Fa
 - SillyTavern 1.13.0+
 - An extraction-capable LLM (mid-tier models work fine)
 
-**Embeddings:** By default, OpenVault downloads a lightweight multilingual model (`multilingual-e5-small`) that runs in your browser via WebGPU/WASM. Or point it at your local Ollama instance
+**Embeddings:** By default, OpenVault downloads a lightweight multilingual model (`multilingual-e5-small`) that runs in your browser via WebGPU/WASM. For higher-quality, task-aware retrieval and entity matching, select `Qwen3-Embedding-0.6B` (q8 WebGPU, about 614 MB). `embeddinggemma-300m` remains the lighter WebGPU option, or point OpenVault at your local Ollama instance.
 
 Thats it. No ChromaDB. No Docker. No cloud vector service
 

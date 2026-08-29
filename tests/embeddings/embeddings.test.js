@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EMBEDDING_TASKS } from '../../src/constants.js';
 import { TRANSFORMERS_MODELS } from '../../src/embeddings.js';
 
 describe('TRANSFORMERS_MODELS config', () => {
@@ -11,6 +12,37 @@ describe('TRANSFORMERS_MODELS config', () => {
     it('embeddinggemma-300m retains large chunk size', () => {
         const config = TRANSFORMERS_MODELS['embeddinggemma-300m'];
         expect(config.optimalChunkSize).toBe(1800);
+    });
+
+    it('configures Qwen3 for q8 WebGPU with last-token pooling', () => {
+        const config = TRANSFORMERS_MODELS['qwen3-embedding-0.6b'];
+        expect(config.name).toBe('onnx-community/Qwen3-Embedding-0.6B-ONNX');
+        expect(config.dtypeWebGPU).toBe('q8');
+        expect(config.requiresWebGPU).toBe(true);
+        expect(config.dimensions).toBe(1024);
+        expect(config.pooling).toBe('last_token');
+    });
+});
+
+describe('model task instructions', () => {
+    it('instructs Qwen3 retrieval queries but leaves retrieval documents plain', async () => {
+        const { getEmbeddingTaskPrefix } = await import('../../src/embeddings.js');
+
+        expect(getEmbeddingTaskPrefix('qwen3-embedding-0.6b', EMBEDDING_TASKS.RETRIEVAL, 'query', '')).toContain(
+            'retrieve prior information relevant to continuing the scene'
+        );
+        expect(getEmbeddingTaskPrefix('qwen3-embedding-0.6b', EMBEDDING_TASKS.RETRIEVAL, 'document', '')).toBe('');
+    });
+
+    it('uses distinct Qwen3 and EmbeddingGemma instructions for matching', async () => {
+        const { getEmbeddingTaskPrefix } = await import('../../src/embeddings.js');
+
+        expect(getEmbeddingTaskPrefix('qwen3-embedding-0.6b', EMBEDDING_TASKS.MATCHING, 'query', '')).toContain(
+            'aliases, nicknames, titles, spelling variants, and cross-language forms'
+        );
+        expect(getEmbeddingTaskPrefix('embeddinggemma-300m', EMBEDDING_TASKS.MATCHING, 'query', '')).toBe(
+            'task: sentence similarity | query: '
+        );
     });
 });
 
@@ -106,6 +138,40 @@ describe('getQueryEmbedding abort signal', () => {
         await expect(getDocumentEmbedding('test', { signal: ctrl.signal })).rejects.toThrow(
             expect.objectContaining({ name: 'AbortError' })
         );
+    });
+});
+
+describe('task-aware embedding cache', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('does not reuse a retrieval vector for entity matching', async () => {
+        const depsModule = await import('../../src/deps.js');
+        vi.spyOn(depsModule, 'getDeps').mockReturnValue({
+            getExtensionSettings: vi.fn(() => ({
+                openvault: {
+                    embeddingSource: 'multilingual-e5-small',
+                    embeddingQueryPrefix: 'query: ',
+                    embeddingDocPrefix: 'passage: ',
+                },
+            })),
+        });
+
+        const { clearEmbeddingCache, getQueryEmbedding, getSimilarityEmbedding, getStrategy } = await import(
+            '../../src/embeddings.js'
+        );
+        clearEmbeddingCache();
+        const strategy = getStrategy('multilingual-e5-small');
+        const spy = vi.spyOn(strategy, 'getQueryEmbedding').mockResolvedValue(new Float32Array([1, 0]));
+
+        await getQueryEmbedding('PERSON: Red');
+        await getSimilarityEmbedding('PERSON: Red');
+        await getSimilarityEmbedding('PERSON: Red');
+
+        expect(spy).toHaveBeenCalledTimes(2);
+        expect(spy.mock.calls[0][1].task).toBe('retrieval');
+        expect(spy.mock.calls[1][1].task).toBe('matching');
     });
 });
 

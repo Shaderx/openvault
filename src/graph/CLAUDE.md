@@ -11,9 +11,9 @@ For merge algorithm details (4-guard thresholds, cross-script rules) see `includ
 
 ## SEMANTIC MERGE (`shouldMergeEntities()`)
 Extraction uses delta approach — focuses on NEW entities or CHANGES, not re-describing static relationships. Schema limits to 5 entities per batch.
-- **Type-Aware Routing**: PERSON merges on high cosine alone. Other types ALWAYS require token overlap to prevent false merges.
+- **Type-Aware Routing**: PERSON merges use matching-task embeddings plus a name-level identity signal, unless cosine is exceptionally high. Other types ALWAYS require token overlap to prevent false merges.
 - **Token Overlap Guard**: Strips EN+RU stopwords (via `stopword` lib). Short keys (<=4 chars) use lower thresholds.
-- **Aliases**: Absorbed name pushed to surviving node's `aliases` array.
+- **Aliases**: Exact normalized aliases resolve before semantic matching. Absorbed names are added uniquely to the surviving node's `aliases` array.
 - **Redirects**: Transient `_mergeRedirects` map routes edges from old node key to merged key.
 - **stChanges**: `mergeOrInsertEntity()` returns `{ key, stChanges: { toSync, toDelete } }`. New nodes push to `toSync`; semantic merge deletions push to `toDelete`. Use `syncNode(key)` helper for the `[OV_ID:${key}] ${description}` + `cyrb53` boilerplate. See `src/store/CLAUDE.md` for stChanges contract.
 

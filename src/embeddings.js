@@ -1,4 +1,4 @@
-import { EMBEDDING_SOURCES, extensionName } from './constants.js';
+import { EMBEDDING_SOURCES, EMBEDDING_TASKS, extensionName } from './constants.js';
 import { getDeps } from './deps.js';
 import { record } from './perf/store.js';
 import { getSessionSignal } from './state.js';
@@ -157,7 +157,7 @@ const TRANSFORMERS_MODELS = {
         dtypeWebGPU: 'q4f16',
         dtypeWASM: 'q8',
         dimensions: 384,
-        description: '384d · 133MB · English · MTEB: 62.17 · SOTA RAG',
+        description: '384d · 133MB · English · legacy',
         optimalChunkSize: 500, // chars, conservative for 512 tokens
     },
     'embeddinggemma-300m': {
@@ -169,7 +169,44 @@ const TRANSFORMERS_MODELS = {
         requiresWebGPU: true,
         optimalChunkSize: 1800, // ~512 tokens for Cyrillic text
     },
+    'qwen3-embedding-0.6b': {
+        name: 'onnx-community/Qwen3-Embedding-0.6B-ONNX',
+        dtypeWebGPU: 'q8',
+        dtypeWASM: null,
+        dimensions: 1024,
+        description: '1024d · 600M params · 100+ langs · instruction-aware · WebGPU only',
+        requiresWebGPU: true,
+        pooling: 'last_token',
+        optimalChunkSize: 6000,
+    },
 };
+
+const QWEN_RETRIEVAL_INSTRUCTION =
+    'Given the current interactive-fiction scene, retrieve prior information relevant to continuing the scene.';
+const QWEN_MATCHING_INSTRUCTION =
+    'Determine whether a newly extracted fictional entity refers to the same entity as an existing record, including aliases, nicknames, titles, spelling variants, and cross-language forms.';
+
+/**
+ * Resolve a model-native prefix/instruction for an embedding task.
+ * @param {string} modelKey - Transformers model key
+ * @param {string} task - EMBEDDING_TASKS value
+ * @param {'query'|'document'} side - Embedding side
+ * @param {string} configuredPrefix - User-configured retrieval prefix
+ * @returns {string}
+ */
+export function getEmbeddingTaskPrefix(modelKey, task, side, configuredPrefix) {
+    if (modelKey === 'qwen3-embedding-0.6b') {
+        if (side === 'document' && task === EMBEDDING_TASKS.RETRIEVAL) return '';
+        const instruction = task === EMBEDDING_TASKS.MATCHING ? QWEN_MATCHING_INSTRUCTION : QWEN_RETRIEVAL_INSTRUCTION;
+        return `Instruct: ${instruction}\nQuery: `;
+    }
+
+    if (modelKey === 'embeddinggemma-300m' && task === EMBEDDING_TASKS.MATCHING) {
+        return 'task: sentence similarity | query: ';
+    }
+
+    return configuredPrefix;
+}
 
 let webGPUSupported = null;
 
@@ -347,7 +384,12 @@ class TransformersStrategy extends EmbeddingStrategy {
         try {
             const pipe = await this.#loadPipeline(this.#currentModelKey);
             const input = prefix ? `${prefix}${text.trim()}` : text.trim();
-            const output = await pipe(input, { pooling: 'mean', normalize: true, signal });
+            const modelConfig = TRANSFORMERS_MODELS[this.#currentModelKey];
+            const output = await pipe(input, {
+                pooling: modelConfig.pooling || 'mean',
+                normalize: true,
+                signal,
+            });
             return output.data instanceof Float32Array ? output.data : new Float32Array(output.data);
         } catch (error) {
             if (error.name === 'AbortError') throw error;
@@ -359,12 +401,12 @@ class TransformersStrategy extends EmbeddingStrategy {
         }
     }
 
-    async getQueryEmbedding(text, { signal, prefix = '' } = {}) {
-        return this.#embed(text, prefix, { signal });
+    async getQueryEmbedding(text, { signal, prefix = '', task = EMBEDDING_TASKS.RETRIEVAL } = {}) {
+        return this.#embed(text, getEmbeddingTaskPrefix(this.#currentModelKey, task, 'query', prefix), { signal });
     }
 
-    async getDocumentEmbedding(text, { signal, prefix = '' } = {}) {
-        return this.#embed(text, prefix, { signal });
+    async getDocumentEmbedding(text, { signal, prefix = '', task = EMBEDDING_TASKS.RETRIEVAL } = {}) {
+        return this.#embed(text, getEmbeddingTaskPrefix(this.#currentModelKey, task, 'document', prefix), { signal });
     }
 
     async reset() {
@@ -661,6 +703,7 @@ const strategies = {
     'multilingual-e5-small': new TransformersStrategy(),
     'bge-small-en-v1.5': new TransformersStrategy(),
     'embeddinggemma-300m': new TransformersStrategy(),
+    'qwen3-embedding-0.6b': new TransformersStrategy(),
     [EMBEDDING_SOURCES.OLLAMA]: new OllamaStrategy(),
     [EMBEDDING_SOURCES.OPENAI_API]: new OpenAICompatibleStrategy(),
     [EMBEDDING_SOURCES.ST_VECTOR]: new StVectorStrategy(),
@@ -670,6 +713,7 @@ const strategies = {
 strategies['multilingual-e5-small'].setModelKey('multilingual-e5-small');
 strategies['bge-small-en-v1.5'].setModelKey('bge-small-en-v1.5');
 strategies['embeddinggemma-300m'].setModelKey('embeddinggemma-300m');
+strategies['qwen3-embedding-0.6b'].setModelKey('qwen3-embedding-0.6b');
 
 /**
  * Get the strategy for a given source key
@@ -760,12 +804,29 @@ export function isEmbeddingsEnabled() {
 // Maximum cache size prevents unbounded memory growth during long sessions
 const MAX_CACHE_SIZE = 500;
 const embeddingCache = new Map();
+let matchingUnavailableReported = false;
+
+/**
+ * Build the model identity portion of an embedding cache key.
+ * @param {Object} settings - Extension settings
+ * @param {string} source - Embedding source
+ * @returns {string}
+ */
+function getEmbeddingFingerprint(settings, source) {
+    if (source === EMBEDDING_SOURCES.OLLAMA)
+        return `${source}|${settings.ollamaUrl || ''}|${settings.embeddingModel || ''}`;
+    if (source === EMBEDDING_SOURCES.OPENAI_API) {
+        return `${source}|${settings.embeddingApiUrl || ''}|${settings.embeddingApiModel || ''}`;
+    }
+    return source;
+}
 
 /**
  * Clear the embedding cache. Useful for testing or when settings change.
  */
 export function clearEmbeddingCache() {
     embeddingCache.clear();
+    matchingUnavailableReported = false;
 }
 
 /**
@@ -775,13 +836,15 @@ export function clearEmbeddingCache() {
  * @param {AbortSignal} options.signal - AbortSignal
  * @returns {Promise<Float32Array|null>} Embedding vector
  */
-export async function getQueryEmbedding(text, { signal } = {}) {
+export async function getQueryEmbedding(text, { signal, task = EMBEDDING_TASKS.RETRIEVAL } = {}) {
     signal ??= getSessionSignal();
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     if (!text) return null;
 
-    // Check cache (query prefix is applied inside strategy, so cache on raw text + 'q:' prefix)
-    const cacheKey = `q:${text}`;
+    const settings = getDeps().getExtensionSettings()[extensionName];
+    const source = settings.embeddingSource;
+    const prefix = settings.embeddingQueryPrefix || '';
+    const cacheKey = `${getEmbeddingFingerprint(settings, source)}|${task}|q|${prefix}|${text}`;
     if (embeddingCache.has(cacheKey)) {
         const value = embeddingCache.get(cacheKey);
         embeddingCache.delete(cacheKey);
@@ -789,12 +852,11 @@ export async function getQueryEmbedding(text, { signal } = {}) {
         return value;
     }
 
-    const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings.embeddingSource;
     const strategy = getStrategy(source);
     const result = await strategy.getQueryEmbedding(text, {
         signal,
-        prefix: settings.embeddingQueryPrefix,
+        task,
+        prefix,
         url: settings.ollamaUrl,
         model: settings.embeddingModel,
         apiUrl: settings.embeddingApiUrl,
@@ -817,12 +879,15 @@ export async function getQueryEmbedding(text, { signal } = {}) {
  * @param {AbortSignal} options.signal - AbortSignal
  * @returns {Promise<Float32Array|null>} Embedding vector
  */
-export async function getDocumentEmbedding(summary, { signal } = {}) {
+export async function getDocumentEmbedding(summary, { signal, task = EMBEDDING_TASKS.RETRIEVAL } = {}) {
     signal ??= getSessionSignal();
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
     if (!summary) return null;
 
-    const cacheKey = `d:${summary}`;
+    const settings = getDeps().getExtensionSettings()[extensionName];
+    const source = settings.embeddingSource;
+    const prefix = settings.embeddingDocPrefix || '';
+    const cacheKey = `${getEmbeddingFingerprint(settings, source)}|${task}|d|${prefix}|${summary}`;
     if (embeddingCache.has(cacheKey)) {
         const value = embeddingCache.get(cacheKey);
         embeddingCache.delete(cacheKey);
@@ -830,12 +895,11 @@ export async function getDocumentEmbedding(summary, { signal } = {}) {
         return value;
     }
 
-    const settings = getDeps().getExtensionSettings()[extensionName];
-    const source = settings.embeddingSource;
     const strategy = getStrategy(source);
     const result = await strategy.getDocumentEmbedding(summary, {
         signal,
-        prefix: settings.embeddingDocPrefix,
+        task,
+        prefix,
         url: settings.ollamaUrl,
         model: settings.embeddingModel,
         apiUrl: settings.embeddingApiUrl,
@@ -849,6 +913,27 @@ export async function getDocumentEmbedding(summary, { signal } = {}) {
     }
     embeddingCache.set(cacheKey, result);
     return result;
+}
+
+/**
+ * Get a symmetric embedding for identity/similarity comparison.
+ * Both inputs to a comparison must use this API; retrieval document vectors are
+ * intentionally not reused for entity identity decisions.
+ * @param {string} text - Text to compare
+ * @param {Object} options - Options
+ * @param {AbortSignal} options.signal - AbortSignal
+ * @returns {Promise<Float32Array|null>} Matching-task vector, or null when unsupported
+ */
+export async function getSimilarityEmbedding(text, { signal } = {}) {
+    const settings = getDeps().getExtensionSettings()[extensionName];
+    if (settings.embeddingSource === EMBEDDING_SOURCES.ST_VECTOR) {
+        if (!matchingUnavailableReported) {
+            logInfo('Semantic entity matching unavailable with ST Vector; using deterministic identity matching only.');
+            matchingUnavailableReported = true;
+        }
+        return null;
+    }
+    return getQueryEmbedding(text, { signal, task: EMBEDDING_TASKS.MATCHING });
 }
 
 // =============================================================================

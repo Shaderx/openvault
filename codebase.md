@@ -106,7 +106,9 @@ Injection positions and macros are implemented in `src/utils/st-helpers.js` and 
 
 `src/embeddings.js` uses a strategy registry:
 
-- Local Transformers.js: `multilingual-e5-small` (default, 384d, multilingual), `bge-small-en-v1.5` (384d) and `embeddinggemma-300m` (768d), with WebGPU when available and WASM/CPU fallback.
+- Local Transformers.js: `multilingual-e5-small` (default, 384d, multilingual), legacy `bge-small-en-v1.5` (384d), lightweight WebGPU `embeddinggemma-300m` (768d), and instruction-aware `Qwen3-Embedding-0.6B` (1024d, q8 WebGPU, last-token pooling).
+- Retrieval and entity identity use explicit embedding tasks. Qwen3 receives task-specific instructions, EmbeddingGemma maps matching to sentence similarity, and cache keys include source/model/task/prefix/text.
+- ST Vector does not expose local vectors, so entity resolution explicitly falls back to exact keys, persisted aliases, and transliteration matching.
 - Ollama `/api/embeddings` with configurable URL/model.
 - OpenAI-compatible `/v1/embeddings` with configurable base URL, bearer key and model.
 - ST Vector Storage, where vectors are owned by SillyTavern.

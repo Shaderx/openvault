@@ -15,6 +15,7 @@
 
 import {
     CONSOLIDATION,
+    ENTITY_MATCH_THRESHOLDS,
     ENTITY_MERGE_THRESHOLD,
     ENTITY_TOKEN_OVERLAP_MIN_RATIO,
     ENTITY_TYPES,
@@ -22,7 +23,7 @@ import {
     GRAPH_JACCARD_DUPLICATE_THRESHOLD,
 } from '../constants.js';
 import { getDeps } from '../deps.js';
-import { getDocumentEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
+import { getDocumentEmbedding, getSimilarityEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
 import { parseConsolidationResponse } from '../extraction/structured.js';
 import { callLLM, LLM_CONFIGS } from '../llm.js';
 import {
@@ -32,9 +33,10 @@ import {
     resolveOutputLanguage,
 } from '../prompts/index.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
-import { cyrb53, getEmbedding, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
+import { cyrb53, setEmbedding } from '../utils/embedding-codec.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
+import { yieldToMain } from '../utils/st-helpers.js';
 import { stemWord } from '../utils/stemmer.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
 import { jaccardSimilarity } from '../utils/text.js';
@@ -91,6 +93,92 @@ export function normalizeKey(name) {
         .replace(/[''\u2019]s\b/g, '') // Strip possessives: 's, 's, 's
         .replace(/\s+/g, ' ') // Collapse whitespace
         .trim();
+}
+
+/**
+ * Persist an alias once, comparing normalized forms rather than display casing.
+ * @param {GraphNode} node - Surviving graph node
+ * @param {string} alias - Alias to add
+ * @returns {void}
+ */
+function addUniqueAlias(node, alias) {
+    deduplicateAliases(node);
+    const normalizedAlias = normalizeKey(alias);
+    if (!normalizedAlias || normalizedAlias === normalizeKey(node.name)) return;
+    if (!node.aliases) node.aliases = [];
+    if (!node.aliases.some((existing) => normalizeKey(existing) === normalizedAlias)) {
+        node.aliases.push(alias.trim());
+    }
+}
+
+/**
+ * Remove normalized duplicate aliases while preserving the first display form.
+ * @param {GraphNode} node - Graph node to normalize
+ * @returns {void}
+ */
+function deduplicateAliases(node) {
+    if (!node.aliases) return;
+    const canonical = normalizeKey(node.name);
+    const seen = new Set();
+    node.aliases = node.aliases.filter((alias) => {
+        const key = normalizeKey(alias);
+        if (!key || key === canonical || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+    if (node.aliases.length === 0) delete node.aliases;
+}
+
+/**
+ * Find a same-type node by a persisted alias.
+ * @param {GraphData} graphData - Graph data
+ * @param {string} key - Normalized incoming name
+ * @param {string} type - Entity type
+ * @returns {string|null} Matching node key
+ */
+function findExactAliasMatch(graphData, key, type) {
+    for (const [nodeKey, node] of Object.entries(graphData.nodes)) {
+        if (node.type !== type) continue;
+        if ((node.aliases || []).some((alias) => normalizeKey(alias) === key)) return nodeKey;
+    }
+    return null;
+}
+
+const PERSON_TITLE_TOKENS = new Set([
+    'captain',
+    'commander',
+    'doctor',
+    'dr',
+    'duke',
+    'lady',
+    'lord',
+    'mr',
+    'mrs',
+    'ms',
+]);
+
+/**
+ * Check whether two PERSON names provide an identity signal beyond description similarity.
+ * @param {string} keyA - First normalized name
+ * @param {string} keyB - Second normalized name
+ * @returns {boolean}
+ */
+export function hasPersonIdentitySignal(keyA, keyB) {
+    const tokensA = keyA.split(/\s+/).filter((token) => token && !PERSON_TITLE_TOKENS.has(token));
+    const tokensB = keyB.split(/\s+/).filter((token) => token && !PERSON_TITLE_TOKENS.has(token));
+    const shared = tokensA.filter((token) => token.length >= 4 && tokensB.includes(token));
+    if (shared.length > 0 && (tokensA.length === 1 || tokensB.length === 1)) return true;
+
+    if (tokensA.length === 1 && tokensB.length === 1) {
+        const [a] = tokensA;
+        const [b] = tokensB;
+        const shorter = a.length <= b.length ? a : b;
+        const longer = a.length <= b.length ? b : a;
+        if (shorter.length >= 3 && longer.startsWith(shorter)) return true;
+        if (Math.min(a.length, b.length) >= 5 && a[0] === b[0] && levenshteinDistance(a, b) <= 2) return true;
+    }
+
+    return false;
 }
 
 /**
@@ -390,8 +478,13 @@ export function hasSufficientTokenOverlap(
  * @returns {boolean}
  */
 export function shouldMergeEntities(cosine, threshold, tokensA, keyA, keyB, type = ENTITY_TYPES.OBJECT) {
-    // PERSON entities: names are unique identifiers, high similarity is sufficient
-    if (type === ENTITY_TYPES.PERSON && cosine >= threshold) return true;
+    if (type === ENTITY_TYPES.PERSON) {
+        if (cosine < threshold) return false;
+        // Borderline PERSON matches require a name-level signal. Only an
+        // exceptionally high score may stand alone, preventing role/description
+        // similarity from collapsing two different characters.
+        return hasPersonIdentitySignal(keyA, keyB) || cosine >= Math.min(0.99, threshold + 0.1);
+    }
 
     // All other types: always require token overlap confirmation
     // This prevents false merges when embeddings are inflated by shared context
@@ -427,8 +520,20 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
     // Fast path: exact key match
     if (graphData.nodes[key]) {
         upsertEntity(graphData, name, type, description, cap);
+        deduplicateAliases(graphData.nodes[key]);
         syncNode(key);
         return { key, stChanges };
+    }
+
+    // Persisted aliases are authoritative and must not be rediscovered via cosine.
+    const aliasMatch = findExactAliasMatch(graphData, key, type);
+    if (aliasMatch) {
+        upsertEntity(graphData, graphData.nodes[aliasMatch].name, type, description, cap);
+        deduplicateAliases(graphData.nodes[aliasMatch]);
+        if (!graphData._mergeRedirects) graphData._mergeRedirects = {};
+        graphData._mergeRedirects[key] = aliasMatch;
+        syncNode(aliasMatch);
+        return { key: aliasMatch, stChanges };
     }
 
     // Universal cross-script merge: if this is a PERSON entity, check all existing
@@ -455,8 +560,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
                     `[graph] Cross-script merge: "${name}" (${key}) → "${node.name}" (${existingKey}), transliterated: "${transliterateCyrToLat(cyrKey)}"`
                 );
                 upsertEntity(graphData, node.name, type, description, cap);
-                if (!node.aliases) node.aliases = [];
-                node.aliases.push(name);
+                addUniqueAlias(node, name);
                 if (!graphData._mergeRedirects) graphData._mergeRedirects = {};
                 if (key !== existingKey) {
                     graphData._mergeRedirects[key] = existingKey;
@@ -467,33 +571,44 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
         }
     }
 
-    // Slow path: semantic match
-    let newEmbedding;
+    // Slow path: task-specific semantic identity match. Retrieval vectors stored
+    // on nodes are deliberately not reused for this symmetric comparison.
+    const entityText = `${type}: ${name} - ${description}`;
+    let matchingEmbedding;
     try {
-        newEmbedding = await getDocumentEmbedding(`${type}: ${name} - ${description}`);
+        matchingEmbedding = await getSimilarityEmbedding(entityText);
     } catch {
-        newEmbedding = null;
+        matchingEmbedding = null;
     }
 
-    if (!newEmbedding) {
+    if (!matchingEmbedding) {
         upsertEntity(graphData, name, type, description, cap);
+        try {
+            const retrievalEmbedding = await getDocumentEmbedding(entityText);
+            if (retrievalEmbedding) setEmbedding(graphData.nodes[key], retrievalEmbedding);
+        } catch {
+            // Retrieval embeddings are optional; deterministic identity still works.
+        }
         syncNode(key);
         return { key, stChanges };
     }
 
-    const threshold = ENTITY_MERGE_THRESHOLD;
+    const source = _settings?.embeddingSource || getDeps().getExtensionSettings()?.[extensionName]?.embeddingSource;
+    const threshold = ENTITY_MATCH_THRESHOLDS[source] ?? ENTITY_MATCH_THRESHOLDS._default ?? ENTITY_MERGE_THRESHOLD;
     let bestMatch = null;
     let bestScore = 0;
 
     // Token-overlap guard: extract word tokens from the new entity's key
     const newTokens = new Set(key.split(/\s+/));
 
-    // Pre-decode embeddings of same-type nodes to avoid repeated Base64 decoding in loop
+    // Compute matching-task vectors for same-type records. The embedding cache
+    // makes stable records cheap after their first comparison.
     const existingEmbeddings = new Map();
     for (const [existingKey, node] of Object.entries(graphData.nodes)) {
-        if (node.type === type && hasEmbedding(node)) {
-            existingEmbeddings.set(existingKey, getEmbedding(node));
-        }
+        if (node.type !== type) continue;
+        const vector = await getSimilarityEmbedding(`${node.type}: ${node.name} - ${node.description}`);
+        if (vector) existingEmbeddings.set(existingKey, vector);
+        await yieldToMain();
     }
 
     for (const [existingKey, existingEmbedding] of existingEmbeddings) {
@@ -509,7 +624,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
             }
         }
 
-        const sim = cosineSimilarity(newEmbedding, existingEmbedding);
+        const sim = cosineSimilarity(matchingEmbedding, existingEmbedding);
         if (!shouldMergeEntities(sim, threshold, newTokens, key, existingKey, type)) {
             continue;
         }
@@ -525,8 +640,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
         );
         upsertEntity(graphData, graphData.nodes[bestMatch].name, type, description, cap);
         // Persist alias for retrieval-time alternate name matching
-        if (!graphData.nodes[bestMatch].aliases) graphData.nodes[bestMatch].aliases = [];
-        graphData.nodes[bestMatch].aliases.push(name);
+        addUniqueAlias(graphData.nodes[bestMatch], name);
         // Record redirect so upsertRelationship can resolve
         if (!graphData._mergeRedirects) graphData._mergeRedirects = {};
         if (key !== bestMatch) {
@@ -536,9 +650,14 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
         return { key: bestMatch, stChanges };
     }
 
-    // No match: create new node with embedding
+    // No match: create new node with a retrieval-task embedding.
     upsertEntity(graphData, name, type, description, cap);
-    setEmbedding(graphData.nodes[key], newEmbedding);
+    try {
+        const retrievalEmbedding = await getDocumentEmbedding(entityText);
+        if (retrievalEmbedding) setEmbedding(graphData.nodes[key], retrievalEmbedding);
+    } catch {
+        // Retrieval embeddings are optional.
+    }
 
     const node = graphData.nodes[key];
     const text = `[OV_ID:${key}] ${node.description}`;

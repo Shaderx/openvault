@@ -199,11 +199,12 @@
                         <label for="openvault_embedding_source">Embedding Model</label>
                         <select id="openvault_embedding_source" class="text_pole">
                             <optgroup label="Multilingual">
+                                <option value="qwen3-embedding-0.6b">Qwen3-Embedding-0.6B - 1024d · instruction-aware · recommended quality (q8 WebGPU)</option>
                                 <option value="multilingual-e5-small">multilingual-e5-small - 384d · 118M · 100+ langs · MTEB: 55.8</option>
-                                <option value="embeddinggemma-300m">embeddinggemma-300m - 768d · 300M · 100+ langs · MTEB: 61.2 (WebGPU)</option>
+                                <option value="embeddinggemma-300m">embeddinggemma-300m - 768d · 300M · lightweight WebGPU</option>
                             </optgroup>
                             <optgroup label="English Only">
-                                <option value="bge-small-en-v1.5">bge-small-en-v1.5 - 384d · 133MB · MTEB: 62.17 · SOTA RAG</option>
+                                <option value="bge-small-en-v1.5">bge-small-en-v1.5 - 384d · 133MB · legacy</option>
                             </optgroup>
                             <optgroup label="External">
                                 <option value="ollama">Ollama (Custom server)</option>
@@ -211,12 +212,12 @@
                                 <option value="st_vector">ST Vector Storage (SillyTavern)</option>
                             </optgroup>
                         </select>
-                        <small class="openvault-hint">Transformers.js and Ollama models produce higher-quality embeddings than ST Vector Storage, improving retrieval accuracy.</small>
+                        <small class="openvault-hint">Qwen3 is the quality option and requires WebGPU (about 614 MB q8 weights). EmbeddingGemma is lighter. ST Vector retrieval uses deterministic entity matching because it does not expose vectors.</small>
 
                         <!-- Embedding Prefixes -->
                         <label for="openvault_embedding_query_prefix">Query Prefix</label>
                         <input id="openvault_embedding_query_prefix" type="text" class="text_pole" placeholder="query: " />
-                        <small class="openvault-hint">Prepended to search queries. Auto-set when switching models.</small>
+                        <small class="openvault-hint">Prepended to search queries. Auto-set when switching models; Qwen3 uses its built-in task instructions.</small>
 
                         <label for="openvault_embedding_doc_prefix">Document Prefix</label>
                         <input id="openvault_embedding_doc_prefix" type="text" class="text_pole" placeholder="passage: " />

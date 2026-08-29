@@ -14,10 +14,14 @@ import {
 } from '../../src/graph/graph.js';
 
 // Mock embeddings module
-vi.mock('../../src/embeddings.js', () => ({
-    getDocumentEmbedding: vi.fn(),
-    isEmbeddingsEnabled: vi.fn(() => false),
-}));
+vi.mock('../../src/embeddings.js', () => {
+    const embedding = vi.fn();
+    return {
+        getDocumentEmbedding: embedding,
+        getSimilarityEmbedding: embedding,
+        isEmbeddingsEnabled: vi.fn(() => false),
+    };
+});
 
 // Mock llm module
 vi.mock('../../src/llm.js', () => ({
@@ -442,6 +446,25 @@ describe('mergeOrInsertEntity', () => {
 
         // Fast path: same key, no alias needed
         expect(graphData.nodes.castle.aliases).toBeUndefined();
+    });
+
+    it('uses a persisted alias before semantic matching and keeps aliases unique', async () => {
+        const { getDocumentEmbedding } = await import('../../src/embeddings.js');
+        getDocumentEmbedding.mockResolvedValue(null);
+        graphData.nodes['reddington steele'] = {
+            name: 'Reddington Steele',
+            type: 'PERSON',
+            description: 'Mercenary netrunner',
+            mentions: 1,
+            aliases: ['Red', 'red'],
+        };
+
+        const result = await mergeOrInsertEntity(graphData, 'RED', 'PERSON', 'BD recorder', 3, mockSettings);
+
+        expect(result.key).toBe('reddington steele');
+        expect(graphData.nodes['reddington steele'].mentions).toBe(2);
+        expect(graphData.nodes['reddington steele'].aliases).toEqual(['Red']);
+        expect(getDocumentEmbedding).not.toHaveBeenCalled();
     });
 
     describe('cross-script merge', () => {
@@ -1050,9 +1073,9 @@ describe('shouldMergeEntities', () => {
             expect(shouldMergeEntities(0.95, 0.9, tokensA, 'alex', 'alexander', 'PERSON')).toBe(true);
         });
 
-        it('merges at exact threshold', () => {
+        it('rejects description-only similarity at the threshold', () => {
             const tokensA = new Set(['john']);
-            expect(shouldMergeEntities(0.9, 0.9, tokensA, 'john', 'jonathan', 'PERSON')).toBe(true);
+            expect(shouldMergeEntities(0.9, 0.9, tokensA, 'john', 'jonathan', 'PERSON')).toBe(false);
         });
 
         it('requires token overlap in grey zone', () => {
@@ -1061,10 +1084,18 @@ describe('shouldMergeEntities', () => {
             expect(shouldMergeEntities(0.85, 0.9, tokensA, 'mary', 'jane', 'PERSON')).toBe(false);
         });
 
-        it('merges in grey zone with token overlap', () => {
-            const tokensA = new Set(['bob']);
-            // cosine=0.85, grey zone, substring containment ('bob' in 'bob smith')
-            expect(shouldMergeEntities(0.85, 0.9, tokensA, 'bob', 'bob smith', 'PERSON')).toBe(true);
+        it('merges at threshold with a compatible title/full-name signal', () => {
+            const tokensA = new Set(['captain', 'voss']);
+            expect(shouldMergeEntities(0.9, 0.9, tokensA, 'captain voss', 'alexander voss', 'PERSON')).toBe(true);
+        });
+
+        it.each([
+            ['John Smith', 'James Smith', 'john smith', 'james smith'],
+            ['Captain Voss', 'Captain Ross', 'captain voss', 'captain ross'],
+            ['Mina', 'Nina', 'mina', 'nina'],
+            ['Red Dragon', 'Red', 'red dragon', 'red'],
+        ])('does not merge hard negative %s / %s from ordinary high cosine', (_a, _b, keyA, keyB) => {
+            expect(shouldMergeEntities(0.95, 0.86, new Set(keyA.split(' ')), keyA, keyB, 'PERSON')).toBe(false);
         });
     });
 

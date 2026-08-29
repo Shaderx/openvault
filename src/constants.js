@@ -137,11 +137,32 @@ export const embeddingModelPrefixes = {
     'multilingual-e5-small': { queryPrefix: 'query: ', docPrefix: 'passage: ' },
     'bge-small-en-v1.5': { queryPrefix: 'Represent this sentence for searching relevant passages: ', docPrefix: '' },
     'embeddinggemma-300m': {
-        queryPrefix: 'task: sentence similarity | query: ',
-        docPrefix: 'task: sentence similarity | query: ',
+        queryPrefix: 'task: search result | query: ',
+        docPrefix: 'title: none | text: ',
     },
+    'qwen3-embedding-0.6b': { queryPrefix: '', docPrefix: '' },
     _default: { queryPrefix: 'query: ', docPrefix: 'passage: ' },
 };
+
+/** Semantic purpose of an embedding request. */
+export const EMBEDDING_TASKS = Object.freeze({
+    RETRIEVAL: 'retrieval',
+    MATCHING: 'matching',
+    CLUSTERING: 'clustering',
+});
+
+/**
+ * Entity identity thresholds are model/task-specific because cosine distributions
+ * are not comparable across embedding families. External models retain the
+ * conservative legacy threshold until explicitly calibrated by their operator.
+ */
+export const ENTITY_MATCH_THRESHOLDS = Object.freeze({
+    'multilingual-e5-small': 0.9,
+    'bge-small-en-v1.5': 0.9,
+    'embeddinggemma-300m': 0.88,
+    'qwen3-embedding-0.6b': 0.86,
+    _default: 0.9,
+});
 
 // ============== Embedding Sources ==============
 export const EMBEDDING_SOURCES = Object.freeze({
