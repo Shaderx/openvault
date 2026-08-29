@@ -109,12 +109,14 @@ describe('Phase 2 End-to-End Integration', () => {
             const communities = [
                 {
                     title: 'The Royal Court',
+                    status: 'active',
                     summary:
                         'Queen Elena navigates treacherous court politics while hiding her alliance with the northern rebels.',
                     findings: ['The Queen fears betrayal', 'The Guard is loyal'],
                 },
                 {
                     title: 'Merchant Trade Network',
+                    status: 'active',
                     summary:
                         'Eastern merchants have formed an embargo against the kingdom, threatening economic collapse.',
                     findings: ['Trade routes are blocked', 'Prices are rising'],
@@ -253,6 +255,7 @@ describe('Phase 2 End-to-End Integration', () => {
             const communities = [
                 {
                     title: 'The Love Triangle',
+                    status: 'active',
                     summary: 'Alice betrayed Bob while secretly loving Charlie.',
                     findings: ['Alice is torn', 'Bob suspects nothing'],
                 },

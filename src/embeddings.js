@@ -1121,8 +1121,11 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
 
         // Collect unsynced communities
         for (const [id, community] of Object.entries(data.communities || {})) {
-            if (community.summary && !isStSynced(community)) {
-                allItems.push({ item: community, text: `[OV_ID:${id}] ${community.summary}` });
+            if (community.summary && community.status !== 'stale' && !isStSynced(community)) {
+                const text =
+                    community.retrievalText ||
+                    `[OV_ID:${id}] ${community.title || ''}\n${community.summary}\n${(community.findings || []).join('\n')}`;
+                allItems.push({ item: community, text });
             }
         }
 
@@ -1163,7 +1166,9 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
     // Count what needs embedding
     const memories = (data[MEMORIES_KEY] || []).filter((m) => m.summary && !hasEmbedding(m));
     const nodes = Object.values(data.graph?.nodes || {}).filter((n) => !hasEmbedding(n));
-    const communities = Object.values(data.communities || {}).filter((c) => c.summary && !hasEmbedding(c));
+    const communities = Object.values(data.communities || {}).filter(
+        (c) => c.summary && c.status !== 'stale' && !hasEmbedding(c)
+    );
     const totalNeeded = memories.length + nodes.length + communities.length;
 
     if (totalNeeded === 0) {
@@ -1207,7 +1212,10 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
         let communityCount = 0;
         if (communities.length > 0) {
             const communityEmbeddings = await processInBatches(communities, 5, async (c) => {
-                return getQueryEmbedding(c.summary, { signal });
+                return getQueryEmbedding(
+                    c.retrievalText || `${c.title || ''}\n${c.summary}\n${(c.findings || []).join('\n')}`,
+                    { signal }
+                );
             });
             for (let i = 0; i < communities.length; i++) {
                 if (communityEmbeddings[i]) {

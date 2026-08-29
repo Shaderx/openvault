@@ -20,6 +20,19 @@ export const MEMORIES_KEY = 'memories';
 export const CHARACTERS_KEY = 'character_states';
 export const PROCESSED_MESSAGES_KEY = 'processed_message_ids';
 
+export const CHAT_LIFECYCLE = Object.freeze({
+    READY: 'ready',
+    NEEDS_REBUILD: 'needs_rebuild',
+    REBUILDING: 'rebuilding',
+    REBUILD_FAILED: 'rebuild_failed',
+});
+
+export const ARCHIVE_SEGMENT_STATES = Object.freeze({
+    PREPARED: 'prepared',
+    SEALED: 'sealed',
+    INACTIVE: 'inactive',
+});
+
 // =============================================================================
 // Injection Position Constants
 // =============================================================================
@@ -62,9 +75,14 @@ export const defaultSettings = {
     extractionMaxTurns: 20, // Max conversation turns per extraction batch
     // Retrieval pipeline settings (token-based)
     retrievalFinalTokens: 8000, // Final context budget
+    dynamicRecallEnabled: true,
+    dynamicRecallTokens: 1200,
     // Auto-hide settings
     autoHideEnabled: true,
     visibleChatBudget: 16000, // Maximum tokens visible in chat history
+    visibleChatTarget: 12000, // Compact down to this target after crossing the high-water mark
+    promptHardTokenLimit: 128000,
+    archiveRollupThreshold: 64000, // Diagnostic threshold; rollups are never automatic
     frozenReplies: 0, // Number of initial bot replies to keep always-visible (0 = disabled)
     // Backfill settings
     backfillMaxRPM: 10,
@@ -124,8 +142,8 @@ export const defaultSettings = {
     outputLanguage: 'auto',
     // Injection settings
     injection: {
-        memory: { position: 5, depth: 4 },
-        world: { position: 5, depth: 4 },
+        memory: { position: 4, depth: 4 },
+        world: { position: 4, depth: 4 },
     },
     postHistoryPrompt: '',
 };

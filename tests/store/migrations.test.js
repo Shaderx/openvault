@@ -5,10 +5,12 @@ import { CURRENT_SCHEMA_VERSION, runSchemaMigrations } from '../../src/store/mig
 
 describe('migration orchestrator', () => {
     describe('runSchemaMigrations', () => {
-        it('returns false when no migration needed (already v2)', () => {
+        it('migrates v2 to the mandatory v4 rebuild gate', () => {
             const data = { schema_version: 2, memories: [] };
             const result = runSchemaMigrations(data, []);
-            expect(result).toBe(false);
+            expect(result).toBe(true);
+            expect(data.schema_version).toBe(CURRENT_SCHEMA_VERSION);
+            expect(data.lifecycle.status).toBe('needs_rebuild');
         });
 
         it('returns false when schema_version equals current', () => {
@@ -93,10 +95,11 @@ describe('v2 migration', () => {
         expect(result).toBe(true);
     });
 
-    it('returns false when no changes needed', () => {
+    it('gates v2 data for a v4 rebuild', () => {
         const data = { schema_version: 2 };
         const result = runSchemaMigrations(data, chat);
-        expect(result).toBe(false);
+        expect(result).toBe(true);
+        expect(data.lifecycle.status).toBe('needs_rebuild');
     });
 });
 
@@ -120,13 +123,14 @@ describe('v3 migration - backfill message_fingerprints', () => {
         const result = runSchemaMigrations(data, chat);
 
         expect(result).toBe(true);
-        expect(data.schema_version).toBe(3);
+        expect(data.schema_version).toBe(4);
+        expect(data.lifecycle.status).toBe('needs_rebuild');
         expect(data.memories[0].message_fingerprints).toEqual(['1000000', '2000000']);
         expect(data.memories[1].message_fingerprints).toEqual(['3000000']);
         expect(data.memories[2].message_fingerprints).toEqual([]);
     });
 
-    it('skips migration when already v3', () => {
+    it('gates already-v3 chats for a v4 rebuild', () => {
         const data = {
             schema_version: 3,
             memories: [{ id: 'mem1', message_ids: [0], message_fingerprints: ['1000000'] }],
@@ -134,7 +138,9 @@ describe('v3 migration - backfill message_fingerprints', () => {
 
         const result = runSchemaMigrations(data, chat);
 
-        expect(result).toBe(false);
+        expect(result).toBe(true);
+        expect(data.schema_version).toBe(4);
+        expect(data.lifecycle.status).toBe('needs_rebuild');
     });
 
     it('handles memories with missing message_ids', () => {

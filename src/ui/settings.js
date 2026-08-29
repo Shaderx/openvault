@@ -450,6 +450,29 @@ async function handleExtractAll() {
     });
 }
 
+async function handleFullRebuild() {
+    if (!confirm('Rebuild OpenVault from the start of this chat? Legacy OpenVault retrieval will not be used.')) return;
+    const $button = $('#openvault_rebuild_btn');
+    $button.prop('disabled', true).text('Rebuilding…');
+    setStatus('extracting');
+    try {
+        const { startFullRebuild } = await import('../rebuild/rebuild.js');
+        await startFullRebuild({
+            onProgress: ({ processed, boundary }) => {
+                $('#openvault_rebuild_notice_text').text(
+                    `Rebuilding source history: ${processed}/${boundary} messages processed.`
+                );
+            },
+        });
+        showToast('success', 'OpenVault rebuild complete. Immutable archive mode is active.');
+    } catch (error) {
+        showToast('error', error.name === 'AbortError' ? 'Rebuild stopped after chat switch.' : error.message);
+    } finally {
+        refreshAllUI();
+        setStatus('ready');
+    }
+}
+
 async function handleDeleteChatData() {
     if (!confirm('Are you sure you want to delete all OpenVault data for this chat?')) {
         return;
@@ -1048,6 +1071,7 @@ function bindUIElements() {
     // Action buttons
     $('#openvault_backfill_embeddings_btn').on('click', backfillEmbeddings);
     $('#openvault_extract_all_btn').on('click', handleExtractAll);
+    $('#openvault_rebuild_btn').on('click', handleFullRebuild);
 
     // Emergency Cut button
     $('#openvault_emergency_cut_btn').on('click', handleEmergencyCutClick);

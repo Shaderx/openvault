@@ -2,6 +2,7 @@
 
 import {
     CHARACTERS_KEY,
+    CHAT_LIFECYCLE,
     CONSOLIDATION,
     EMBEDDING_SOURCES,
     GRAPH_JACCARD_DUPLICATE_THRESHOLD,
@@ -39,7 +40,7 @@ export function getOpenVaultData() {
     }
     if (!context.chatMetadata[METADATA_KEY]) {
         context.chatMetadata[METADATA_KEY] = {
-            schema_version: 3,
+            schema_version: 4,
             [MEMORIES_KEY]: [],
             [CHARACTERS_KEY]: {},
             [PROCESSED_MESSAGES_KEY]: [],
@@ -47,6 +48,9 @@ export function getOpenVaultData() {
             graph: createEmptyGraph(),
             communities: {},
             graph_message_count: 0,
+            lifecycle: { status: CHAT_LIFECYCLE.READY },
+            archives: { revision: 0, segments: [], next_sequence: 1, rollups: [] },
+            diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
         };
     }
     const data = context.chatMetadata[METADATA_KEY];
@@ -426,22 +430,27 @@ export async function deleteCurrentChatData() {
  * Update a community by ID.
  * @param {string} id - Community ID (e.g. "C0")
  * @param {Object} updates - Fields to update (title, summary, findings)
- * @returns {Promise<boolean>} True if updated, false otherwise
+ * @returns {Promise<Object>} Structured result and ST vector changes
  */
 export async function updateCommunity(id, updates) {
     const data = getOpenVaultData();
     if (!data) {
         showToast('warning', 'No chat loaded');
-        return false;
+        return { success: false };
     }
 
     const community = data.communities?.[id];
     if (!community) {
         logDebug(`Community ${id} not found`);
-        return false;
+        return { success: false };
     }
 
-    const summaryChanged = updates.summary !== undefined && updates.summary !== community.summary;
+    const oldText =
+        community.retrievalText ||
+        `[OV_ID:${id}] ${community.title || ''}\n${community.summary || ''}\n${(community.findings || []).join('\n')}`;
+    const contentChanged = ['title', 'summary', 'findings'].some(
+        (field) => updates[field] !== undefined && updates[field] !== community[field]
+    );
 
     const allowedFields = ['title', 'summary', 'findings'];
     for (const field of allowedFields) {
@@ -450,36 +459,50 @@ export async function updateCommunity(id, updates) {
         }
     }
 
-    if (summaryChanged) {
+    const stChanges = { toDelete: [], toSync: [] };
+    if (contentChanged) {
+        if (community._st_synced) stChanges.toDelete.push({ hash: cyrb53(oldText) });
         deleteEmbedding(community);
+        community.retrievalText = `[OV_ID:${id}] ${community.title || ''}\n${community.summary || ''}\n${(community.findings || []).join('\n')}`;
+        stChanges.toSync.push({
+            hash: cyrb53(community.retrievalText),
+            text: community.retrievalText,
+            item: community,
+        });
     }
 
     await getDeps().saveChatConditional();
-    logDebug(`Updated community ${id}${summaryChanged ? ' (embedding invalidated)' : ''}`);
-    return true;
+    logDebug(`Updated community ${id}${contentChanged ? ' (embedding invalidated)' : ''}`);
+    return { success: true, stChanges };
 }
 
 /**
  * Delete a community by ID.
  * @param {string} id - Community ID (e.g. "C0")
- * @returns {Promise<boolean>} True if deleted, false otherwise
+ * @returns {Promise<Object>} Structured result and ST vector changes
  */
 export async function deleteCommunity(id) {
     const data = getOpenVaultData();
     if (!data) {
         showToast('warning', 'No chat loaded');
-        return false;
+        return { success: false };
     }
 
     if (!data.communities?.[id]) {
         logDebug(`Community ${id} not found`);
-        return false;
+        return { success: false };
     }
 
+    const community = data.communities[id];
+    const text =
+        community.retrievalText ||
+        `[OV_ID:${id}] ${community.title || ''}\n${community.summary || ''}\n${(community.findings || []).join('\n')}`;
+    const stChanges = community._st_synced ? { toDelete: [{ hash: cyrb53(text) }] } : undefined;
     delete data.communities[id];
+    delete data.global_world_state;
     await getDeps().saveChatConditional();
     logDebug(`Deleted community ${id}`);
-    return true;
+    return { success: true, stChanges };
 }
 
 /**

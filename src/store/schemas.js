@@ -35,6 +35,7 @@ export const MemorySchema = z.object({
     archived: z.boolean().optional(),
     temporal_anchor: z.string().nullable().optional(),
     is_transient: z.boolean().optional(),
+    is_secret: z.boolean().optional(),
     _st_synced: z.boolean().optional(),
     _proxyVectorScore: z.number().optional(),
 });
@@ -61,6 +62,11 @@ export const GraphEdgeSchema = z.object({
     embedding: z.array(z.number()).optional(),
     embedding_b64: z.string().optional(),
     _st_synced: z.boolean().optional(),
+    status: z.enum(['active', 'weakened', 'resolved', 'superseded']).optional(),
+    valid_from: z.number().optional(),
+    valid_to: z.number().nullable().optional(),
+    last_confirmed: z.number().optional(),
+    revision: z.number().optional(),
 });
 
 export const GraphDataSchema = z.object({
@@ -90,6 +96,7 @@ export const BaseRelationshipSchema = z.object({
     source: z.string().min(1).trim().describe('Source entity name'),
     target: z.string().min(1).trim().describe('Target entity name'),
     description: z.string().min(1).describe('Description of the relationship'),
+    status: z.enum(['active', 'weakened', 'resolved', 'superseded']).default('active'),
 });
 
 // --- Scoring & Retrieval Schemas ---
@@ -151,6 +158,7 @@ export const GlobalWorldStateSchema = z.object({
     summary: z.string(),
     last_updated: z.number(),
     community_count: z.number(),
+    community_revision: z.number().optional(),
 });
 
 export const CommunitySummarySchema = z.object({
@@ -160,6 +168,59 @@ export const CommunitySummarySchema = z.object({
     entities: z.array(z.string()).optional(),
     findings: z.array(z.string()).optional(),
     last_updated: z.number().optional(),
+    nodeKeys: z.array(z.string()).optional(),
+    inputHash: z.string().optional(),
+    status: z.enum(['active', 'stale', 'dissolved']).optional(),
+    lineage: z.object({ parents: z.array(z.string()), children: z.array(z.string()) }).optional(),
+    boundaryEdges: z.array(z.string()).optional(),
+    retrievalText: z.string().optional(),
+    lastKnownSummary: z.string().optional(),
+    parentId: z.string().optional(),
+    parentInputHash: z.string().optional(),
+    pendingSplitHash: z.string().optional(),
+    embedding_b64: z.string().optional(),
+    embedding: z.array(z.number()).optional(),
+    _st_synced: z.boolean().optional(),
+});
+
+export const ArchiveSourceSchema = z.object({
+    index: z.number().int().nonnegative(),
+    fingerprint: z.string(),
+    role: z.enum(['user', 'assistant']),
+});
+
+export const ArchiveSegmentSchema = z.object({
+    id: z.string(),
+    sequence: z.number().int().positive(),
+    state: z.enum(['prepared', 'sealed', 'inactive']),
+    active: z.boolean(),
+    sources: z.array(ArchiveSourceSchema),
+    memory_ids: z.array(z.string()),
+    content: z.string(),
+    content_hash: z.string(),
+    token_count: z.number().int().nonnegative(),
+    prepared_at: z.number(),
+    sealed_at: z.number().optional(),
+});
+
+export const ArchiveStoreSchema = z.object({
+    revision: z.number().int().nonnegative(),
+    segments: z.array(ArchiveSegmentSchema),
+    next_sequence: z.number().int().positive(),
+    rollups: z.array(z.string()),
+});
+
+export const ChatLifecycleSchema = z.object({
+    status: z.enum(['ready', 'needs_rebuild', 'rebuilding', 'rebuild_failed']),
+    reason: z.string().optional(),
+    detected_at: z.number().optional(),
+    rebuild_id: z.string().optional(),
+    boundary: z.number().optional(),
+    processed: z.number().optional(),
+    error: z.string().optional(),
+    rebuilt_at: z.number().optional(),
+    restored: z.number().optional(),
+    missing_source_warning: z.boolean().optional(),
 });
 
 export const OpenVaultDataSchema = z.object({
@@ -172,7 +233,12 @@ export const OpenVaultDataSchema = z.object({
     reflection_state: ReflectionStateSchema.optional(),
     graph_message_count: z.number().optional(),
     global_world_state: GlobalWorldStateSchema.optional(),
+    community_state_revision: z.number().optional(),
     embedding_model_id: z.string().optional(),
+    lifecycle: ChatLifecycleSchema,
+    archives: ArchiveStoreSchema,
+    recovery_backup: z.record(z.string(), z.unknown()).optional(),
+    diagnostics: z.record(z.string(), z.unknown()),
 });
 
 // --- StVectorItem Schema ---

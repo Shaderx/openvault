@@ -4,7 +4,7 @@
  * Handles all SillyTavern event subscriptions and processing.
  */
 
-import { extensionName, MEMORIES_KEY, METADATA_KEY, RETRIEVAL_TIMEOUT_MS } from './constants.js';
+import { CHAT_LIFECYCLE, extensionName, METADATA_KEY, RETRIEVAL_TIMEOUT_MS } from './constants.js';
 import { getDeps } from './deps.js';
 import './settings.js'; // Side-effect import to initialize settings with lodash.merge
 import { loadFromChat as loadPerfFromChat, record } from './perf/store.js';
@@ -40,80 +40,10 @@ import { isExtensionEnabled, safeSetExtensionPrompt, withTimeout } from './utils
 export async function autoHideOldMessages() {
     const t0 = performance.now();
     try {
-        const { getProcessedFingerprints, getFingerprint } = await import('./extraction/scheduler.js');
-        const { getMessageTokenCount, getTokenSum, snapToTurnBoundary } = await import('./utils/tokens.js');
-
-        const deps = getDeps();
-        const settings = deps.getExtensionSettings()[extensionName];
+        const settings = getDeps().getExtensionSettings()[extensionName];
         if (!settings.autoHideEnabled) return;
-
-        const context = deps.getContext();
-        const chat = context.chat || [];
-        const visibleChatBudget = settings.visibleChatBudget;
-
-        const data = getOpenVaultData();
-        const processedFps = getProcessedFingerprints(data);
-
-        // Get visible (non-system) message indices
-        const visibleIndices = [];
-        for (let i = 0; i < chat.length; i++) {
-            if (!chat[i].is_system) visibleIndices.push(i);
-        }
-
-        // Freeze initial replies: count bot messages to determine the boundary
-        const frozenReplies = settings.frozenReplies || 0;
-        let frozenBoundary = 0;
-        if (frozenReplies > 0) {
-            let botCount = 0;
-            for (const idx of visibleIndices) {
-                if (!chat[idx].is_user) botCount++;
-                if (botCount >= frozenReplies) {
-                    frozenBoundary = idx + 1;
-                    break;
-                }
-            }
-        }
-
-        const hideableIndices =
-            frozenReplies > 0 ? visibleIndices.filter((idx) => idx >= frozenBoundary) : visibleIndices;
-
-        // Sum visible tokens
-        const totalVisibleTokens = getTokenSum(chat, visibleIndices);
-        if (totalVisibleTokens <= visibleChatBudget) return;
-
-        // Calculate excess
-        const excess = totalVisibleTokens - visibleChatBudget;
-
-        // Collect oldest visible messages to hide, skipping unextracted and frozen
-        const toHide = [];
-        let accumulated = 0;
-
-        for (const idx of hideableIndices) {
-            if (accumulated >= excess) break;
-
-            // Only hide already-extracted messages; skip unextracted
-            if (!processedFps.has(getFingerprint(chat[idx]))) continue;
-
-            toHide.push(idx);
-            accumulated += getMessageTokenCount(chat, idx);
-        }
-
-        // Snap to turn boundary
-        const snapped = snapToTurnBoundary(chat, toHide);
-
-        if (snapped.length === 0) return;
-
-        // Hide
-        for (const idx of snapped) {
-            chat[idx].is_system = true;
-            chat[idx].openvault_hidden = true;
-        }
-
-        await getDeps().saveChatConditional();
-        logDebug(
-            `Auto-hid ${snapped.length} messages (token-based) — budget: ${visibleChatBudget}, was: ${totalVisibleTokens}`
-        );
-        showToast('info', `Auto-hid ${snapped.length} old messages`);
+        const { compactIfNeeded } = await import('./archive/archive.js');
+        await compactIfNeeded(settings);
     } finally {
         record('auto_hide', performance.now() - t0);
     }
@@ -160,7 +90,7 @@ export async function onBeforeGeneration(type, _options, dryRun = false) {
         // Auto-hide old messages before building context
         await autoHideOldMessages();
 
-        const { updateInjection } = await import('./retrieval/retrieve.js');
+        const { injectContext, updateInjection } = await import('./retrieval/retrieve.js');
 
         // Skip retrieval if no memories exist yet
         const data = getOpenVaultData();
@@ -168,11 +98,9 @@ export async function onBeforeGeneration(type, _options, dryRun = false) {
             logDebug('>>> Skipping retrieval - no context available');
             return;
         }
-        const memories = data[MEMORIES_KEY] || [];
-        if (memories.length === 0) {
-            logDebug('>>> Skipping retrieval - no memories yet');
-            return;
-        }
+        if (data.lifecycle?.status && data.lifecycle.status !== CHAT_LIFECYCLE.READY) return;
+        // Establish Tier A before any fallible dynamic retrieval work.
+        injectContext('', '', '');
 
         setStatus('retrieving');
         setGenerationLock();
@@ -270,7 +198,7 @@ export async function onChatChanged() {
         try {
             const chat = context.chat || [];
             if (runSchemaMigrations(data, chat)) {
-                showToast('info', 'OpenVault database optimized.', 'Data Migration');
+                showToast('warning', 'This older chat requires a full OpenVault rebuild.', 'OpenVault Rebuild');
                 const { saveOpenVaultData } = await import('./store/chat-data.js');
                 await saveOpenVaultData();
             }
@@ -286,11 +214,20 @@ export async function onChatChanged() {
         }
     }
 
+    if (!data?.lifecycle?.status || data.lifecycle.status === CHAT_LIFECYCLE.READY) {
+        const { persistArchiveDeactivations, recoverPreparedArchive } = await import('./archive/archive.js');
+        await recoverPreparedArchive();
+        await persistArchiveDeactivations();
+    } else if (data) {
+        const { getRebuildNotice } = await import('./rebuild/rebuild.js');
+        showToast('warning', getRebuildNotice(data), 'OpenVault Rebuild', { timeOut: 0, extendedTimeOut: 0 });
+    }
+
     // Check for embedding model mismatch and wipe stale vectors
     const { invalidateStaleEmbeddings } = await import('./embeddings/migration.js');
     const { saveOpenVaultData } = await import('./store/chat-data.js');
     const settings = getDeps().getExtensionSettings()[extensionName];
-    if (data && settings?.embeddingSource) {
+    if ((!data?.lifecycle?.status || data.lifecycle.status === CHAT_LIFECYCLE.READY) && settings?.embeddingSource) {
         const wiped = await invalidateStaleEmbeddings(data, settings.embeddingSource);
         if (wiped > 0) {
             await saveOpenVaultData();
@@ -320,8 +257,9 @@ export async function onChatChanged() {
     // Clear operation states on chat change to prevent stale locks
     resetOperationStatesIfSafe();
 
-    // Clear current injection - it will be refreshed in onBeforeGeneration
-    safeSetExtensionPrompt('');
+    // Clear every named slot and macro cache; ready chats re-establish Tier A.
+    const { injectContext } = await import('./retrieval/retrieve.js');
+    injectContext('', '', '');
 
     // Load perf data BEFORE refreshing UI so perf tab has data to render
     loadPerfFromChat();
@@ -343,6 +281,8 @@ export async function onMessageReceived(messageId) {
         logDebug('Skipping extraction - session disabled due to migration failure');
         return;
     }
+    const lifecycleStatus = getOpenVaultData()?.lifecycle?.status;
+    if (lifecycleStatus && lifecycleStatus !== CHAT_LIFECYCLE.READY) return;
 
     const { wakeUpBackgroundWorker } = await import('./extraction/worker.js');
 

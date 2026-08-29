@@ -45,6 +45,7 @@ export const RelationshipSchema = z.object({
     description: BaseRelationshipSchema.shape.description
         .catch('No description')
         .describe('Description of the relationship'),
+    status: BaseRelationshipSchema.shape.status.catch('active'),
 });
 
 /**
@@ -419,6 +420,18 @@ export const CommunitySummarySchema = z.object({
     title: z.string().min(1, 'Title is required'),
     summary: z.string().min(1, 'Summary is required'),
     findings: z.array(z.string()).min(1, 'At least one finding required').max(5, 'Maximum 5 findings'),
+    subcommunities: z
+        .array(
+            z.object({
+                entity_ids: z.array(z.string()).min(2),
+                title: z.string().min(1),
+                summary: z.string().min(1),
+                findings: z.array(z.string()).min(1).max(5),
+                rationale: z.string().min(1),
+            })
+        )
+        .max(4)
+        .default([]),
 });
 
 /**

@@ -67,7 +67,7 @@ export const LLM_CONFIGS = {
     },
     extraction_graph: {
         profileSettingKey: 'extractionProfile',
-        maxTokens: 16000,
+        maxTokens: 8000,
         errorContext: 'Graph Extraction',
         timeoutMs: 180000,
         getJsonSchema: getGraphExtractionJsonSchema,

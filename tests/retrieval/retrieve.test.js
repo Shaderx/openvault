@@ -311,6 +311,62 @@ describe('retrieve pipeline', () => {
         expect(memoryCall).toBeDefined();
     });
 
+    for (const entryPoint of ['updateInjection', 'retrieveAndInjectContext']) {
+        it(`${entryPoint}: does not fall back to inaccessible secret memories`, async () => {
+            mockSetPrompt = vi.fn();
+            const secret = 'Bob alone learned the forbidden launch code';
+            setupTestContext({
+                context: {
+                    chat: [
+                        { mes: 'Hidden source', name: 'Bob', is_user: false, is_system: true, send_date: 'secret-1' },
+                        { mes: 'Alice asks what happened', name: 'Alice', is_user: false, is_system: false },
+                    ],
+                    chatMetadata: {
+                        openvault: {
+                            schema_version: 4,
+                            lifecycle: { status: 'ready' },
+                            memories: [
+                                {
+                                    id: 'secret-event',
+                                    type: 'event',
+                                    summary: secret,
+                                    importance: 5,
+                                    message_ids: [0],
+                                    characters_involved: ['Bob'],
+                                    witnesses: ['Bob'],
+                                    is_secret: true,
+                                },
+                            ],
+                            characters: { Alice: { known_events: [] }, Bob: { known_events: ['secret-event'] } },
+                            graph: { nodes: {}, edges: {} },
+                            communities: {},
+                            archives: { revision: 0, segments: [], next_sequence: 1, rollups: [] },
+                            diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
+                        },
+                    },
+                    chatId: 'secret-chat',
+                    name1: 'User',
+                    name2: 'Alice',
+                    groupId: 'group-one',
+                    groups: [{ id: 'group-one', members: [] }],
+                },
+                settings: { enabled: true, embeddingSource: 'ollama' },
+                deps: {
+                    setExtensionPrompt: mockSetPrompt,
+                    extension_prompt_types: { IN_PROMPT: 0 },
+                    saveChatConditional: vi.fn().mockResolvedValue(undefined),
+                },
+            });
+
+            const retrieval = await import('../../src/retrieval/retrieve.js');
+            const result = await retrieval[entryPoint]();
+            expect(result ?? null).toBeNull();
+            expect(mockSetPrompt.mock.calls.flat().join('\n')).not.toContain(secret);
+            const memoryCall = mockSetPrompt.mock.calls.find((call) => call[0] === extensionName);
+            expect(memoryCall?.[1] || '').toBe('');
+        });
+    }
+
     it('macro intent: summarize request uses global state injection', async () => {
         mockSetPrompt = vi.fn();
 

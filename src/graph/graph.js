@@ -281,7 +281,7 @@ export function upsertEntity(graphData, name, type, description, cap = 3) {
  * @param {Object} [settings=null] - Optional settings for consolidation behavior
  * @returns {void}
  */
-export function upsertRelationship(graphData, source, target, description, cap = 5, settings = null) {
+export function upsertRelationship(graphData, source, target, description, cap = 5, settings = null, state = {}) {
     const srcKey = _resolveKey(graphData, source);
     const tgtKey = _resolveKey(graphData, target);
 
@@ -300,7 +300,17 @@ export function upsertRelationship(graphData, source, target, description, cap =
     const existing = graphData.edges[edgeKey];
 
     if (existing) {
-        existing.weight += 1;
+        const status = state.status || 'active';
+        existing.status = status;
+        existing.revision = (existing.revision || 0) + 1;
+        existing.last_confirmed = state.messageCount || existing.last_confirmed || 0;
+        if (status === 'resolved' || status === 'superseded') {
+            existing.valid_to = state.messageCount || existing.last_confirmed;
+            existing.weight = 0;
+        } else {
+            existing.valid_to = null;
+            existing.weight = Math.max(1, existing.weight || 0) + 1;
+        }
 
         // Jaccard guard: only append if description is sufficiently different (>60% new content)
         const jaccard = jaccardSimilarity(existing.description, description, tokenize);
@@ -329,7 +339,12 @@ export function upsertRelationship(graphData, source, target, description, cap =
             source: srcKey,
             target: tgtKey,
             description,
-            weight: 1,
+            weight: state.status === 'resolved' || state.status === 'superseded' ? 0 : 1,
+            status: state.status || 'active',
+            valid_from: state.messageCount || 0,
+            valid_to: state.status === 'resolved' || state.status === 'superseded' ? state.messageCount || 0 : null,
+            last_confirmed: state.messageCount || 0,
+            revision: 1,
             _descriptionTokens: countTokens(description),
         };
         graphData.edges[edgeKey] = newEdge;

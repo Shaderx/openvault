@@ -924,6 +924,22 @@ export function initBrowser() {
 }
 
 export function refreshAllUI() {
+    const data = getOpenVaultData();
+    const lifecycleStatus = data?.lifecycle?.status || 'ready';
+    const needsRebuild = lifecycleStatus !== 'ready';
+    $('#openvault_rebuild_notice').toggle(needsRebuild);
+    if (needsRebuild) {
+        import('../rebuild/rebuild.js')
+            .then(({ getRebuildNotice }) => {
+                $('#openvault_rebuild_notice_text').text(getRebuildNotice(data));
+                $('#openvault_rebuild_btn')
+                    .prop('disabled', lifecycleStatus === 'rebuilding')
+                    .text(
+                        lifecycleStatus === 'rebuild_failed' ? 'Resume Full Rebuild' : 'Rebuild OpenVault from Start'
+                    );
+            })
+            .catch(() => {});
+    }
     refreshStats();
     renderMemoryList();
     renderCharacterStates();

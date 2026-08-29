@@ -71,7 +71,13 @@ export function retrieveWorldContext(
         let usedTokens = 0;
         for (const id of stCommunityIds) {
             const community = communities[id];
-            if (!community?.summary) continue;
+            if (
+                !community?.summary ||
+                community.status === 'stale' ||
+                community.status === 'dissolved' ||
+                community.lineage?.children?.length > 0
+            )
+                continue;
             const entry = formatCommunityEntry(community);
             const tokens = countTokens(entry);
             if (usedTokens + tokens > tokenBudget) break;
@@ -94,6 +100,8 @@ export function retrieveWorldContext(
     // Score communities by cosine similarity (local mode only)
     const scored = [];
     for (const [id, community] of Object.entries(communities)) {
+        if (community.status === 'stale' || community.status === 'dissolved' || community.lineage?.children?.length > 0)
+            continue;
         if (!hasEmbedding(community)) continue;
         const score = cosineSimilarity(queryEmbedding, getEmbedding(community));
         scored.push({ id, community, score });

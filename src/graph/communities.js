@@ -29,6 +29,13 @@ import { cyrb53, hasEmbedding, setEmbedding } from '../utils/embedding-codec.js'
 import { logDebug } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 
+function escapePromptData(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+}
+
 /**
  * Convert flat graph data to a graphology instance.
  * @param {Object} graphData - { nodes, edges } from chatMetadata
@@ -48,10 +55,15 @@ export function toGraphology(graphData) {
             delete graphData.edges[key];
             continue;
         }
-        if (graph.hasNode(attrs.source) && graph.hasNode(attrs.target)) {
+        if (
+            attrs.status !== 'resolved' &&
+            attrs.status !== 'superseded' &&
+            graph.hasNode(attrs.source) &&
+            graph.hasNode(attrs.target)
+        ) {
             graph.addEdgeWithKey(key, attrs.source, attrs.target, {
                 description: attrs.description,
-                weight: attrs.weight || 1,
+                weight: Math.min(Math.max(attrs.weight || 1, 0), 10) * (attrs.status === 'weakened' ? 0.35 : 1),
             });
         }
     }
@@ -151,18 +163,21 @@ export function buildCommunityGroups(graphData, communityPartition) {
     // Group node keys
     for (const [nodeKey, communityId] of Object.entries(communityPartition)) {
         if (!groups[communityId]) {
-            groups[communityId] = { nodeKeys: [], nodeLines: [], edgeLines: [] };
+            groups[communityId] = { nodeKeys: [], nodeLines: [], edgeLines: [], boundaryEdgeLines: [] };
         }
         groups[communityId].nodeKeys.push(nodeKey);
 
         const node = graphData.nodes[nodeKey];
         if (node) {
-            groups[communityId].nodeLines.push(`- ${node.name} (${node.type || 'UNKNOWN'}): ${node.description}`);
+            groups[communityId].nodeLines.push(
+                `- [ID:${escapePromptData(nodeKey)}] ${escapePromptData(node.name)} (${node.type || 'UNKNOWN'}): ${escapePromptData(node.description)}`
+            );
         }
     }
 
     // Assign edges to communities
     for (const [_edgeKey, edge] of Object.entries(graphData.edges || {})) {
+        if (edge.status === 'resolved' || edge.status === 'superseded') continue;
         const srcCommunity = communityPartition[edge.source];
         const tgtCommunity = communityPartition[edge.target];
 
@@ -171,12 +186,107 @@ export function buildCommunityGroups(graphData, communityPartition) {
             const srcNode = graphData.nodes[edge.source];
             const tgtNode = graphData.nodes[edge.target];
             groups[srcCommunity].edgeLines.push(
-                `- ${srcNode?.name || edge.source} → ${tgtNode?.name || edge.target}: ${edge.description} [weight: ${edge.weight}]`
+                `- ${escapePromptData(srcNode?.name || edge.source)} → ${escapePromptData(tgtNode?.name || edge.target)}: ${escapePromptData(edge.description)} [weight: ${edge.weight}; status: ${edge.status || 'active'}]`
             );
+        } else {
+            const srcNode = graphData.nodes[edge.source];
+            const tgtNode = graphData.nodes[edge.target];
+            const line = `- [BOUNDARY] ${escapePromptData(srcNode?.name || edge.source)} → ${escapePromptData(tgtNode?.name || edge.target)}: ${escapePromptData(edge.description)} [status: ${edge.status || 'active'}]`;
+            if (groups[srcCommunity]) groups[srcCommunity].boundaryEdgeLines.push(line);
+            if (groups[tgtCommunity]) groups[tgtCommunity].boundaryEdgeLines.push(line);
         }
     }
 
+    for (const group of Object.values(groups)) {
+        group.nodeKeys.sort();
+        group.nodeLines.sort();
+        group.edgeLines.sort();
+        group.boundaryEdgeLines = [...new Set(group.boundaryEdgeLines)].sort().slice(0, 12);
+        group.inputHash = String(
+            cyrb53([...group.nodeLines, ...group.edgeLines, ...group.boundaryEdgeLines].join('\n'))
+        );
+    }
+
     return groups;
+}
+
+function overlapScore(a, b) {
+    const left = new Set(a || []);
+    const right = new Set(b || []);
+    let intersection = 0;
+    for (const key of left) if (right.has(key)) intersection++;
+    const union = left.size + right.size - intersection;
+    return union > 0 ? intersection / union : 0;
+}
+
+/** Match volatile Louvain labels to stable stored community IDs. */
+export function assignStableCommunityIds(communityGroups, existingCommunities) {
+    const assignments = {};
+    const used = new Set();
+    const groups = Object.entries(communityGroups).sort((a, b) => b[1].nodeKeys.length - a[1].nodeKeys.length);
+    for (const [temporaryId, group] of groups) {
+        let bestId = null;
+        let bestScore = 0;
+        for (const [id, existing] of Object.entries(existingCommunities || {})) {
+            if (used.has(id) || existing.status === 'dissolved' || existing.parentId) continue;
+            const score = overlapScore(group.nodeKeys, existing.nodeKeys || []);
+            if (score > bestScore) {
+                bestScore = score;
+                bestId = id;
+            }
+        }
+        const id = bestId && bestScore >= 0.5 ? bestId : `community-${cyrb53(group.nodeKeys.join('|'))}`;
+        used.add(id);
+        const parents = Object.entries(existingCommunities || {})
+            .filter(
+                ([, existing]) =>
+                    !existing.parentId &&
+                    existing.status !== 'dissolved' &&
+                    overlapScore(group.nodeKeys, existing.nodeKeys || []) >= 0.25
+            )
+            .map(([existingId]) => existingId)
+            .sort();
+        assignments[temporaryId] = { id, parents, overlap: bestScore };
+    }
+    return assignments;
+}
+
+export function getCommunityRetrievalText(id, community) {
+    return `[OV_ID:${id}] ${community.title || ''}\n${community.summary || ''}\n${(community.findings || []).join('\n')}`.trim();
+}
+
+/** Strictly validate an LLM subdivision against real nodes and active edges. */
+export function validateCommunitySubdivisions(proposals, group, graphData) {
+    if (!Array.isArray(proposals) || proposals.length < 2 || proposals.length > 4) return [];
+    const allowed = new Set(group.nodeKeys);
+    const seen = new Set();
+    for (const proposal of proposals) {
+        if (!Array.isArray(proposal.entity_ids) || proposal.entity_ids.length < 2) return [];
+        for (const id of proposal.entity_ids) {
+            if (!allowed.has(id) || seen.has(id)) return [];
+            seen.add(id);
+        }
+        const members = new Set(proposal.entity_ids);
+        const connected = new Set([proposal.entity_ids[0]]);
+        let progressed = true;
+        while (progressed) {
+            progressed = false;
+            for (const edge of Object.values(graphData.edges || {})) {
+                if (edge.status === 'resolved' || edge.status === 'superseded') continue;
+                if (!members.has(edge.source) || !members.has(edge.target)) continue;
+                if (connected.has(edge.source) && !connected.has(edge.target)) {
+                    connected.add(edge.target);
+                    progressed = true;
+                }
+                if (connected.has(edge.target) && !connected.has(edge.source)) {
+                    connected.add(edge.source);
+                    progressed = true;
+                }
+            }
+        }
+        if (connected.size !== members.size) return [];
+    }
+    return seen.size === allowed.size ? proposals : [];
 }
 
 /**
@@ -204,7 +314,7 @@ function sameMembers(a, b) {
  * @returns {Promise<{ communities: Object, global_world_state: Object|null, stChanges: Object }>} Updated communities, optional global state, and ST sync changes
  */
 export async function updateCommunitySummaries(
-    _graphData,
+    graphData,
     communityGroups,
     existingCommunities,
     currentMessageCount = 0,
@@ -218,6 +328,9 @@ export async function updateCommunitySummaries(
     const outputLanguage = resolveOutputLanguage(settings);
     const prefill = resolveExtractionPrefill(settings);
     const updatedCommunities = {};
+    const assignments = assignStableCommunityIds(communityGroups, existingCommunities);
+    const changedIds = new Set();
+    let hadStaleFailure = false;
 
     // Track how many communities were actually updated
     let updatedCount = 0;
@@ -229,11 +342,13 @@ export async function updateCommunitySummaries(
         // Skip solo nodes - they don't form a meaningful community
         if (group.nodeKeys.length < 2) continue;
 
-        const key = `C${communityId}`;
+        const assignment = assignments[communityId];
+        const key = assignment.id;
         const existing = existingCommunities[key];
 
         // Check if membership has changed
-        const membershipChanged = !existing || !sameMembers(existing.nodeKeys, group.nodeKeys);
+        const membershipChanged = !existing || !sameMembers(existing.nodeKeys || [], group.nodeKeys);
+        const inputChanged = !existing || existing.inputHash !== group.inputHash;
 
         // Check staleness: message count delta exceeds threshold
         const messageDelta = currentMessageCount - (existing?.lastUpdatedMessageCount || 0);
@@ -246,10 +361,16 @@ export async function updateCommunitySummaries(
         const singleCommunityForceRefresh = isSingleCommunity && isStale;
 
         // Skip if membership hasn't changed AND not stale AND not missing embedding
-        if (!membershipChanged && !isStale && !missingEmbedding && !singleCommunityForceRefresh) {
+        if (!inputChanged && !membershipChanged && !isStale && !missingEmbedding && !singleCommunityForceRefresh) {
             updatedCommunities[key] = existing;
+            for (const [childId, child] of Object.entries(existingCommunities)) {
+                if (child.parentId === key && child.parentInputHash === group.inputHash) {
+                    updatedCommunities[childId] = child;
+                }
+            }
             continue;
         }
+        changedIds.add(key);
 
         // Queue the LLM summarization
         promises.push(
@@ -257,34 +378,113 @@ export async function updateCommunitySummaries(
                 .add(async () => {
                     const prompt = buildCommunitySummaryPrompt(
                         group.nodeLines,
-                        group.edgeLines,
+                        [...(group.edgeLines || []), ...(group.boundaryEdgeLines || [])],
                         preamble,
                         outputLanguage,
                         prefill
                     );
                     const response = await callLLM(prompt, LLM_CONFIGS.community, { structured: true });
                     const parsed = parseCommunitySummaryResponse(response);
-                    const embedding = await getQueryEmbedding(parsed.summary);
                     const community = {
+                        id: key,
                         nodeKeys: group.nodeKeys,
                         title: parsed.title,
                         summary: parsed.summary,
                         findings: parsed.findings,
                         lastUpdated: deps.Date.now(),
                         lastUpdatedMessageCount: currentMessageCount,
+                        inputHash: group.inputHash,
+                        status: 'active',
+                        boundaryEdges: group.boundaryEdgeLines || [],
+                        lineage: { parents: assignment.parents.filter((id) => id !== key), children: [] },
                     };
+                    community.retrievalText = getCommunityRetrievalText(key, community);
+                    const embedding = await getQueryEmbedding(community.retrievalText);
                     if (embedding) {
                         setEmbedding(community, embedding);
                     }
                     updatedCommunities[key] = community;
                     updatedCount++;
+
+                    const proposedSubdivisions = validateCommunitySubdivisions(parsed.subcommunities, group, graphData);
+                    const proposalHash =
+                        proposedSubdivisions.length > 0
+                            ? String(
+                                  cyrb53(
+                                      proposedSubdivisions
+                                          .map((proposal) => [...proposal.entity_ids].sort().join('|'))
+                                          .sort()
+                                          .join('::')
+                                  )
+                              )
+                            : '';
+                    const hadExistingSplit = Object.values(existingCommunities).some(
+                        (candidate) => candidate.parentId === key
+                    );
+                    const subdivisions =
+                        hadExistingSplit || (proposalHash && existing?.pendingSplitHash === proposalHash)
+                            ? proposedSubdivisions
+                            : [];
+                    if (proposedSubdivisions.length > 0 && subdivisions.length === 0) {
+                        community.pendingSplitHash = proposalHash;
+                    }
+                    const usedChildIds = new Set();
+                    for (const proposal of subdivisions) {
+                        let childId = null;
+                        let childScore = 0;
+                        for (const [candidateId, candidate] of Object.entries(existingCommunities)) {
+                            if (candidate.parentId !== key || usedChildIds.has(candidateId)) continue;
+                            const score = overlapScore(proposal.entity_ids, candidate.nodeKeys || []);
+                            if (score > childScore) {
+                                childScore = score;
+                                childId = candidateId;
+                            }
+                        }
+                        if (!childId || childScore < 0.5) {
+                            childId = `community-${cyrb53(`${key}|${[...proposal.entity_ids].sort().join('|')}`)}`;
+                        }
+                        usedChildIds.add(childId);
+                        changedIds.add(childId);
+                        const child = {
+                            id: childId,
+                            nodeKeys: [...proposal.entity_ids].sort(),
+                            title: proposal.title,
+                            summary: proposal.summary,
+                            findings: proposal.findings,
+                            status: 'active',
+                            inputHash: String(
+                                cyrb53(`${group.inputHash}|${[...proposal.entity_ids].sort().join('|')}`)
+                            ),
+                            parentId: key,
+                            parentInputHash: group.inputHash,
+                            lastUpdated: deps.Date.now(),
+                            lastUpdatedMessageCount: currentMessageCount,
+                            lineage: { parents: [key], children: [] },
+                        };
+                        child.retrievalText = getCommunityRetrievalText(childId, child);
+                        const childEmbedding = await getQueryEmbedding(child.retrievalText);
+                        if (childEmbedding) setEmbedding(child, childEmbedding);
+                        updatedCommunities[childId] = child;
+                        community.lineage.children.push(childId);
+                        updatedCount++;
+                    }
                     logDebug(`Community ${key}: "${parsed.title}" (${group.nodeKeys.length} nodes)`);
                 })
                 .catch((error) => {
                     logDebug(`Community ${key} summarization failed: ${error.message}`);
-                    if (existing) {
-                        updatedCommunities[key] = existing;
-                    }
+                    hadStaleFailure = true;
+                    updatedCommunities[key] = {
+                        id: key,
+                        nodeKeys: group.nodeKeys,
+                        title: existing?.title || 'Stale community',
+                        summary: '',
+                        findings: [],
+                        inputHash: group.inputHash,
+                        status: 'stale',
+                        lastKnownSummary: existing?.summary || '',
+                        boundaryEdges: group.boundaryEdgeLines || [],
+                        lineage: { parents: assignment.parents.filter((id) => id !== key), children: [] },
+                    };
                 })
         );
     }
@@ -294,8 +494,13 @@ export async function updateCommunitySummaries(
     // Build change set for ST sync (orchestrator handles network I/O)
     const stChanges = { toSync: [], toDelete: [] };
     for (const [id, community] of Object.entries(updatedCommunities)) {
-        if (community.summary) {
-            const text = `[OV_ID:${id}] ${community.summary}`;
+        const existing = existingCommunities[id];
+        if (changedIds.has(id) && existing?._st_synced) {
+            const oldText = existing.retrievalText || getCommunityRetrievalText(id, existing);
+            stChanges.toDelete.push({ hash: cyrb53(oldText) });
+        }
+        if (changedIds.has(id) && community.status === 'active' && community.summary) {
+            const text = community.retrievalText || getCommunityRetrievalText(id, community);
             stChanges.toSync.push({ hash: cyrb53(text), text, item: community });
         }
     }
@@ -303,7 +508,7 @@ export async function updateCommunitySummaries(
     // Detect dissolved communities — present in existing but absent in updated
     for (const [id, community] of Object.entries(existingCommunities)) {
         if (!updatedCommunities[id] && community._st_synced) {
-            const text = `[OV_ID:${id}] ${community.summary || ''}`;
+            const text = community.retrievalText || getCommunityRetrievalText(id, community);
             stChanges.toDelete.push({ hash: cyrb53(text) });
         }
     }
@@ -313,7 +518,7 @@ export async function updateCommunitySummaries(
 
     // Trigger global world state synthesis if any communities were updated
     let globalState = null;
-    if (updatedCount > 0) {
+    if (updatedCount > 0 && !hadStaleFailure) {
         globalState = await generateGlobalWorldState(updatedCommunities, preamble, outputLanguage, prefill);
     }
 
@@ -393,7 +598,9 @@ export async function synthesizeInChunks(communityList, preamble, outputLanguage
  * @returns {Promise<{ summary: string, last_updated: number, community_count: number } | null>}
  */
 export async function generateGlobalWorldState(communities, preamble, outputLanguage, prefill) {
-    const communityList = Object.values(communities || {});
+    const communityList = Object.values(communities || {}).filter(
+        (community) => community.status === 'active' && !(community.lineage?.children?.length > 0)
+    );
     if (communityList.length === 0) {
         return null;
     }

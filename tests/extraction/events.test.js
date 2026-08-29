@@ -122,7 +122,7 @@ describe('autoHideOldMessages (token-based)', () => {
         expect(saveFn).not.toHaveBeenCalled();
     });
 
-    it('skips unextracted messages and continues past them', async () => {
+    it('stops compaction at the first unprocessed hole', async () => {
         // Mark messages 2,3 as NOT extracted
         mockData.processed_message_ids = ['1000000', '1000001', '1000004', '1000005', '1000006', '1000007'];
         mockData.memories = [];
@@ -130,15 +130,14 @@ describe('autoHideOldMessages (token-based)', () => {
         const { autoHideOldMessages } = await import('../../src/events.js');
         await autoHideOldMessages();
 
-        // excess = 8 tokens. Hide 0,1 (extracted, 4 tokens), skip 2,3 (unextracted),
-        // continue with 4,5 (extracted, 4 tokens) → total hidden = 8
-        // Snap after 1: next is U(2) ✓. Snap after 5: next is U(6) ✓.
+        // Only the oldest contiguous processed turn can be archived. Crossing
+        // the hole would silently claim source coverage that does not exist.
         expect(mockChat[0].is_system).toBe(true);
         expect(mockChat[1].is_system).toBe(true);
         expect(mockChat[2].is_system).toBe(false); // Unextracted, skipped
         expect(mockChat[3].is_system).toBe(false); // Unextracted, skipped
-        expect(mockChat[4].is_system).toBe(true);
-        expect(mockChat[5].is_system).toBe(true);
+        expect(mockChat[4].is_system).toBe(false);
+        expect(mockChat[5].is_system).toBe(false);
     });
 
     it('respects turn boundaries — does not split mid-turn', async () => {
@@ -345,11 +344,14 @@ describe('onChatChanged embedding model mismatch detection', () => {
 
         // Setup: chat has embeddings from old model
         mockData = {
-            schema_version: 2, // Already on v2 to avoid triggering schema migration
+            schema_version: 4,
+            lifecycle: { status: 'ready' },
             embedding_model_id: 'old-model',
             memories: [{ id: '1', embedding_b64: 'abc' }],
             graph: { nodes: { alice: { name: 'Alice', type: 'CHARACTER', embedding_b64: 'def' } }, edges: {} },
             communities: { C0: { title: 'G', embedding_b64: 'ghi' } },
+            archives: { revision: 0, segments: [], next_sequence: 1, rollups: [] },
+            diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
         };
 
         setupTestContext({
@@ -463,7 +465,7 @@ describe('onChatChanged migration', () => {
         vi.clearAllMocks();
     });
 
-    it('migrates v1 data and shows toast', async () => {
+    it('gates v1 data for a mandatory full rebuild', async () => {
         const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 
         // v1 data with index-based processed_message_ids
@@ -476,13 +478,17 @@ describe('onChatChanged migration', () => {
         const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
-        // Should have migrated through v2 and v3
-        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(3);
+        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(4);
+        expect(mockContext.chatMetadata[METADATA_KEY].lifecycle.status).toBe('needs_rebuild');
         expect(mockContext.chatMetadata[METADATA_KEY][PROCESSED_MESSAGES_KEY]).toContain('1000000');
-        expect(mockToast).toHaveBeenCalledWith('info', expect.stringContaining('optimized'), 'Data Migration', {});
+        expect(
+            mockToast.mock.calls.some(
+                (call) => call[0] === 'warning' && /full rebuild/i.test(call[1]) && call[3]?.timeOut === 0
+            )
+        ).toBe(true);
     });
 
-    it('rolls back on migration failure and sets session disabled', async () => {
+    it('gates legacy data even when old processed locators have missing sources', async () => {
         const { METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 
         // Create v1 data with index that will be out of bounds
@@ -494,25 +500,18 @@ describe('onChatChanged migration', () => {
         const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
-        // Migration should have succeeded (the v2 migration handles missing messages gracefully)
-        // So we test a different scenario: data that causes actual failure
-        // Let's test that session disabled flag works correctly
-        const { setSessionDisabled } = await import('../../src/state.js');
-
-        // Manually set session disabled and verify onChatChanged respects it
-        setSessionDisabled(true);
-        mockToast.mockClear();
-
-        await onChatChanged();
-
-        // Should NOT have called toast (early return due to session disabled)
-        expect(mockToast).not.toHaveBeenCalled();
-
-        // Reset for next test
-        setSessionDisabled(false);
+        expect(mockContext.chatMetadata[METADATA_KEY]).toMatchObject({
+            schema_version: 4,
+            lifecycle: { status: 'needs_rebuild' },
+        });
+        expect(
+            mockToast.mock.calls.some(
+                (call) => call[0] === 'warning' && /full rebuild/i.test(call[1]) && call[3]?.timeOut === 0
+            )
+        ).toBe(true);
     });
 
-    it('skips migration when schema_version is already 2', async () => {
+    it('gates schema v2 chats instead of running legacy retrieval migration', async () => {
         const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 
         // v2 data already
@@ -525,13 +524,14 @@ describe('onChatChanged migration', () => {
         const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
-        // Should still be v2
-        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(2);
-        // Should not show migration toast (only embedding-related toast might show)
-        const optimizedToasts = mockToast.mock.calls.filter(
-            (call) => call[1]?.includes?.('optimized') || call[1]?.includes?.('Migration')
-        );
-        expect(optimizedToasts.length).toBe(0);
+        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(4);
+        expect(mockContext.chatMetadata[METADATA_KEY].lifecycle.status).toBe('needs_rebuild');
+        expect(mockContext.chatMetadata[METADATA_KEY].embedding_model_id).toBeUndefined();
+        expect(
+            mockToast.mock.calls.some(
+                (call) => call[0] === 'warning' && /full rebuild/i.test(call[1]) && call[3]?.timeOut === 0
+            )
+        ).toBe(true);
     });
 });
 

@@ -19,8 +19,10 @@
  * @property {Object[]} allAvailableMemories - All memories for expanded IDF corpus
  */
 
+import { getArchiveText, persistArchiveDeactivations } from '../archive/archive.js';
 import {
     CHARACTERS_KEY,
+    CHAT_LIFECYCLE,
     COMBINED_BOOST_WEIGHT,
     extensionName,
     IMPORTANCE_5_FLOOR,
@@ -31,11 +33,13 @@ import {
 } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { getQueryEmbedding, isEmbeddingsEnabled } from '../embeddings.js';
-import { getFingerprint } from '../extraction/scheduler.js';
+import { getMessageRevision } from '../extraction/scheduler.js';
 import { cachedContent } from '../injection/macros.js';
 import { filterMemoriesByPOV, getActiveCharacters, getPOVContext } from '../pov.js';
 import { getSettings } from '../settings.js';
 import { getOpenVaultData } from '../store/chat-data.js';
+import { cyrb53 } from '../utils/embedding-codec.js';
+import { integrityDigest } from '../utils/integrity-digest.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { isExtensionEnabled, safeSetExtensionPrompt } from '../utils/st-helpers.js';
 import { countTokens } from '../utils/tokens.js';
@@ -61,7 +65,7 @@ function _getHiddenMemories(chat, memories) {
     // Build fingerprint→index map for current chat
     const fpMap = new Map();
     for (let i = 0; i < chat.length; i++) {
-        const fp = getFingerprint(chat[i]);
+        const fp = getMessageRevision(chat[i]);
         fpMap.set(fp, i);
     }
 
@@ -84,6 +88,15 @@ function _getHiddenMemories(chat, memories) {
         const maxId = Math.max(...m.message_ids);
         return chat[maxId]?.is_system;
     });
+}
+
+function _suppressArchivedDuplicates(memories, data) {
+    const archivedIds = new Set(
+        (data.archives?.segments || [])
+            .filter((segment) => segment.state === 'sealed' && segment.active !== false)
+            .flatMap((segment) => segment.memory_ids || [])
+    );
+    return memories.filter((memory) => memory.type === 'reflection' || !archivedIds.has(memory.id));
 }
 
 /**
@@ -166,7 +179,7 @@ export function buildRetrievalContext(opts = {}) {
         chatFingerprintMap: (() => {
             const map = new Map();
             for (let i = 0; i < chat.length; i++) {
-                map.set(getFingerprint(chat[i]), i);
+                map.set(getMessageRevision(chat[i]), i);
             }
             return map;
         })(),
@@ -189,7 +202,7 @@ export function buildRetrievalContext(opts = {}) {
  * @param {Object} settings - Extension settings
  * @returns {number|null} Depth value, or null if frozen replies are off
  */
-function getFrozenAwareDepth(settings) {
+function _getFrozenAwareDepth(settings) {
     const frozenReplies = settings?.frozenReplies || 0;
     if (frozenReplies <= 0) return null;
 
@@ -220,7 +233,7 @@ function getFrozenAwareDepth(settings) {
  * @param {Object[]} chat - Chat messages array
  * @returns {{hiddenCount: number, hiddenTurns: number}}
  */
-function countHiddenMessages(chat) {
+function _countHiddenMessages(chat) {
     let hiddenCount = 0;
     for (const m of chat) {
         if (m.openvault_hidden) hiddenCount++;
@@ -236,7 +249,7 @@ function countHiddenMessages(chat) {
  * @param {number} hiddenTurns - Approximate number of hidden exchanges
  * @returns {string} Modified context with gap notice inserted
  */
-function prependGapNotice(contextText, hiddenCount, hiddenTurns) {
+function _prependGapNotice(contextText, hiddenCount, hiddenTurns) {
     const notice = `[The following summarizes ${hiddenCount} messages (~${hiddenTurns} exchanges) not shown in chat. Use these memories to maintain narrative continuity across the gap.]`;
     return contextText.replace('<scene_memory>', `<scene_memory>\n${notice}`);
 }
@@ -247,7 +260,7 @@ function prependGapNotice(contextText, hiddenCount, hiddenTurns) {
  * @param {number} hiddenTurns - Approximate number of hidden exchanges
  * @returns {string} Bridge XML block
  */
-function buildEmptyBridge(hiddenCount, hiddenTurns) {
+function _buildEmptyBridge(hiddenCount, hiddenTurns) {
     return [
         '<scene_memory>',
         `[${hiddenCount} messages (~${hiddenTurns} exchanges) occurred between the opening scene above and the recent conversation below but are not shown. No extracted memories are available yet for this section.]`,
@@ -355,37 +368,41 @@ export function injectContext(contextText, worldText = '', entityText = '') {
     // and updates the macro return values in-place.
     cachedContent.memory = contextText || '';
     cachedContent.world = worldText || '';
+    const data = getOpenVaultData();
+    const ready = !data?.lifecycle?.status || data.lifecycle.status === CHAT_LIFECYCLE.READY;
+    const archiveText = ready ? getArchiveText(data, deps.getContext().chat || []) : '';
+    cachedContent.archive = archiveText;
+
+    if (!ready) {
+        safeSetExtensionPrompt('', 'openvault_archive', 5, 0);
+        safeSetExtensionPrompt('', 'openvault_entities', 4, 4);
+        safeSetExtensionPrompt('', 'openvault', 4, 4);
+        safeSetExtensionPrompt('', 'openvault_world', 4, 4);
+        safeSetExtensionPrompt('', 'openvault_posthistory', 4, 0);
+        return;
+    }
+
+    // Tier A is fixed at TOP_OF_CHAT. It is never moved for frozen replies and
+    // contains no dynamic hidden-count or timestamp notices.
+    safeSetExtensionPrompt(archiveText, 'openvault_archive', 5, 0);
+    const archiveHash = integrityDigest(archiveText);
+    const previousArchiveHash = data.diagnostics?.archive?.hash;
+    data.diagnostics ||= { archive: {}, volatile: {}, compaction: {}, rebuild: {} };
+    data.diagnostics.archive = {
+        revision: data.archives?.revision || 0,
+        segments: (data.archives?.segments || []).filter((segment) => segment.state === 'sealed').length,
+        hash: archiveHash,
+        tokens: countTokens(archiveText),
+        changed: previousArchiveHash !== undefined && previousArchiveHash !== archiveHash,
+    };
 
     // Get position settings with defaults
-    let memoryPosition = settings?.injection?.memory?.position ?? 5;
-    let memoryDepth = settings?.injection?.memory?.depth ?? 4;
-    const worldPosition = settings?.injection?.world?.position ?? 5;
+    const memoryPosition = settings?.injection?.memory?.position ?? 4;
+    const memoryDepth = settings?.injection?.memory?.depth ?? 4;
+    const worldPosition = settings?.injection?.world?.position ?? 4;
     const worldDepth = settings?.injection?.world?.depth ?? 4;
 
-    // When frozen replies are active and memory is at TOP_OF_CHAT (position 5),
-    // switch to IN_CHAT with a computed depth that places injection after frozen messages
-    const frozenDepth = getFrozenAwareDepth(settings);
-    if (memoryPosition === 5 && frozenDepth !== null) {
-        memoryPosition = 4; // IN_CHAT with exact depth
-        memoryDepth = frozenDepth;
-    }
-
-    // Detect hidden message gap and inject appropriate context:
-    // - With memories: prepend a notice explaining these summarize hidden messages
-    // - Without memories: inject a minimal bridge noting the gap
-    const chat = deps.getContext().chat || [];
-    const { hiddenCount, hiddenTurns } = countHiddenMessages(chat);
-    let effectiveContent = contextText;
-
-    if (hiddenCount > 0) {
-        if (effectiveContent) {
-            effectiveContent = prependGapNotice(effectiveContent, hiddenCount, hiddenTurns);
-            logDebug(`Gap notice prepended to scene_memory (${hiddenCount} hidden msgs)`);
-        } else {
-            effectiveContent = buildEmptyBridge(hiddenCount, hiddenTurns);
-            logDebug(`Empty bridge injected (${hiddenCount} hidden msgs, no memories)`);
-        }
-    }
+    const effectiveContent = contextText;
 
     // Inject entity context right before scene_memory (same position/depth)
     safeSetExtensionPrompt(entityText || '', 'openvault_entities', memoryPosition, memoryDepth);
@@ -409,6 +426,12 @@ export function injectContext(contextText, worldText = '', entityText = '') {
     // Inject post-history prompt (IN_CHAT at depth 0 = after all messages)
     const postHistoryPrompt = (settings?.postHistoryPrompt || '').trim();
     safeSetExtensionPrompt(postHistoryPrompt, 'openvault_posthistory', 4, 0);
+
+    data.diagnostics.volatile = {
+        hash: String(cyrb53(`${entityText}\u001f${worldText}\u001f${contextText}`)),
+        tokens: countTokens(`${entityText}\n${worldText}\n${contextText}`),
+        depth: Math.min(memoryDepth, worldDepth),
+    };
 }
 
 /**
@@ -428,7 +451,7 @@ export function injectContext(contextText, worldText = '', entityText = '') {
  * @returns {Promise<{memories: Object[], context: string}|null>}
  */
 async function selectFormatAndInject(memoriesToUse, data, ctx) {
-    const { primaryCharacter, activeCharacters, headerName, chatLength, userMessages, totalPool } = ctx;
+    const { primaryCharacter, headerName, chatLength, userMessages, totalPool } = ctx;
 
     // --- Phase 1: Build entity and world with soft caps ---
     const entityCap = Math.floor(totalPool * MAX_RATIO_ENTITY);
@@ -438,7 +461,9 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
     const world = await _buildWorldText(data, userMessages, ctx.recentContext, worldCap);
 
     // --- Phase 2: Compute dynamic scene budget ---
-    const sceneBudget = Math.max(0, totalPool - entity.tokens - world.tokens);
+    const settings = getDeps().getExtensionSettings()?.[extensionName] || {};
+    const recallCap = settings.dynamicRecallEnabled === false ? 0 : settings.dynamicRecallTokens || 1200;
+    const sceneBudget = Math.min(recallCap, Math.max(0, totalPool - entity.tokens - world.tokens));
 
     logDebug(
         `Budget: total=${totalPool} → entity=${entity.tokens} (cap ${entityCap}) world=${world.tokens} (cap ${worldCap}) → scene=${sceneBudget}`
@@ -507,6 +532,18 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
     return { memories: relevantMemories, context: formattedContext };
 }
 
+async function injectWorldWithoutRecall(data, pendingUserMessage = '') {
+    const ctx = buildRetrievalContext({ pendingUserMessage });
+    const entity = _buildEntityText(Math.floor(ctx.totalPool * MAX_RATIO_ENTITY));
+    const world = await _buildWorldText(
+        data,
+        ctx.userMessages,
+        ctx.recentContext,
+        Math.floor(ctx.totalPool * MAX_RATIO_WORLD)
+    );
+    injectContext('', world.text, entity.text);
+}
+
 /**
  * Retrieve relevant context and inject into prompt
  * @returns {Promise<{memories: Object[], context: string}|null>}
@@ -540,13 +577,16 @@ export async function retrieveAndInjectContext() {
         injectContext('', '');
         return null;
     }
+    if (data.lifecycle?.status && data.lifecycle.status !== CHAT_LIFECYCLE.READY) {
+        injectContext('', '', '');
+        return null;
+    }
+    await persistArchiveDeactivations();
     const memories = data[MEMORIES_KEY] || [];
 
     if (memories.length === 0) {
         logDebug('No memories stored yet');
-        cachedContent.memory = '';
-        cachedContent.world = '';
-        injectContext('', '');
+        await injectWorldWithoutRecall(data);
         return null;
     }
 
@@ -558,7 +598,10 @@ export async function retrieveAndInjectContext() {
         // Include reflections (which have no message_ids) in candidate set - respecting user toggle
         const includeReflections = getSettings('reflectionInjectionEnabled', true);
         const reflections = includeReflections ? memories.filter((m) => m.type === 'reflection') : [];
-        const candidateMemories = _deduplicateById([...hiddenMemories, ...reflections]);
+        const candidateMemories = _suppressArchivedDuplicates(
+            _deduplicateById([...hiddenMemories, ...reflections]),
+            data
+        );
 
         // Filter memories by POV
         const accessibleMemories = filterMemoriesByPOV(candidateMemories, povCharacters, data);
@@ -576,18 +619,12 @@ export async function retrieveAndInjectContext() {
             povCharacters,
         });
 
-        // Fallback to hidden memories if POV filter is too strict
-        let memoriesToUse = accessibleMemories;
-        if (accessibleMemories.length === 0 && hiddenMemories.length > 0) {
-            logDebug('POV filter returned 0 results, using all hidden memories as fallback');
-            memoriesToUse = hiddenMemories;
-        }
+        const memoriesToUse = accessibleMemories;
 
         if (memoriesToUse.length === 0) {
             logDebug('No memories available');
             cachedContent.memory = '';
-            cachedContent.world = '';
-            injectContext('', '');
+            await injectWorldWithoutRecall(data);
             return null;
         }
 
@@ -651,12 +688,15 @@ export async function updateInjection(pendingUserMessage = '') {
         injectContext('', '');
         return;
     }
+    if (data.lifecycle?.status && data.lifecycle.status !== CHAT_LIFECYCLE.READY) {
+        injectContext('', '', '');
+        return;
+    }
+    await persistArchiveDeactivations();
     const memories = data[MEMORIES_KEY] || [];
 
     if (memories.length === 0) {
-        cachedContent.memory = '';
-        cachedContent.world = '';
-        injectContext('', '');
+        await injectWorldWithoutRecall(data, pendingUserMessage);
         return;
     }
 
@@ -667,7 +707,7 @@ export async function updateInjection(pendingUserMessage = '') {
     // Include reflections (which have no message_ids) in candidate set - respecting user toggle
     const includeReflections = getSettings('reflectionInjectionEnabled', true);
     const reflections = includeReflections ? memories.filter((m) => m.type === 'reflection') : [];
-    const candidateMemories = _deduplicateById([...hiddenMemories, ...reflections]);
+    const candidateMemories = _suppressArchivedDuplicates(_deduplicateById([...hiddenMemories, ...reflections]), data);
 
     // Filter memories by POV
     const accessibleMemories = filterMemoriesByPOV(candidateMemories, povCharacters, data);
@@ -675,17 +715,11 @@ export async function updateInjection(pendingUserMessage = '') {
         `Retrieval filter: total=${memories.length} hidden=${hiddenMemories.length} reflections=${reflections.length} candidates=${candidateMemories.length} accessible=${accessibleMemories.length}`
     );
 
-    // Fallback to candidate memories if POV filter is too strict
-    let memoriesToUse = accessibleMemories;
-    if (accessibleMemories.length === 0 && candidateMemories.length > 0) {
-        logDebug('Injection: POV filter returned 0, using all candidate memories as fallback');
-        memoriesToUse = candidateMemories;
-    }
+    const memoriesToUse = accessibleMemories;
 
     if (memoriesToUse.length === 0) {
         cachedContent.memory = '';
-        cachedContent.world = '';
-        injectContext('', '');
+        await injectWorldWithoutRecall(data, pendingUserMessage);
         return;
     }
 

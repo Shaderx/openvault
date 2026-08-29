@@ -3,6 +3,22 @@
 Authoritative reference for data structures, retrieval formulas, and storage constants.
 Implementation gotchas live in subdirectory CLAUDE.md files — see directory map in root `CLAUDE.md`.
 
+### Immutable archive tiers (schema v4)
+
+`lifecycle.status` gates retrieval and compaction. Legacy chats migrate to `needs_rebuild` and receive no legacy
+memory, graph, community, macro, or prompt context. The explicit full rebuild preserves an inactive
+`recovery_backup`, restores only `openvault_hidden` messages, captures a fixed source boundary, and activates the
+new data only after extraction and final synthesis complete.
+
+`archives.segments` is an ordered append-only log. Normal operation appends `prepared` then `sealed` segments and
+never edits sealed `content` bytes. Compaction consumes only the oldest contiguous processed complete-turn range,
+persists its replacement first, then hides source messages. The archive injects at TOP_OF_CHAT; dynamic entities,
+communities, and optional small recall inject independently at IN_CHAT depth 4.
+
+Graph edges carry current status, validity bounds, last confirmation, and revision. Resolved/superseded edges have
+no clustering weight. Community canonical input hashes include node state, active internal edges, and boundary
+edges; changed-input summary failures are stale last-known data and are excluded from retrieval.
+
 ## 1. DATA SCHEMA (`chatMetadata.openvault`)
 
 All extension state lives within SillyTavern's `context.chatMetadata.openvault`. 
@@ -10,7 +26,7 @@ All extension state lives within SillyTavern's `context.chatMetadata.openvault`.
 
 ```typescript
 {
-  schema_version: number,      // Tracks migration state (Current: 2)
+  schema_version: number,      // Tracks migration state (Current: 4)
   embedding_model_id: string,  // Tracks which model generated stored embeddings
   st_vector_source: string,    // ST Vector source used for last sync (e.g., 'openrouter')
   st_vector_model: string,     // ST Vector model used for last sync

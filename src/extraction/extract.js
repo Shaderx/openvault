@@ -32,7 +32,12 @@ import {
 } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
-import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
+import {
+    buildCommunityGroups,
+    detectCommunities,
+    getCommunityRetrievalText,
+    updateCommunitySummaries,
+} from '../graph/communities.js';
 import {
     consolidateEdges,
     expandMainCharacterKeys,
@@ -76,6 +81,7 @@ import {
     getBackfillMessageIds,
     getBackfillStats,
     getFingerprint,
+    getMessageRevision,
     getNextBatch,
     getProcessedFingerprints,
 } from './scheduler.js';
@@ -109,7 +115,7 @@ const MAX_EMPTY_RETRIES = 2;
  */
 function _getBatchKey(messages) {
     const fps = messages
-        .map((m) => getFingerprint(m))
+        .map((m) => getMessageRevision(m))
         .sort()
         .join('|');
     return String(cyrb53(fps));
@@ -185,7 +191,7 @@ export async function hideExtractedMessages() {
     let hiddenCount = 0;
     for (let i = 0; i < chat.length; i++) {
         const msg = chat[i];
-        if (processedFps.has(getFingerprint(msg)) && !msg.is_system) {
+        if ((processedFps.has(getMessageRevision(msg)) || processedFps.has(getFingerprint(msg))) && !msg.is_system) {
             msg.is_system = true;
             msg.openvault_hidden = true;
             hiddenCount++;
@@ -229,7 +235,9 @@ export async function executeEmergencyCut(options = {}) {
 
     if (stats.unextractedCount === 0) {
         const processedFps = getProcessedFingerprints(data);
-        const hideableCount = chat.filter((m) => !m.is_system && processedFps.has(getFingerprint(m))).length;
+        const hideableCount = chat.filter(
+            (m) => !m.is_system && (processedFps.has(getMessageRevision(m)) || processedFps.has(getFingerprint(m)))
+        ).length;
 
         if (hideableCount === 0) {
             onWarning?.('No messages to hide');
@@ -698,7 +706,7 @@ export async function synthesizeReflections(data, characterNames, settings, opti
  * @param {string} characterName - Main character name (for main character key derivation)
  * @param {string} userName - User name (for main character key derivation)
  */
-async function synthesizeCommunities(data, settings, characterName, userName) {
+export async function synthesizeCommunities(data, settings, characterName, userName) {
     try {
         const baseKeys = [normalizeKey(characterName), normalizeKey(userName)];
         const mainCharacterKeys = expandMainCharacterKeys(baseKeys, data.graph.nodes || {});
@@ -727,11 +735,27 @@ async function synthesizeCommunities(data, settings, characterName, userName) {
                 isSingleCommunity
             );
             data.communities = communityUpdateResult.communities;
+            data.community_state_revision = (data.community_state_revision || 0) + 1;
             if (communityUpdateResult.global_world_state) {
-                data.global_world_state = communityUpdateResult.global_world_state;
-            }
+                data.global_world_state = {
+                    ...communityUpdateResult.global_world_state,
+                    community_revision: data.community_state_revision,
+                };
+            } else delete data.global_world_state;
             await applySyncChanges(communityUpdateResult.stChanges);
             logDebug(`Community detection: ${communityResult.count} communities found`);
+        } else {
+            const oldCommunities = data.communities || {};
+            const stChanges = { toSync: [], toDelete: [] };
+            for (const [id, community] of Object.entries(oldCommunities)) {
+                if (!community._st_synced) continue;
+                const text = community.retrievalText || getCommunityRetrievalText(id, community);
+                stChanges.toDelete.push({ hash: cyrb53(text) });
+            }
+            data.communities = {};
+            delete data.global_world_state;
+            data.community_state_revision = (data.community_state_revision || 0) + 1;
+            await applySyncChanges(stChanges);
         }
     } catch (error) {
         logError('Community detection error', error);
@@ -910,7 +934,10 @@ async function processGraphUpdates(graphData, entities, relationships, settings)
         const edgeCap = EDGE_DESCRIPTION_CAP;
         for (const rel of relationships) {
             if (rel.source === 'Unknown' || rel.target === 'Unknown') continue;
-            upsertRelationship(graphData, rel.source, rel.target, rel.description, edgeCap);
+            upsertRelationship(graphData, rel.source, rel.target, rel.description, edgeCap, settings, {
+                status: rel.status,
+                messageCount: getOpenVaultData()?.graph_message_count || 0,
+            });
         }
     }
 
@@ -1017,7 +1044,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
         // Stage 3: Enrich & dedup events
         const messageIdsArray = messages.map((m) => m.id);
-        const messageFingerprintsArray = messages.map((m) => getFingerprint(m));
+        const messageFingerprintsArray = messages.map((m) => getMessageRevision(m));
         logDebug(`LLM returned ${rawEvents.length} events from ${messages.length} messages`);
         const { events } = await enrichAndDedupEvents(
             rawEvents,
@@ -1034,7 +1061,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Only triggers on rawEvents === 0 (LLM found nothing); post-dedup empty
         // (rawEvents > 0 but all dupes) is legitimate processing.
         const batchKey = _getBatchKey(messages);
-        if (rawEvents.length === 0) {
+        const hasGraphUpdates = graphResult.entities.length > 0 || graphResult.relationships.length > 0;
+        if (rawEvents.length === 0 && !hasGraphUpdates) {
             const attempts = (_emptyExtractionAttempts.get(batchKey) || 0) + 1;
             _emptyExtractionAttempts.set(batchKey, attempts);
 
@@ -1083,7 +1111,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         }
 
         // Mark processed AFTER events are committed to memories
-        const processedFps = messages.map((m) => getFingerprint(m));
+        const processedFps = messages.map((m) => getMessageRevision(m));
         markMessagesProcessed(processedFps);
         logDebug(`Phase 1 complete: ${events.length} events, ${processedFps.length} messages processed`);
 
