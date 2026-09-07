@@ -82,7 +82,9 @@ export const defaultSettings = {
     visibleChatBudget: 16000, // Maximum tokens visible in chat history
     visibleChatTarget: 12000, // Compact down to this target after crossing the high-water mark
     promptHardTokenLimit: 128000,
-    archiveRollupThreshold: 64000, // Diagnostic threshold; rollups are never automatic
+    archivePromptBudget: 64000, // Bounded immutable archive projection budget
+    archiveProjectionSafetyTokens: 1000,
+    archiveRollupThreshold: 64000, // Soft cap for archive projection/rollup diagnostics
     frozenReplies: 0, // Number of initial bot replies to keep always-visible (0 = disabled)
     // Backfill settings
     backfillMaxRPM: 10,

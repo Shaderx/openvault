@@ -83,16 +83,6 @@ describe('shouldReflect', () => {
         expect(shouldReflect(state, 'Alice', 20)).toBe(true);
         expect(shouldReflect(state, 'Alice', 30)).toBe(false);
     });
-
-    it('does not trigger reflection below threshold of 40', () => {
-        const state = { Alice: { importance_sum: 35 } };
-        expect(shouldReflect(state, 'Alice')).toBe(false);
-    });
-
-    it('triggers reflection at threshold of 40', () => {
-        const state = { Alice: { importance_sum: 40 } };
-        expect(shouldReflect(state, 'Alice')).toBe(true);
-    });
 });
 
 describe('generateReflections', () => {

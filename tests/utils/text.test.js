@@ -189,11 +189,6 @@ describe('text', () => {
     });
 
     describe('assignMemoriesToBuckets (moved from formatting.js)', () => {
-        it('should be exported from text.js', async () => {
-            const { assignMemoriesToBuckets } = await import('../../src/utils/text.js');
-            expect(typeof assignMemoriesToBuckets).toBe('function');
-        });
-
         it('should assign memories to old/mid/recent buckets correctly', async () => {
             const { assignMemoriesToBuckets } = await import('../../src/utils/text.js');
 
@@ -229,11 +224,6 @@ describe('text', () => {
             const { getMemoryPosition } = await import('../../src/utils/text.js');
             const memory = { message_ids: messageIds };
             expect(getMemoryPosition(memory)).toBe(expected);
-        });
-
-        it('should be exported from text.js', async () => {
-            const { getMemoryPosition } = await import('../../src/utils/text.js');
-            expect(typeof getMemoryPosition).toBe('function');
         });
 
         const SEQUENCE_FALLBACK_CASES = [
@@ -479,7 +469,7 @@ describe('text', () => {
         // === Tier 3: Normalize + Extract ===
         describe('Tier 3: Normalize + Extract', () => {
             it('normalizes smart quotes', () => {
-                const result = safeParseJSON('{"key": "value"}');
+                const result = safeParseJSON('{“key”: “value”}');
                 expect(result.success).toBe(true);
                 expect(result.data).toEqual({ key: 'value' });
             });

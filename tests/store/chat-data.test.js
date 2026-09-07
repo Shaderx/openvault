@@ -45,7 +45,7 @@ describe('store/chat-data', () => {
     describe('getOpenVaultData', () => {
         it('creates complete schema for new chats', () => {
             const data = getOpenVaultData();
-            expect(data.schema_version).toBe(4);
+            expect(data.schema_version).toBe(5);
             expect(data.memories).toEqual([]);
             expect(data.character_states).toEqual({});
             expect(data.graph).toBeDefined();
@@ -57,7 +57,7 @@ describe('store/chat-data', () => {
         it('creates empty data structure if none exists', () => {
             const data = getOpenVaultData();
             expect(data).toEqual({
-                schema_version: 4,
+                schema_version: 5,
                 [MEMORIES_KEY]: [],
                 [CHARACTERS_KEY]: {},
                 processed_message_ids: [],

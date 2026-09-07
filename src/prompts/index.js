@@ -10,6 +10,7 @@ export { buildCommunitySummaryPrompt, buildGlobalSynthesisPrompt } from './commu
 
 // Events
 export { buildEventExtractionPrompt } from './events/builder.js';
+export { buildFallbackExtractionPrompt } from './events/fallback.js';
 
 // Graph
 export { buildEdgeConsolidationPrompt, buildGraphExtractionPrompt } from './graph/builder.js';

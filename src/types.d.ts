@@ -21,6 +21,7 @@ export type Memory = {
     temporal_anchor?: (string | null) | undefined;
     is_transient?: boolean | undefined;
     is_secret?: boolean | undefined;
+    coverage_fallback?: boolean | undefined;
     _st_synced?: boolean | undefined;
     _proxyVectorScore?: number | undefined;
 };
@@ -124,6 +125,7 @@ export type ScoredMemory = {
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
         is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     };
@@ -177,6 +179,7 @@ export type ExtractedEvent = {
     relationship_impact: {
         [key: string]: string;
     } | undefined;
+    source_message_ids?: number[] | undefined;
 };
 
 export type EventExtraction = {
@@ -195,6 +198,7 @@ export type EventExtraction = {
         relationship_impact: {
             [key: string]: string;
         } | undefined;
+        source_message_ids?: number[] | undefined;
     }[];
 };
 
@@ -263,6 +267,7 @@ export type OpenVaultData = {
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
         is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[] | undefined;
@@ -378,9 +383,36 @@ export type OpenVaultData = {
             token_count: number;
             prepared_at: number;
             sealed_at?: number | undefined;
+            rollup_required?: boolean | undefined;
+            entries?: {
+                memory_id: string;
+                integrity: string;
+                kind: "event" | "fallback" | "correction";
+                importance: number;
+                summary: string;
+                temporal_anchor?: (string | null) | undefined;
+                source_fingerprints: string[];
+                source_start?: number | undefined;
+                source_end?: number | undefined;
+                is_secret?: boolean | undefined;
+                witnesses?: string[] | undefined;
+            }[] | undefined;
+            entries_hash?: string | undefined;
+            coverage_complete?: boolean | undefined;
         }[];
         next_sequence: number;
         rollups: string[];
+        projection?: {
+            revision: number;
+            budget: number;
+            entry_ids: string[];
+            content: string;
+            content_hash: string;
+            token_count: number;
+            built_at: number;
+            rollup_required?: boolean | undefined;
+            settings_signature?: string | undefined;
+        } | undefined;
     };
     recovery_backup?: {
         [key: string]: unknown;
@@ -454,6 +486,7 @@ export type StSyncChanges = {
             temporal_anchor?: (string | null) | undefined;
             is_transient?: boolean | undefined;
             is_secret?: boolean | undefined;
+            coverage_fallback?: boolean | undefined;
             _st_synced?: boolean | undefined;
             _proxyVectorScore?: number | undefined;
         } | {
@@ -562,6 +595,7 @@ export type GenerateReflectionsResult = {
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
         is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[];
@@ -589,6 +623,7 @@ export type GenerateReflectionsResult = {
                 temporal_anchor?: (string | null) | undefined;
                 is_transient?: boolean | undefined;
                 is_secret?: boolean | undefined;
+                coverage_fallback?: boolean | undefined;
                 _st_synced?: boolean | undefined;
                 _proxyVectorScore?: number | undefined;
             } | {
@@ -671,6 +706,7 @@ export type ConsolidateEdgesResult = {
                 temporal_anchor?: (string | null) | undefined;
                 is_transient?: boolean | undefined;
                 is_secret?: boolean | undefined;
+                coverage_fallback?: boolean | undefined;
                 _st_synced?: boolean | undefined;
                 _proxyVectorScore?: number | undefined;
             } | {
@@ -753,6 +789,7 @@ export type MergeEntityResult = {
                 temporal_anchor?: (string | null) | undefined;
                 is_transient?: boolean | undefined;
                 is_secret?: boolean | undefined;
+                coverage_fallback?: boolean | undefined;
                 _st_synced?: boolean | undefined;
                 _proxyVectorScore?: number | undefined;
             } | {
@@ -940,6 +977,7 @@ export type RetrievalContext = {
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
         is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[] | undefined;
@@ -1007,6 +1045,7 @@ export type PromptContext = {
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
         is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[] | undefined;
@@ -1041,6 +1080,7 @@ export type BasePromptParams = {
             temporal_anchor?: (string | null) | undefined;
             is_transient?: boolean | undefined;
             is_secret?: boolean | undefined;
+            coverage_fallback?: boolean | undefined;
             _st_synced?: boolean | undefined;
             _proxyVectorScore?: number | undefined;
         }[] | undefined;
@@ -1079,6 +1119,7 @@ export type GraphPromptParams = {
             temporal_anchor?: (string | null) | undefined;
             is_transient?: boolean | undefined;
             is_secret?: boolean | undefined;
+            coverage_fallback?: boolean | undefined;
             _st_synced?: boolean | undefined;
             _proxyVectorScore?: number | undefined;
         }[] | undefined;
@@ -1134,6 +1175,7 @@ export type ReflectionPromptParams = {
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
         is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[];

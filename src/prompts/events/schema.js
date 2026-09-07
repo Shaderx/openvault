@@ -2,6 +2,8 @@
  * JSON output schema for event extraction.
  */
 
+import { TEMPORAL_ANCHOR_RULE } from '../shared/rules.js';
+
 export const EVENT_SCHEMA = `Output EXACTLY ONE JSON object with this structure:
 
 {
@@ -16,7 +18,8 @@ export const EVENT_SCHEMA = `Output EXACTLY ONE JSON object with this structure:
       "location": null,
       "is_secret": false,
       "emotional_impact": {"CharacterName": "emotion description"},
-      "relationship_impact": {"CharacterA->CharacterB": "how relationship changed"}
+      "relationship_impact": {"CharacterA->CharacterB": "how relationship changed"},
+      "source_message_ids": [12, 13]
     }
   ]
 }
@@ -25,7 +28,8 @@ FIELD DEFINITIONS:
 - characters_involved: Characters who actively participated or were directly affected (the main actors).
 - witnesses: ALL characters who would know this event occurred. MUST include characters_involved PLUS any present/observers. In a 1-on-1 scene, BOTH characters are witnesses.
 - is_secret: true ONLY for hidden actions (internal thoughts, secret plots). Most events are false.
-- temporal_anchor: REQUIRED FIELD — always include in output. Extract the date (and time if present) from message headers. Prefer date over bare time. Examples: "Friday, June 14, 3:40 PM", "Wednesday, 30 October 2024". If only a time exists with no date: "3:40 PM". null ONLY if no temporal information exists at all.
+- ${TEMPORAL_ANCHOR_RULE}
+- source_message_ids: REQUIRED exact chat-array message ids whose text supports this event. Include one or more ids when an event spans messages. Never include an id that is not shown in the input.
 - is_transient: true for short-term plans or temporary states ("going to wash up", "waiting 10 min"). false for permanent facts or completed actions.
 
 FORMAT RULES:

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+    buildPreparedSegment,
     getArchiveText,
     persistArchiveDeactivations,
     recoverPreparedArchive,
@@ -7,16 +8,25 @@ import {
 } from '../../src/archive/archive.js';
 import { resetDeps } from '../../src/deps.js';
 import { getMessageRevision } from '../../src/extraction/scheduler.js';
+import { integrityDigest } from '../../src/utils/integrity-digest.js';
 
-function setupArchiveContext(saveChatConditional) {
+function setupArchiveContext(saveChatConditional, settings = {}) {
     const chat = [
         { mes: 'User establishes a durable fact.', name: 'User', is_user: true, is_system: false, send_date: '1' },
         { mes: 'The guide confirms that fact.', name: 'Guide', is_user: false, is_system: false, send_date: '2' },
     ];
     const data = {
-        schema_version: 4,
+        schema_version: 5,
         lifecycle: { status: 'ready' },
-        memories: [],
+        memories: [
+            {
+                id: 'coverage-event',
+                summary: 'The conversation established a durable shared fact.',
+                importance: 4,
+                message_ids: [0, 1],
+                message_fingerprints: chat.map(getMessageRevision),
+            },
+        ],
         processed_message_ids: chat.map(getMessageRevision),
         graph: { nodes: {}, edges: {} },
         communities: {},
@@ -25,6 +35,7 @@ function setupArchiveContext(saveChatConditional) {
     };
     setupTestContext({
         context: { chatId: 'archive-chat', chat, chatMetadata: { openvault: data } },
+        settings,
         deps: { saveChatConditional },
     });
     return { chat, data };
@@ -70,5 +81,71 @@ describe('archive two-phase commit', () => {
             deps: { saveChatConditional: vi.fn().mockResolvedValue(undefined) },
         });
         expect(getArchiveText(reloaded)).toBe('');
+    });
+
+    it('does not hide a first segment when protected entries require a rollup', async () => {
+        const save = vi.fn().mockResolvedValue(true);
+        const { chat, data } = setupArchiveContext(save, {
+            archivePromptBudget: 1,
+            archiveRollupThreshold: 1,
+            promptHardTokenLimit: 1000,
+            archiveProjectionSafetyTokens: 1,
+        });
+        data.memories[0].importance = 5;
+        data.memories[0].summary = 'Protected fact '.repeat(100);
+
+        expect(await sealAndHide([0, 1], 'archive-chat')).toBe(false);
+        expect(chat.every((message) => !message.is_system)).toBe(true);
+        expect(data.archives.segments[0]).toMatchObject({ state: 'inactive', active: false, rollup_required: true });
+        expect(data.diagnostics.archive.rollup_required).toBe(true);
+    });
+
+    it('keeps the previous projection and sources visible on existing-projection overflow', async () => {
+        const save = vi.fn().mockResolvedValue(true);
+        const { chat, data } = setupArchiveContext(save, {
+            archivePromptBudget: 1,
+            archiveRollupThreshold: 1,
+            promptHardTokenLimit: 1000,
+            archiveProjectionSafetyTokens: 1,
+        });
+        data.memories[0].importance = 5;
+        data.memories[0].summary = 'Protected fact '.repeat(100);
+        const previous = {
+            revision: 0,
+            budget: 1000,
+            entry_ids: [],
+            content: '<previous />',
+            content_hash: integrityDigest('<previous />'),
+            token_count: 1,
+            built_at: 1,
+        };
+        data.archives.projection = previous;
+
+        expect(await sealAndHide([0, 1], 'archive-chat')).toBe(false);
+        expect(chat.every((message) => !message.is_system)).toBe(true);
+        expect(data.archives.projection).toBe(previous);
+        expect(data.archives.segments[0]).toMatchObject({ state: 'inactive', active: false, rollup_required: true });
+        expect(getArchiveText(data, chat)).toBe('<previous />');
+    });
+
+    it('recovery preflights a prepared overflow before hiding sources', async () => {
+        const save = vi.fn().mockResolvedValue(true);
+        const { chat, data } = setupArchiveContext(save, {
+            archivePromptBudget: 1,
+            archiveRollupThreshold: 1,
+            promptHardTokenLimit: 1000,
+            archiveProjectionSafetyTokens: 1,
+        });
+        data.memories[0].importance = 5;
+        data.memories[0].summary = 'Protected fact '.repeat(100);
+        const prepared = buildPreparedSegment(data, chat, [0, 1]);
+        data.archives.segments.push(prepared);
+        data.archives.next_sequence++;
+        data.archives.revision++;
+
+        expect(await recoverPreparedArchive('archive-chat')).toBe(false);
+        expect(chat.every((message) => !message.is_system)).toBe(true);
+        expect(prepared).toMatchObject({ state: 'inactive', active: false, rollup_required: true });
+        expect(data.archives.projection).toBeUndefined();
     });
 });

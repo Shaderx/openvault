@@ -697,6 +697,8 @@ describe('formatting', () => {
                 expect(result).toContain('Event 2');
                 expect(result).toContain('<subconscious_drives>');
                 expect(result).toContain('Insight about character');
+                expect(result).toContain('[CRITICAL RULE:');
+                expect(result).toContain('NOT consciously aware');
                 const sceneMemoryMatch = result.match(/<scene_memory>([\s\S]*?)<\/scene_memory>/);
                 const sceneMemoryContent = sceneMemoryMatch ? sceneMemoryMatch[1] : '';
                 expect(sceneMemoryContent).not.toContain('Insight about character');
@@ -706,6 +708,14 @@ describe('formatting', () => {
                 const memories = [{ id: 'ev_1', type: 'event', summary: 'Event 1', importance: 3, sequence: 1000 }];
                 const result = formatContextForInjection(memories, [], null, 'Char', 1000, 100);
                 expect(result).toContain('<scene_memory>');
+                expect(result).not.toContain('<subconscious_drives>');
+            });
+
+            it('treats legacy memories without a type as events', () => {
+                const memories = [{ id: 'ev_1', summary: 'Legacy event', importance: 3, sequence: 1000 }];
+                const result = formatContextForInjection(memories, [], null, 'Char', 1000, 100);
+                expect(result).toContain('<scene_memory>');
+                expect(result).toContain('Legacy event');
                 expect(result).not.toContain('<subconscious_drives>');
             });
         });

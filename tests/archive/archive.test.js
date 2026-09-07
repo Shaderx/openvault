@@ -5,11 +5,13 @@ import {
     escapeArchiveText,
     getArchiveText,
     planCompaction,
+    rebuildArchiveProjection,
     validatePreparedSegment,
 } from '../../src/archive/archive.js';
 import { resetDeps } from '../../src/deps.js';
 import { getMessageRevision } from '../../src/extraction/scheduler.js';
 import { setWorkerRunning } from '../../src/state.js';
+import { integrityDigest } from '../../src/utils/integrity-digest.js';
 
 function segment(sequence, content) {
     return {
@@ -67,11 +69,11 @@ describe('immutable archive representation', () => {
         const prepared = buildPreparedSegment(data, chat, [0]);
         expect(prepared.content_hash).toMatch(/^d2-[^-]+-[^-]+-[^-]+$/);
         expect(validatePreparedSegment(prepared, chat)).toBe(true);
-        prepared.content = prepared.content.replace('original source', 'original sourcf');
+        prepared.content = prepared.content.replace('<segment ', '<segment tampered="true" ');
         expect(validatePreparedSegment(prepared, chat)).toBe(false);
     });
 
-    it('records bounded fallback for dialogue not covered by selected events', () => {
+    it('refuses to seal dialogue not covered by selected events', () => {
         const chat = [
             { mes: 'covered dialogue', name: 'User', is_user: true, send_date: 'one' },
             { mes: 'uncovered detail', name: 'Bot', is_user: false, send_date: 'two' },
@@ -88,10 +90,11 @@ describe('immutable archive representation', () => {
         };
         setupTestContext();
         const prepared = buildPreparedSegment(data, chat, [0, 1]);
-        expect(prepared.content).toContain('<coverage event_sources="1" fallback_sources="1" />');
+        expect(prepared.content).toContain('<coverage event_sources="1" fallback_sources="0" missing_sources="1" />');
         expect(prepared.content).toContain('The covered event.');
-        expect(prepared.content).toContain('uncovered detail');
-        expect(prepared.content).not.toContain('>covered dialogue</utterance>');
+        expect(prepared.content).not.toContain('uncovered detail');
+        expect(prepared.content).not.toContain('covered dialogue');
+        expect(prepared.coverage_complete).toBe(false);
     });
 
     it('does not compact while the background extraction worker is active', async () => {
@@ -149,6 +152,158 @@ describe('immutable archive representation', () => {
         expect(data.diagnostics.compaction).toMatchObject({ blocked: 'archive_over_budget', rollup_required: true });
         expect(chat.every((message) => !message.is_system)).toBe(true);
         expect(save).toHaveBeenCalled();
+    });
+
+    it('continues compaction when a bounded projection is full and evicts fallback entries', async () => {
+        const chat = [
+            { mes: 'old source', is_user: true, send_date: '1', is_system: true },
+            { mes: 'new user source '.repeat(30), is_user: true, send_date: '2' },
+            { mes: 'new assistant source '.repeat(30), is_user: false, send_date: '3' },
+        ];
+        const oldFingerprint = getMessageRevision(chat[0]);
+        const newFingerprints = [getMessageRevision(chat[1]), getMessageRevision(chat[2])];
+        const oldEntry = {
+            memory_id: 'old-fallback',
+            kind: 'fallback',
+            importance: 1,
+            summary: 'Old coverage fallback.',
+            temporal_anchor: null,
+            source_fingerprints: [oldFingerprint],
+            source_start: 0,
+            source_end: 0,
+            is_secret: false,
+            witnesses: [],
+        };
+        oldEntry.integrity = integrityDigest(JSON.stringify(oldEntry));
+        const data = {
+            schema_version: 5,
+            lifecycle: { status: 'ready' },
+            memories: [
+                {
+                    id: 'old-fallback',
+                    summary: 'Old coverage fallback.',
+                    importance: 1,
+                    coverage_fallback: true,
+                    message_fingerprints: [oldFingerprint],
+                },
+                {
+                    id: 'new-fallback-a',
+                    summary: 'New coverage fallback A.',
+                    importance: 1,
+                    coverage_fallback: true,
+                    message_fingerprints: [newFingerprints[0]],
+                },
+                {
+                    id: 'new-fallback-b',
+                    summary: 'New coverage fallback B.',
+                    importance: 1,
+                    coverage_fallback: true,
+                    message_fingerprints: [newFingerprints[1]],
+                },
+            ],
+            processed_message_ids: [oldFingerprint, ...newFingerprints],
+            graph: { nodes: {}, edges: {} },
+            communities: {},
+            reflection_state: {},
+            graph_message_count: 0,
+            archives: {
+                revision: 1,
+                next_sequence: 2,
+                rollups: [],
+                segments: [
+                    {
+                        id: 'archive-1',
+                        sequence: 1,
+                        state: 'sealed',
+                        active: true,
+                        sources: [{ index: 0, fingerprint: oldFingerprint, role: 'user' }],
+                        memory_ids: ['old-fallback'],
+                        entries: [oldEntry],
+                    },
+                ],
+            },
+            diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
+        };
+        const settingsOverrides = {
+            archivePromptBudget: 1000,
+            archiveRollupThreshold: 1000,
+            promptHardTokenLimit: 10000,
+            retrievalFinalTokens: 0,
+            visibleChatTarget: 0,
+            archiveProjectionSafetyTokens: 1,
+            visibleChatBudget: 1,
+        };
+        setupTestContext({
+            context: { chatId: 'full-projection', chat, chatMetadata: { openvault: data } },
+            settings: settingsOverrides,
+            deps: { saveChatConditional: vi.fn(async () => true) },
+        });
+        const initial = rebuildArchiveProjection(data, {
+            archivePromptBudget: 1000,
+            archiveRollupThreshold: 1000,
+            promptHardTokenLimit: 10000,
+            archiveProjectionSafetyTokens: 1,
+        });
+        const fullBudget = initial.token_count;
+        settingsOverrides.archivePromptBudget = fullBudget + 24;
+        settingsOverrides.archiveRollupThreshold = fullBudget + 24;
+        const projectionSettings = { ...settingsOverrides };
+        rebuildArchiveProjection(data, projectionSettings);
+        expect(data.archives.projection.entry_ids).toEqual(['old-fallback']);
+
+        expect(await compactIfNeeded(projectionSettings)).toBe(true);
+        expect(chat[1].is_system).toBe(true);
+        expect(chat[2].is_system).toBe(true);
+        expect(data.archives.projection.entry_ids).not.toContain('old-fallback');
+    });
+
+    it('reserves the visible target exactly once when calculating live allowance', async () => {
+        const data = {
+            schema_version: 5,
+            lifecycle: { status: 'ready' },
+            memories: [],
+            processed_message_ids: [],
+            archives: {
+                revision: 1,
+                next_sequence: 2,
+                rollups: [],
+                segments: [
+                    {
+                        id: 'archive-1',
+                        sequence: 1,
+                        state: 'sealed',
+                        active: true,
+                        sources: [],
+                        memory_ids: [],
+                        entries: [],
+                    },
+                ],
+            },
+            diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
+        };
+        const settings = {
+            archivePromptBudget: 70,
+            archiveRollupThreshold: 70,
+            promptHardTokenLimit: 100,
+            retrievalFinalTokens: 10,
+            visibleChatTarget: 15,
+            visibleChatBudget: 20,
+            archiveProjectionSafetyTokens: 5,
+        };
+        setupTestContext({
+            context: { chatId: 'visible-reserve', chat: [], chatMetadata: { openvault: data } },
+            settings,
+            deps: { saveChatConditional: vi.fn(async () => true) },
+        });
+
+        await compactIfNeeded(settings);
+
+        expect(data.diagnostics.archive.live_allowance).toBe(
+            settings.promptHardTokenLimit -
+                settings.retrievalFinalTokens -
+                settings.archiveProjectionSafetyTokens -
+                data.diagnostics.archive.tokens
+        );
     });
 });
 

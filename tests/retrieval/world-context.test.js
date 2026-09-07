@@ -59,6 +59,7 @@ describe('detectMacroIntent', () => {
         expect(detectMacroIntent('Give me a recap of the story')).toBe(true);
         expect(detectMacroIntent('What is the overall dynamic?')).toBe(true);
         expect(detectMacroIntent('Tell me about what has happened lately')).toBe(true);
+        expect(detectMacroIntent('Is there a time skip coming?')).toBe(true);
     });
 
     it('should detect Russian macro intent keywords', () => {

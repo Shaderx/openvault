@@ -36,6 +36,7 @@ export const MemorySchema = z.object({
     temporal_anchor: z.string().nullable().optional(),
     is_transient: z.boolean().optional(),
     is_secret: z.boolean().optional(),
+    coverage_fallback: z.boolean().optional(),
     _st_synced: z.boolean().optional(),
     _proxyVectorScore: z.number().optional(),
 });
@@ -135,6 +136,10 @@ export const EventSchema = z.object({
     is_transient: z.boolean().optional().default(false),
     emotional_impact: z.record(z.string().trim(), z.string()).optional().default({}),
     relationship_impact: z.record(z.string().trim(), z.string()).optional().default({}),
+    // Chat-array message ids used for exact source attribution.  An event may
+    // span more than one source message, but it must never implicitly claim
+    // the entire extraction batch.
+    source_message_ids: z.array(z.number().int().nonnegative()).optional(),
 });
 
 export const EventExtractionSchema = z.object({
@@ -189,6 +194,20 @@ export const ArchiveSourceSchema = z.object({
     role: z.enum(['user', 'assistant']),
 });
 
+export const ArchiveEntrySchema = z.object({
+    memory_id: z.string(),
+    integrity: z.string(),
+    kind: z.enum(['event', 'fallback', 'correction']).default('event'),
+    importance: z.number().int().min(1).max(5).default(3),
+    summary: z.string(),
+    temporal_anchor: z.string().nullable().optional(),
+    source_fingerprints: z.array(z.string()).default([]),
+    source_start: z.number().int().nonnegative().optional(),
+    source_end: z.number().int().nonnegative().optional(),
+    is_secret: z.boolean().optional(),
+    witnesses: z.array(z.string()).optional(),
+});
+
 export const ArchiveSegmentSchema = z.object({
     id: z.string(),
     sequence: z.number().int().positive(),
@@ -201,6 +220,22 @@ export const ArchiveSegmentSchema = z.object({
     token_count: z.number().int().nonnegative(),
     prepared_at: z.number(),
     sealed_at: z.number().optional(),
+    rollup_required: z.boolean().optional(),
+    entries: z.array(ArchiveEntrySchema).optional(),
+    entries_hash: z.string().optional(),
+    coverage_complete: z.boolean().optional(),
+});
+
+export const ArchiveProjectionSchema = z.object({
+    revision: z.number().int().nonnegative(),
+    budget: z.number().int().nonnegative(),
+    entry_ids: z.array(z.string()),
+    content: z.string(),
+    content_hash: z.string(),
+    token_count: z.number().int().nonnegative(),
+    built_at: z.number(),
+    rollup_required: z.boolean().optional(),
+    settings_signature: z.string().optional(),
 });
 
 export const ArchiveStoreSchema = z.object({
@@ -208,6 +243,7 @@ export const ArchiveStoreSchema = z.object({
     segments: z.array(ArchiveSegmentSchema),
     next_sequence: z.number().int().positive(),
     rollups: z.array(z.string()),
+    projection: ArchiveProjectionSchema.optional(),
 });
 
 export const ChatLifecycleSchema = z.object({

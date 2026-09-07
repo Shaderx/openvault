@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetDeps } from '../../src/deps.js';
+import { getMessageRevision } from '../../src/extraction/scheduler.js';
 import { setWorkerRunning } from '../../src/state.js';
 
 describe('autoHideOldMessages (token-based)', () => {
@@ -34,6 +35,7 @@ describe('autoHideOldMessages (token-based)', () => {
         ];
 
         mockData = {
+            schema_version: 5,
             memories: [],
             processed_message_ids: [
                 '1000000',
@@ -46,6 +48,16 @@ describe('autoHideOldMessages (token-based)', () => {
                 '1000007',
             ], // All extracted
         };
+        mockData.memories = [0, 1, 2, 3].map((turn, index) => {
+            const messageIds = [turn * 2, turn * 2 + 1];
+            return {
+                id: `event-${index}`,
+                summary: `Turn ${index} established a durable narrative fact for the archive.`,
+                importance: 3,
+                message_ids: messageIds,
+                message_fingerprints: messageIds.map((id) => getMessageRevision(mockChat[id])),
+            };
+        });
 
         setupTestContext({
             context: {
@@ -125,7 +137,7 @@ describe('autoHideOldMessages (token-based)', () => {
     it('stops compaction at the first unprocessed hole', async () => {
         // Mark messages 2,3 as NOT extracted
         mockData.processed_message_ids = ['1000000', '1000001', '1000004', '1000005', '1000006', '1000007'];
-        mockData.memories = [];
+        mockData.memories = [mockData.memories[0]];
 
         const { autoHideOldMessages } = await import('../../src/events.js');
         await autoHideOldMessages();
@@ -344,7 +356,7 @@ describe('onChatChanged embedding model mismatch detection', () => {
 
         // Setup: chat has embeddings from old model
         mockData = {
-            schema_version: 4,
+            schema_version: 5,
             lifecycle: { status: 'ready' },
             embedding_model_id: 'old-model',
             memories: [{ id: '1', embedding_b64: 'abc' }],
@@ -399,39 +411,6 @@ describe('onChatChanged embedding model mismatch detection', () => {
     });
 });
 
-describe('onBeforeGeneration AbortError handling', () => {
-    afterEach(() => {
-        resetDeps();
-        vi.clearAllMocks();
-    });
-
-    it('does not set error status on AbortError during retrieval', async () => {
-        // This test verifies the behavior after we add AbortError handling.
-        // We mock updateInjection to throw AbortError.
-        setupTestContext({
-            context: {
-                chat: [{ mes: 'test', is_user: true, is_system: false }],
-                chatMetadata: {
-                    openvault: {
-                        memories: [{ id: 'm1', summary: 'test' }],
-                    },
-                },
-                chatId: 'test-chat',
-            },
-            settings: { enabled: true },
-        });
-
-        const { onBeforeGeneration } = await import('../../src/events.js');
-
-        // We need to verify that after AbortError, status is NOT set to 'error'.
-        // Since updateInjection is dynamically imported, this is hard to mock
-        // without vi.mock. Instead, test structurally by checking no error toast
-        // appears. The key assertion is that the function doesn't throw.
-        // Full integration verification is done via manual testing.
-        expect(typeof onBeforeGeneration).toBe('function');
-    });
-});
-
 describe('onChatChanged migration', () => {
     let mockContext;
     let mockConsole;
@@ -478,7 +457,7 @@ describe('onChatChanged migration', () => {
         const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
-        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(4);
+        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(5);
         expect(mockContext.chatMetadata[METADATA_KEY].lifecycle.status).toBe('needs_rebuild');
         expect(mockContext.chatMetadata[METADATA_KEY][PROCESSED_MESSAGES_KEY]).toContain('1000000');
         expect(
@@ -501,7 +480,7 @@ describe('onChatChanged migration', () => {
         await onChatChanged();
 
         expect(mockContext.chatMetadata[METADATA_KEY]).toMatchObject({
-            schema_version: 4,
+            schema_version: 5,
             lifecycle: { status: 'needs_rebuild' },
         });
         expect(
@@ -524,7 +503,7 @@ describe('onChatChanged migration', () => {
         const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
-        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(4);
+        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(5);
         expect(mockContext.chatMetadata[METADATA_KEY].lifecycle.status).toBe('needs_rebuild');
         expect(mockContext.chatMetadata[METADATA_KEY].embedding_model_id).toBeUndefined();
         expect(

@@ -123,7 +123,7 @@ describe('v3 migration - backfill message_fingerprints', () => {
         const result = runSchemaMigrations(data, chat);
 
         expect(result).toBe(true);
-        expect(data.schema_version).toBe(4);
+        expect(data.schema_version).toBe(5);
         expect(data.lifecycle.status).toBe('needs_rebuild');
         expect(data.memories[0].message_fingerprints).toEqual(['1000000', '2000000']);
         expect(data.memories[1].message_fingerprints).toEqual(['3000000']);
@@ -139,7 +139,7 @@ describe('v3 migration - backfill message_fingerprints', () => {
         const result = runSchemaMigrations(data, chat);
 
         expect(result).toBe(true);
-        expect(data.schema_version).toBe(4);
+        expect(data.schema_version).toBe(5);
         expect(data.lifecycle.status).toBe('needs_rebuild');
     });
 

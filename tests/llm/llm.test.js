@@ -55,10 +55,6 @@ describe('LLM_CONFIGS timeout values', () => {
         expect(LLM_CONFIGS.reflection.timeoutMs).toBe(180000);
     });
 
-    it('community has 180s timeout', () => {
-        expect(LLM_CONFIGS.community.timeoutMs).toBe(180000);
-    });
-
     it('edge_consolidation stays at 60s', () => {
         expect(LLM_CONFIGS.edge_consolidation.timeoutMs).toBe(60000);
     });

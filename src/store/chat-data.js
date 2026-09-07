@@ -40,7 +40,7 @@ export function getOpenVaultData() {
     }
     if (!context.chatMetadata[METADATA_KEY]) {
         context.chatMetadata[METADATA_KEY] = {
-            schema_version: 4,
+            schema_version: 5,
             [MEMORIES_KEY]: [],
             [CHARACTERS_KEY]: {},
             [PROCESSED_MESSAGES_KEY]: [],

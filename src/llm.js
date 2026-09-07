@@ -13,6 +13,7 @@ import {
     getCommunitySummaryJsonSchema,
     getEdgeConsolidationJsonSchema,
     getEventExtractionJsonSchema,
+    getFallbackExtractionJsonSchema,
     getGraphExtractionJsonSchema,
     getUnifiedReflectionJsonSchema,
 } from './extraction/structured.js';
@@ -64,6 +65,13 @@ export const LLM_CONFIGS = {
         errorContext: 'Event Extraction',
         timeoutMs: 240000,
         getJsonSchema: getEventExtractionJsonSchema,
+    },
+    extraction_fallback: {
+        profileSettingKey: 'extractionProfile',
+        maxTokens: 4000,
+        errorContext: 'Coverage fallback extraction',
+        timeoutMs: 180000,
+        getJsonSchema: getFallbackExtractionJsonSchema,
     },
     extraction_graph: {
         profileSettingKey: 'extractionProfile',

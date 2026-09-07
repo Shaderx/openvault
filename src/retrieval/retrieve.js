@@ -19,7 +19,12 @@
  * @property {Object[]} allAvailableMemories - All memories for expanded IDF corpus
  */
 
-import { getArchiveText, persistArchiveDeactivations } from '../archive/archive.js';
+import {
+    ensureArchiveProjection,
+    getArchiveProjectionSettingsSignature,
+    getArchiveText,
+    persistArchiveDeactivations,
+} from '../archive/archive.js';
 import {
     CHARACTERS_KEY,
     CHAT_LIFECYCLE,
@@ -37,7 +42,7 @@ import { getMessageRevision } from '../extraction/scheduler.js';
 import { cachedContent } from '../injection/macros.js';
 import { filterMemoriesByPOV, getActiveCharacters, getPOVContext } from '../pov.js';
 import { getSettings } from '../settings.js';
-import { getOpenVaultData } from '../store/chat-data.js';
+import { getCurrentChatId, getOpenVaultData, saveOpenVaultData } from '../store/chat-data.js';
 import { cyrb53 } from '../utils/embedding-codec.js';
 import { integrityDigest } from '../utils/integrity-digest.js';
 import { logDebug, logError } from '../utils/logging.js';
@@ -370,6 +375,50 @@ export function injectContext(contextText, worldText = '', entityText = '') {
     cachedContent.world = worldText || '';
     const data = getOpenVaultData();
     const ready = !data?.lifecycle?.status || data.lifecycle.status === CHAT_LIFECYCLE.READY;
+    if (ready && data?.archives?.segments?.some((segment) => Array.isArray(segment.entries))) {
+        const previousProjection = data.archives.projection;
+        const checkpointRevision = data.archives.revision || 0;
+        const checkpointChatId = getCurrentChatId();
+        const previousArchiveDiagnostics = structuredClone(data.diagnostics?.archive || {});
+        // Stable generations consume persisted bytes. Rebuild only when an
+        // existing projection is stale at an explicit archive revision or
+        // relevant budget-setting checkpoint; a missing projection is left
+        // empty until seal/rebuild/recovery provides that checkpoint.
+        const projectionIsStale =
+            previousProjection &&
+            (previousProjection.revision !== checkpointRevision ||
+                previousProjection.settings_signature !== getArchiveProjectionSettingsSignature(settings));
+        const projection = projectionIsStale
+            ? ensureArchiveProjection(data, settings, deps.getContext().chat || [])
+            : previousProjection;
+        if (projection && projection !== previousProjection) {
+            // Settings changes are an explicit projection checkpoint. Persist
+            // the new immutable projection instead of rebuilding on every
+            // subsequent generation.
+            void saveOpenVaultData(checkpointChatId).then((saved) => {
+                // A seal/settings/rebuild checkpoint may have superseded this
+                // asynchronous save while the storage write yielded. Never
+                // restore an older projection over newer archive state.
+                if (
+                    saved ||
+                    data.archives.projection !== projection ||
+                    (data.archives.revision || 0) !== checkpointRevision
+                )
+                    return;
+                if (previousProjection) data.archives.projection = previousProjection;
+                else delete data.archives.projection;
+                const currentArchiveDiagnostics = /** @type {any} */ (data.diagnostics.archive || {});
+                const restoredArchiveDiagnostics = { ...currentArchiveDiagnostics };
+                if (previousArchiveDiagnostics.rollup_required === undefined)
+                    delete restoredArchiveDiagnostics.rollup_required;
+                else restoredArchiveDiagnostics.rollup_required = previousArchiveDiagnostics.rollup_required;
+                if (previousArchiveDiagnostics.rollup_reason === undefined)
+                    delete restoredArchiveDiagnostics.rollup_reason;
+                else restoredArchiveDiagnostics.rollup_reason = previousArchiveDiagnostics.rollup_reason;
+                data.diagnostics.archive = restoredArchiveDiagnostics;
+            });
+        }
+    }
     const archiveText = ready ? getArchiveText(data, deps.getContext().chat || []) : '';
     cachedContent.archive = archiveText;
 
@@ -388,7 +437,9 @@ export function injectContext(contextText, worldText = '', entityText = '') {
     const archiveHash = integrityDigest(archiveText);
     const previousArchiveHash = data.diagnostics?.archive?.hash;
     data.diagnostics ||= { archive: {}, volatile: {}, compaction: {}, rebuild: {} };
+    const previousArchiveDiagnostics = data.diagnostics.archive || {};
     data.diagnostics.archive = {
+        ...previousArchiveDiagnostics,
         revision: data.archives?.revision || 0,
         segments: (data.archives?.segments || []).filter((segment) => segment.state === 'sealed').length,
         hash: archiveHash,

@@ -70,9 +70,8 @@ describe('countTurns', () => {
 });
 
 describe('countTokens', () => {
-    it('exports countTokens function', async () => {
+    it('counts tokens in non-empty text', async () => {
         const { countTokens } = await import('../../src/utils/tokens.js');
-        expect(typeof countTokens).toBe('function');
         expect(countTokens('hello world')).toBeGreaterThan(0);
     });
 });

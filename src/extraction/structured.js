@@ -21,6 +21,17 @@ export const RelationshipImpactSchema = z.record(z.string(), z.any());
  */
 export { EventSchema, EventExtractionSchema };
 
+/** Schema used by the post-extraction coverage pass. */
+export const FallbackExtractionSchema = z.object({
+    fallbacks: z.array(
+        z.object({
+            source_message_id: z.number().int().nonnegative(),
+            summary: z.string().min(1),
+            temporal_anchor: z.string().min(1).nullable(),
+        })
+    ),
+});
+
 /**
  * Schema for an entity (person, place, organization, object, or concept)
  * Uses .catch() fallbacks to salvage partial LLM output —
@@ -177,6 +188,11 @@ export function getEventExtractionJsonSchema() {
     return toJsonSchema(EventExtractionSchema, 'EventExtraction');
 }
 
+/** Get jsonSchema for the low-priority uncovered-message pass. */
+export function getFallbackExtractionJsonSchema() {
+    return toJsonSchema(FallbackExtractionSchema, 'FallbackExtraction');
+}
+
 /**
  * Get jsonSchema for Stage 2: Graph extraction
  * @returns {Object} ConnectionManager jsonSchema object
@@ -189,9 +205,10 @@ export function getGraphExtractionJsonSchema() {
  * Parse event extraction response (Stage 1)
  *
  * @param {string} content - Raw LLM response
+ * @param {{requireSourceAttribution?: boolean}} [options]
  * @returns {Object} Validated event extraction response with {events}
  */
-export function parseEventExtractionResponse(content) {
+export function parseEventExtractionResponse(content, options = {}) {
     // Handle lazy exits: strip thinking tags and check for empty output
     const stripped = stripThinkingTags(content);
     if (stripped.trim().length === 0) {
@@ -232,7 +249,10 @@ export function parseEventExtractionResponse(content) {
     const validEvents = [];
     for (const raw of rawEvents) {
         const eventResult = EventSchema.safeParse(raw);
-        if (eventResult.success) {
+        if (
+            eventResult.success &&
+            (!options.requireSourceAttribution || eventResult.data.source_message_ids?.length > 0)
+        ) {
             validEvents.push(eventResult.data);
         }
     }
@@ -242,6 +262,12 @@ export function parseEventExtractionResponse(content) {
     }
 
     return { events: validEvents };
+}
+
+/** Parse the batched uncovered-message fallback response. */
+export function parseFallbackExtractionResponse(content) {
+    const result = parseStructuredResponse(content, FallbackExtractionSchema);
+    return { fallbacks: result.fallbacks };
 }
 
 /**

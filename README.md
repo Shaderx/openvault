@@ -30,18 +30,22 @@ OpenVault tracks witnesses. Every extracted event records who was present. Chara
 
 **Event Extraction.** As you chat, OpenVault identifies what happened-actions, emotional shifts, revelations. Each event gets an importance rating (1-5 stars) and a witness list
 
+**Immutable Story Archive.** When old, fully processed turns are compacted out of visible chat, their extracted events enter an append-only chronological archive at the top of the prompt. Existing archive records are never rewritten. Messages not covered by a normal event receive a separate one-sentence, 15-word-maximum coverage summary rated at one star; raw message bodies are not copied into the archive
+
 **Knowledge Graph.** People, places, factions, objects, and concepts get tracked as nodes. Relationships between them are edges that update over time. When two characters go from enemies to allies, the graph knows
 
 **Reflections.** After enough significant events pile up for a character, OpenVault pauses to reflect. It synthesizes raw memories into psychological insights-shifting motivations, subconscious drives, evolving relationship dynamics. These are *internal* truths, not things the character says out loud
 
 **GraphRAG Communities.** Every 50 messages, it analyzes the relationship web to detect social circles and factions. This produces a running "world state" summary so macro-level plots don't get lost
 
-**Smart Retrieval.** Before the AI generates a response, OpenVault scores all candidate memories using a blend of:
+**Smart Retrieval.** The immutable archive is always available and does not use embedding recall. Before the AI generates a response, OpenVault scores volatile scene memories, reflections, and world context using a blend of:
 - Exponential forgetfulness (old trivial stuff fades, critical memories stick)
 - BM25 keyword matching
 - Vector similarity against recent context
 
-Memories get injected into the prompt in chronological buckets: *The Story So Far*, *Leading Up To This Moment*, *Current Scene*, and hidden *Subconscious Drives* that influence behavior without being spoken
+The bounded archive projection preserves five-star events, balances old/middle/recent history, and removes low-priority coverage summaries first when its budget fills. Entities, communities, reflections, and scene recall remain dynamic and are injected later in the prompt
+
+Chats created with an older OpenVault schema are not served through legacy retrieval. OpenVault asks for a full rebuild from the beginning of the chat before retrieval or compaction is enabled
 
 ## Setup
 
@@ -69,7 +73,7 @@ OpenVault adds a panel to SillyTaverns Extensions menu. The layout is intentiona
 
 ## Injection Positions
 
-You control where memories appear in the prompt:
+The immutable archive has a fixed position after character definitions at the top of chat. The controls below apply to dynamic memory and world context:
 
 | Position | Where it goes |
 |----------|---------------|
@@ -82,6 +86,7 @@ You control where memories appear in the prompt:
 
 **Manual macros** (when set to Custom):
 - `{{openvault_memory}}` - Memory context
+- `{{openvault_archive}}` - Current bounded immutable archive projection
 - `{{openvault_world}}` - World/faction context
 
 The main panel shows current positions as badges like `[↓Char | ↑AN]`. Click a macro badge to copy it

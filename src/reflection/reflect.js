@@ -91,7 +91,9 @@ export function filterDuplicateReflections(
     rejectThreshold = 0.9,
     replaceThreshold = 0.8
 ) {
-    const existingReflections = existingMemories.filter((m) => m.type === 'reflection' && hasEmbedding(m));
+    const existingReflections = existingMemories.filter(
+        (m) => !m.coverage_fallback && m.type === 'reflection' && hasEmbedding(m)
+    );
     const toAdd = [];
     const toArchiveIds = new Set();
 
@@ -213,8 +215,13 @@ export async function generateReflections(characterName, allMemories, characterS
     const maxReflections = settings.maxReflectionsPerCharacter;
     const contextBudget = settings.reflectionContextTokens || defaultSettings.reflectionContextTokens;
 
+    // Coverage-only fallbacks are archival bookkeeping, not semantic input to
+    // reflection synthesis. Filter them before POV, budgeting, and dedup so a
+    // full rebuild cannot accidentally promote them into insight context.
+    const semanticMemories = allMemories.filter((memory) => !memory.coverage_fallback);
+
     // Archive old reflections if cap is reached
-    const characterReflections = allMemories.filter(
+    const characterReflections = semanticMemories.filter(
         (m) => m.type === 'reflection' && m.character === characterName && !m.archived
     );
     if (characterReflections.length >= maxReflections) {
@@ -228,7 +235,7 @@ export async function generateReflections(characterName, allMemories, characterS
 
     // Filter memories to what this character knows
     const data = { character_states: characterStates };
-    const accessibleMemories = filterMemoriesByPOV(allMemories, [characterName], data);
+    const accessibleMemories = filterMemoriesByPOV(semanticMemories, [characterName], data);
 
     // Token-budgeted candidate selection (replaces fixed REFLECTION_CANDIDATE_LIMIT)
     // 80% budget for recent events, 20% for existing reflections
@@ -348,14 +355,14 @@ export async function generateReflections(characterName, allMemories, characterS
     const replaceThreshold = REFLECTION_DEDUP_REPLACE_THRESHOLD;
     const { toAdd, toArchiveIds } = filterDuplicateReflections(
         newReflections,
-        allMemories,
+        semanticMemories,
         reflectionDedupThreshold,
         replaceThreshold
     );
 
     // Archive replaced reflections
     if (toArchiveIds.length > 0) {
-        for (const memory of allMemories) {
+        for (const memory of semanticMemories) {
             if (toArchiveIds.includes(memory.id)) {
                 memory.archived = true;
             }
