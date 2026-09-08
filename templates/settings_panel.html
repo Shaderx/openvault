@@ -130,9 +130,22 @@
                         </div>
                         <span class="openvault-batch-progress-label" id="openvault_batch_progress_label">No chat</span>
                     </div>
+                    <div class="openvault-card-header">
+                        <span class="openvault-card-title"><i class="fa-solid fa-box-archive"></i> Visible Chat</span>
+                    </div>
+                    <div class="openvault-batch-progress openvault-visible-progress">
+                        <div class="openvault-batch-progress-bar">
+                            <div class="openvault-batch-progress-fill" id="openvault_visible_budget_fill"></div>
+                        </div>
+                        <span class="openvault-batch-progress-label" id="openvault_visible_budget_text">No chat</span>
+                    </div>
                     <div class="openvault-button-row openvault-button-stack">
                         <button id="openvault_extract_all_btn" class="menu_button">
                             <i class="fa-solid fa-layer-group"></i> Backfill History
+                        </button>
+                        <button id="openvault_compact_now_btn" class="menu_button"
+                                title="Hide the oldest extracted turns only when sanitized visible tokens exceed the configured Visible Chat Budget.">
+                            <i class="fa-solid fa-box-archive"></i> Compact Visible Chat
                         </button>
                         <button id="openvault_emergency_cut_btn" class="menu_button danger"
                                 title="Extract all unprocessed messages and hide chat history to break repetition loops.">
@@ -406,7 +419,7 @@
                                 <small class="openvault-default-hint" data-default-key="visibleChatBudget"></small>
                             </label>
                             <input type="range" id="openvault_visible_chat_budget" min="4000" max="64000" step="1000" />
-                            <small class="openvault-hint">Maximum tokens visible in chat history. Oldest messages are auto-hidden when exceeded.</small>
+                            <small class="openvault-hint">Maximum sanitized tokens visible in chat history. Oldest messages are auto-hidden when the sanitized count is exceeded.</small>
 
                             <label for="openvault_frozen_replies">
                                 Frozen Initial Replies: <span id="openvault_frozen_replies_value">0</span>

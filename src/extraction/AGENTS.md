@@ -33,6 +33,6 @@ For event dedup thresholds (cross-batch/intra-batch Jaccard) see `include/DATA_S
 - **Trim once on the full list for backfill.** In `getBackfillMessageIds()`, apply `trimTailTurns` after the incomplete-last-batch trim, then recalculate `batchCount`.
 
 ## CROSS-MODULE REFERENCES
-Graph merge logic, community detection, and reflection synthesis have dedicated CLAUDE.md files:
-- `src/graph/CLAUDE.md` - Semantic merge, edge consolidation, Louvain communities
-- `src/reflection/CLAUDE.md` - Reflection pipeline, accumulator lifecycle, 3-tier dedup
+Graph merge logic, community detection, and reflection synthesis have dedicated `AGENTS.md` files:
+- `src/graph/AGENTS.md` - Semantic merge, edge consolidation, Louvain communities
+- `src/reflection/AGENTS.md` - Reflection pipeline, accumulator lifecycle, 3-tier dedup

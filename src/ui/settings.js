@@ -7,6 +7,7 @@
  */
 
 import {
+    COMPACTION_BLOCK_REASONS,
     defaultSettings,
     embeddingModelPrefixes,
     extensionFolderPath,
@@ -41,6 +42,73 @@ import { setStatus, updateEmbeddingStatusDisplay } from './status.js';
 
 let emergencyCutModalAppended = false;
 let emergencyCutAbortController = null;
+let manualCompactionInProgress = false;
+
+const COMPACTION_BLOCK_MESSAGES = Object.freeze({
+    [COMPACTION_BLOCK_REASONS.EXTRACTION_IN_PROGRESS]:
+        'Background extraction is still running. Wait for it to finish, then try again.',
+    [COMPACTION_BLOCK_REASONS.LIFECYCLE_NOT_READY]: 'OpenVault data is not ready for compaction.',
+    [COMPACTION_BLOCK_REASONS.PREPARED_ARCHIVE_PENDING]: 'An interrupted archive operation is still pending recovery.',
+    [COMPACTION_BLOCK_REASONS.ARCHIVE_OVER_BUDGET]:
+        'The immutable archive projection is full and requires a rollup before more chat can hide.',
+    [COMPACTION_BLOCK_REASONS.FROZEN_PREFIX]: 'Frozen Initial Replies protect every currently eligible message.',
+    [COMPACTION_BLOCK_REASONS.RESTORED_ARCHIVE_SOURCE]:
+        'The oldest visible candidate belongs to an archive segment that was manually restored.',
+    [COMPACTION_BLOCK_REASONS.ALREADY_ARCHIVED_SOURCE]:
+        'The oldest visible candidate is already covered by an active archive segment.',
+    [COMPACTION_BLOCK_REASONS.INCOMPLETE_TURN_BOUNDARY]:
+        'The eligible prefix does not end at a complete assistant-to-user turn boundary.',
+    [COMPACTION_BLOCK_REASONS.COVERAGE_INCOMPLETE]:
+        'Some processed source messages have no extracted archive entry, so hiding them would lose context.',
+    [COMPACTION_BLOCK_REASONS.PREPARE_SAVE_FAILED]:
+        'The prepared archive segment could not be saved. No messages were hidden.',
+    [COMPACTION_BLOCK_REASONS.VISIBILITY_SAVE_FAILED]:
+        'The updated message visibility could not be saved. The hide operation was rolled back.',
+    [COMPACTION_BLOCK_REASONS.CHAT_CHANGED]: 'The active chat changed during compaction. No messages were hidden.',
+    [COMPACTION_BLOCK_REASONS.SOURCE_CHANGED]: 'A source message changed during compaction. No messages were hidden.',
+    [COMPACTION_BLOCK_REASONS.COMPACTION_IN_PROGRESS]: 'Another compaction operation is already in progress.',
+    [COMPACTION_BLOCK_REASONS.INVALID_THRESHOLDS]:
+        'The configured compaction target is higher than its trigger threshold.',
+});
+
+/**
+ * Convert domain compaction diagnostics into an actionable user-facing message.
+ * @param {Record<string, any>} diagnostic - Latest compaction diagnostic.
+ * @returns {string} Detailed blocker message.
+ */
+export function formatCompactionBlockMessage(diagnostic = {}) {
+    const base = COMPACTION_BLOCK_MESSAGES[diagnostic.blocked];
+    if (diagnostic.blocked === COMPACTION_BLOCK_REASONS.UNDER_BUDGET) {
+        return `No compaction needed: ${(diagnostic.visible_tokens || 0).toLocaleString()} sanitized tokens are within the ${(diagnostic.high_water || 0).toLocaleString()} token threshold.`;
+    }
+    if (diagnostic.blocked === COMPACTION_BLOCK_REASONS.UNPROCESSED_SOURCE) {
+        return `Message ${Number(diagnostic.message_index) + 1} is the first unprocessed visible message. Extraction must cover it before compaction can continue.`;
+    }
+    if (diagnostic.blocked === COMPACTION_BLOCK_REASONS.COVERAGE_INCOMPLETE) {
+        const first = diagnostic.first_message_index === null ? 'unknown' : Number(diagnostic.first_message_index) + 1;
+        return `${base} ${diagnostic.uncovered_messages || 0} message(s) are uncovered; the first is message ${first}.`;
+    }
+    if (diagnostic.blocked === COMPACTION_BLOCK_REASONS.ARCHIVE_OVER_BUDGET) {
+        const archiveTokens = Number(diagnostic.archive_tokens || 0).toLocaleString();
+        return `${base} Current archive size: ${archiveTokens} tokens.`;
+    }
+    if (diagnostic.blocked === COMPACTION_BLOCK_REASONS.FROZEN_PREFIX) {
+        return `${base} Frozen reply count: ${diagnostic.frozen_replies || 0}.`;
+    }
+    if (
+        diagnostic.blocked === COMPACTION_BLOCK_REASONS.RESTORED_ARCHIVE_SOURCE ||
+        diagnostic.blocked === COMPACTION_BLOCK_REASONS.ALREADY_ARCHIVED_SOURCE
+    ) {
+        return `${base} Blocking position: message ${Number(diagnostic.message_index) + 1}.`;
+    }
+    if (diagnostic.blocked === COMPACTION_BLOCK_REASONS.INCOMPLETE_TURN_BOUNDARY) {
+        return `${base} Candidate prefix: ${diagnostic.candidate_messages || 0} message(s).`;
+    }
+    if (diagnostic.blocked === COMPACTION_BLOCK_REASONS.LIFECYCLE_NOT_READY && diagnostic.lifecycle_status) {
+        return `${base} Current state: ${diagnostic.lifecycle_status}.`;
+    }
+    return base || `Compaction was blocked for an unknown reason (${diagnostic.blocked || 'no diagnostic'}).`;
+}
 
 /**
  * Show the Emergency Cut progress modal.
@@ -157,6 +225,55 @@ async function handleEmergencyCutClick() {
         },
         abortSignal: emergencyCutAbortController.signal,
     });
+}
+
+/**
+ * Apply normal archive compaction immediately using the configured sanitized-token
+ * budget. The domain operation is idempotent once visible chat is in budget.
+ */
+export async function handleCompactNow() {
+    if (manualCompactionInProgress) return;
+
+    const data = getOpenVaultData();
+    const chat = getDeps().getContext()?.chat || [];
+    if (!data || chat.length === 0) {
+        showToast('warning', 'No chat data loaded.', 'OpenVault');
+        return;
+    }
+
+    const $button = $('#openvault_compact_now_btn');
+    const settings = getSettings();
+    manualCompactionInProgress = true;
+    $button.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Compacting…');
+    try {
+        const { getSanitizedTokenSum } = await import('../utils/message-sanitizer.js');
+        const visibleIndices = chat.flatMap((message, index) => (message.is_system ? [] : [index]));
+        const beforeTokens = getSanitizedTokenSum(chat, visibleIndices);
+        const { compactIfNeeded } = await import('../archive/archive.js');
+        const compacted = await compactIfNeeded(settings);
+
+        if (compacted) {
+            const remainingIndices = chat.flatMap((message, index) => (message.is_system ? [] : [index]));
+            const afterTokens = getSanitizedTokenSum(chat, remainingIndices);
+            showToast(
+                'success',
+                `Visible chat compacted from ${beforeTokens.toLocaleString()} to ${afterTokens.toLocaleString()} sanitized tokens.`
+            );
+        } else {
+            const diagnostic = getOpenVaultData()?.diagnostics?.compaction || {};
+            const severity = diagnostic.blocked === COMPACTION_BLOCK_REASONS.UNDER_BUDGET ? 'info' : 'warning';
+            showToast(severity, formatCompactionBlockMessage(diagnostic), 'OpenVault');
+        }
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            logError('Manual compaction failed', error);
+            showToast('error', `Compaction failed: ${error.message}`, 'OpenVault');
+        }
+    } finally {
+        manualCompactionInProgress = false;
+        $button.prop('disabled', false).html('<i class="fa-solid fa-box-archive"></i> Compact Visible Chat');
+        refreshAllUI();
+    }
 }
 
 /**
@@ -903,7 +1020,7 @@ function bindUIElements() {
     });
 
     // Token budget settings
-    bindSetting('visible_chat_budget', 'visibleChatBudget');
+    bindSetting('visible_chat_budget', 'visibleChatBudget', 'int', () => updateBudgetIndicators().catch(() => {}));
 
     // Retrieval pipeline settings
     bindSetting('final_budget', 'retrievalFinalTokens', 'int', (v) =>
@@ -1071,6 +1188,7 @@ function bindUIElements() {
     // Action buttons
     $('#openvault_backfill_embeddings_btn').on('click', backfillEmbeddings);
     $('#openvault_extract_all_btn').on('click', handleExtractAll);
+    $('#openvault_compact_now_btn').on('click', handleCompactNow);
     $('#openvault_rebuild_btn').on('click', handleFullRebuild);
 
     // Emergency Cut button
@@ -1366,7 +1484,7 @@ export async function updateBudgetIndicators() {
         return;
     }
 
-    const { getSanitizedTokenSum: getTokenSum } = await import('../utils/message-sanitizer.js');
+    const { getSanitizedTokenSum } = await import('../utils/message-sanitizer.js');
     const { getExtractionBudgetProgress } = await import('../extraction/scheduler.js');
 
     // Extraction indicator - use domain function
@@ -1389,12 +1507,12 @@ export async function updateBudgetIndicators() {
     for (let i = 0; i < chat.length; i++) {
         if (!chat[i].is_system) visibleIndices.push(i);
     }
-    const visibleTokens = getTokenSum(chat, visibleIndices);
-    const visiblePct = Math.min((visibleTokens / visibleBudget) * 100, 100);
+    const sanitizedVisibleTokens = getSanitizedTokenSum(chat, visibleIndices);
+    const visiblePct = Math.min((sanitizedVisibleTokens / visibleBudget) * 100, 100);
 
     $('#openvault_visible_budget_fill').css('width', `${visiblePct}%`);
     $('#openvault_visible_budget_text').text(
-        `${(visibleTokens / 1000).toFixed(1)}k / ${(visibleBudget / 1000).toFixed(0)}k`
+        `Sanitized: ${(sanitizedVisibleTokens / 1000).toFixed(1)}k / ${(visibleBudget / 1000).toFixed(0)}k`
     );
     updateBudgetColor('openvault_visible_budget_fill', visiblePct);
 }

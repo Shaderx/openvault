@@ -15,7 +15,7 @@ Extraction uses delta approach — focuses on NEW entities or CHANGES, not re-de
 - **Token Overlap Guard**: Strips EN+RU stopwords (via `stopword` lib). Short keys (<=4 chars) use lower thresholds.
 - **Aliases**: Exact normalized aliases resolve before semantic matching. Absorbed names are added uniquely to the surviving node's `aliases` array.
 - **Redirects**: Transient `_mergeRedirects` map routes edges from old node key to merged key.
-- **stChanges**: `mergeOrInsertEntity()` returns `{ key, stChanges: { toSync, toDelete } }`. New nodes push to `toSync`; semantic merge deletions push to `toDelete`. Use `syncNode(key)` helper for the `[OV_ID:${key}] ${description}` + `cyrb53` boilerplate. See `src/store/CLAUDE.md` for stChanges contract.
+- **stChanges**: `mergeOrInsertEntity()` returns `{ key, stChanges: { toSync, toDelete } }`. New nodes push to `toSync`; semantic merge deletions push to `toDelete`. Use `syncNode(key)` helper for the `[OV_ID:${key}] ${description}` + `cyrb53` boilerplate. See `src/store/AGENTS.md` for stChanges contract.
 
 ## EDGE CONSOLIDATION
 - **Trigger**: `_descriptionTokens > 150` → queued in `_edgesNeedingConsolidation`.

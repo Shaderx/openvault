@@ -91,3 +91,25 @@ describe('Emergency Cut Modal Helpers', () => {
         });
     });
 });
+
+describe('compaction blocker messages', () => {
+    it('identifies the first unprocessed message', async () => {
+        const { formatCompactionBlockMessage } = await import('../../src/ui/settings.js');
+
+        expect(formatCompactionBlockMessage({ blocked: 'unprocessed_source', message_index: 4 })).toContain(
+            'Message 5'
+        );
+    });
+
+    it('reports uncovered archive sources with their first position', async () => {
+        const { formatCompactionBlockMessage } = await import('../../src/ui/settings.js');
+        const message = formatCompactionBlockMessage({
+            blocked: 'coverage_incomplete',
+            uncovered_messages: 3,
+            first_message_index: 7,
+        });
+
+        expect(message).toContain('3 message(s)');
+        expect(message).toContain('message 8');
+    });
+});

@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     buildPreparedSegment,
     compactIfNeeded,
+    diagnoseCompactionPlan,
     escapeArchiveText,
     getArchiveText,
     planCompaction,
@@ -12,6 +13,9 @@ import { resetDeps } from '../../src/deps.js';
 import { getMessageRevision } from '../../src/extraction/scheduler.js';
 import { setWorkerRunning } from '../../src/state.js';
 import { integrityDigest } from '../../src/utils/integrity-digest.js';
+import { clearSanitizedTokenCache, getSanitizedTokenSum } from '../../src/utils/message-sanitizer.js';
+
+beforeEach(() => clearSanitizedTokenCache());
 
 function segment(sequence, content) {
     return {
@@ -97,6 +101,37 @@ describe('immutable archive representation', () => {
         expect(prepared.coverage_complete).toBe(false);
     });
 
+    it('reports source coverage that blocks compaction', async () => {
+        const chat = [
+            { mes: 'covered dialogue '.repeat(20), name: 'User', is_user: true, send_date: 'one' },
+            { mes: 'uncovered detail '.repeat(20), name: 'Bot', is_user: false, send_date: 'two' },
+        ];
+        const data = {
+            lifecycle: { status: 'ready' },
+            memories: [
+                {
+                    id: 'event-one',
+                    summary: 'The covered event.',
+                    message_fingerprints: [getMessageRevision(chat[0])],
+                },
+            ],
+            processed_message_ids: chat.map(getMessageRevision),
+            archives: { revision: 0, next_sequence: 1, segments: [], rollups: [] },
+            diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
+        };
+        setupTestContext({
+            context: { chatId: 'coverage-block', chat, chatMetadata: { openvault: data } },
+            deps: { saveChatConditional: vi.fn(async () => true) },
+        });
+
+        expect(await compactIfNeeded({ visibleChatBudget: 1, visibleChatTarget: 0 })).toBe(false);
+        expect(data.diagnostics.compaction).toMatchObject({
+            blocked: 'coverage_incomplete',
+            uncovered_messages: 1,
+            first_message_index: 1,
+        });
+    });
+
     it('does not compact while the background extraction worker is active', async () => {
         const chat = [
             { mes: 'alpha '.repeat(40), is_user: true, send_date: '1' },
@@ -115,6 +150,7 @@ describe('immutable archive representation', () => {
         });
         setWorkerRunning(true);
         expect(await compactIfNeeded({ visibleChatBudget: 1, visibleChatTarget: 0 })).toBe(false);
+        expect(data.diagnostics.compaction).toEqual({ blocked: 'extraction_in_progress' });
         expect(save).not.toHaveBeenCalled();
         expect(chat.every((message) => !message.is_system)).toBe(true);
     });
@@ -308,6 +344,31 @@ describe('immutable archive representation', () => {
 });
 
 describe('compaction planning', () => {
+    it('uses sanitized tokens for both the trigger and target, then stays within budget', () => {
+        const messages = Array.from({ length: 6 }, (_, index) => ({
+            mes: `<think>${'private reasoning '.repeat(200)}</think>${'visible dialogue '.repeat(20)}`,
+            is_user: index % 2 === 0,
+            is_system: false,
+            send_date: `sanitized-${index}`,
+        }));
+        const data = { processed_message_ids: messages.map(getMessageRevision), archives: { segments: [] } };
+        const total = getSanitizedTokenSum(messages, [0, 1, 2, 3, 4, 5]);
+        const target = getSanitizedTokenSum(messages, [2, 3, 4, 5]);
+
+        expect(diagnoseCompactionPlan(messages, data, total, target).diagnostic).toMatchObject({
+            blocked: 'under_budget',
+            visible_tokens: total,
+        });
+
+        const indices = planCompaction(messages, data, total - 1, target);
+        expect(indices).toEqual([0, 1]);
+        for (const index of indices) messages[index].is_system = true;
+
+        const repeated = diagnoseCompactionPlan(messages, data, total - 1, target);
+        expect(repeated.indices).toEqual([]);
+        expect(repeated.diagnostic).toMatchObject({ blocked: 'under_budget', visible_tokens: target });
+    });
+
     const chat = [
         { mes: 'alpha '.repeat(20), is_user: true, send_date: '1' },
         { mes: 'beta '.repeat(20), is_user: false, send_date: '2' },
@@ -336,5 +397,21 @@ describe('compaction planning', () => {
     it('respects a frozen initial reply boundary', () => {
         const data = { processed_message_ids: chat.map(getMessageRevision), archives: { segments: [] } };
         expect(planCompaction(chat, data, 1, 0, 1)).toEqual([2, 3]);
+    });
+
+    it('reports the first unprocessed source that blocks compaction', () => {
+        const data = { processed_message_ids: [], archives: { segments: [] } };
+        const result = diagnoseCompactionPlan(chat, data, 1, 0);
+
+        expect(result.indices).toEqual([]);
+        expect(result.diagnostic).toMatchObject({ blocked: 'unprocessed_source', message_index: 0 });
+    });
+
+    it('reports when frozen replies protect every visible message', () => {
+        const data = { processed_message_ids: chat.map(getMessageRevision), archives: { segments: [] } };
+        const result = diagnoseCompactionPlan(chat, data, 1, 0, 2);
+
+        expect(result.indices).toEqual([]);
+        expect(result.diagnostic).toMatchObject({ blocked: 'frozen_prefix', frozen_replies: 2 });
     });
 });

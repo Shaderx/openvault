@@ -27,6 +27,27 @@ export const CHAT_LIFECYCLE = Object.freeze({
     REBUILD_FAILED: 'rebuild_failed',
 });
 
+/** Reasons an archive compaction attempt cannot proceed. */
+export const COMPACTION_BLOCK_REASONS = Object.freeze({
+    EXTRACTION_IN_PROGRESS: 'extraction_in_progress',
+    LIFECYCLE_NOT_READY: 'lifecycle_not_ready',
+    PREPARED_ARCHIVE_PENDING: 'prepared_archive_pending',
+    ARCHIVE_OVER_BUDGET: 'archive_over_budget',
+    FROZEN_PREFIX: 'frozen_prefix',
+    RESTORED_ARCHIVE_SOURCE: 'restored_archive_source',
+    ALREADY_ARCHIVED_SOURCE: 'already_archived_source',
+    INCOMPLETE_TURN_BOUNDARY: 'incomplete_turn_boundary',
+    COVERAGE_INCOMPLETE: 'coverage_incomplete',
+    PREPARE_SAVE_FAILED: 'prepare_save_failed',
+    VISIBILITY_SAVE_FAILED: 'visibility_save_failed',
+    CHAT_CHANGED: 'chat_changed',
+    SOURCE_CHANGED: 'source_changed',
+    COMPACTION_IN_PROGRESS: 'compaction_in_progress',
+    INVALID_THRESHOLDS: 'invalid_thresholds',
+    UNDER_BUDGET: 'under_budget',
+    UNPROCESSED_SOURCE: 'unprocessed_source',
+});
+
 export const ARCHIVE_SEGMENT_STATES = Object.freeze({
     PREPARED: 'prepared',
     SEALED: 'sealed',

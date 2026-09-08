@@ -4,7 +4,7 @@
 
 This report describes the tree as inspected on 2026-08-29. OpenVault is a browser-side, ESM SillyTavern extension. It is an agentic memory/RAG system for roleplay chats: it extracts structured events and graph facts with an LLM, stores them in SillyTavern chat metadata, optionally indexes them in SillyTavern Vector Storage, and injects selected memories/world context into later generations.
 
-There is no `AGENTS.md` in this repository or its ancestor directories. The repository does contain `CLAUDE.md` files; the root file and the domain files under `src/extraction`, `src/graph`, `src/perf`, `src/prompts`, `src/reflection`, `src/retrieval`, `src/services`, `src/store`, `src/store/migrations`, `src/ui`, `src/utils`, and `tests` were read and treated as project guidance. `include/DATA_SCHEMA.md` is the intended schema/algorithm reference, but the implementation has drifted from parts of it; those differences are called out below.
+The repository uses `AGENTS.md` files for Codex guidance. The root file and the domain files under `src/extraction`, `src/graph`, `src/perf`, `src/prompts`, `src/reflection`, `src/retrieval`, `src/services`, `src/store`, `src/store/migrations`, `src/ui`, `src/utils`, and `tests` were read and treated as project guidance. `include/DATA_SCHEMA.md` is the intended schema/algorithm reference, but the implementation has drifted from parts of it; those differences are called out below.
 
 ## Quick orientation
 
@@ -63,7 +63,7 @@ Message fingerprints are generated in `src/extraction/scheduler.js`: `send_date`
 
 ## Extraction pipeline
 
-The extraction pipeline is implemented in `src/extraction/extract.js` and follows the six-stage model documented in `src/extraction/CLAUDE.md`:
+The extraction pipeline is implemented in `src/extraction/extract.js` and follows the six-stage model documented in `src/extraction/AGENTS.md`:
 
 1. Fetch the current batch of non-system, unprocessed messages.
 2. Fetch graph entities/relationships from the same batch.
@@ -188,4 +188,4 @@ Not fully verified:
 - Performance and memory behavior on very large chats; no production-scale benchmark was run.
 - `docs/designs` and `docs/plans` contain historical design/change material. They were inventoried and relevant guidance was compared with implementation, but not every historical design document was treated as current specification.
 
-Future agents should begin with this report, then consult the nearest domain `CLAUDE.md`, `src/constants.js`, `src/store/chat-data.js`, and the relevant tests before changing behavior. Keep `include/DATA_SCHEMA.md`, `src/store/schemas.js`, migrations and runtime key names synchronized when modifying persistence.
+Future agents should begin with this report, then consult the nearest domain `AGENTS.md`, `src/constants.js`, `src/store/chat-data.js`, and the relevant tests before changing behavior. Keep `include/DATA_SCHEMA.md`, `src/store/schemas.js`, migrations and runtime key names synchronized when modifying persistence.

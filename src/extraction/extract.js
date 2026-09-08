@@ -162,27 +162,23 @@ function escapeExtractionXml(value) {
         .replaceAll("'", '&apos;');
 }
 
-function fallbackTemporalAnchor(raw, message) {
-    const candidate = raw?.temporal_anchor ?? message?.send_date ?? null;
-    return candidate === null || candidate === undefined || candidate === '' ? null : String(candidate);
-}
-
 /**
- * One batched LLM pass for uncovered sources. A single constrained retry is
- * allowed; output is then normalized deterministically and validated against
- * the requested source ids.
+ * One batched LLM pass for uncovered sources. The full ordered batch remains
+ * available as temporal context, while only required messages receive
+ * fallbacks. A single constrained retry is allowed; output is then normalized
+ * deterministically and validated against the requested source ids.
  */
-async function fetchFallbackMemories(messages, contextParams, batchId, abortSignal) {
-    if (!messages.length) return [];
-    const sourceLines = messages
+async function fetchFallbackMemories(requiredMessages, contextMessages, contextParams, batchId, abortSignal) {
+    if (!requiredMessages.length) return [];
+    const sourceLines = contextMessages
         .map((message) => {
             const speaker = message.is_user ? contextParams.names.user : message.name || contextParams.names.char;
-            const date = message.send_date ? ` date="${escapeExtractionXml(String(message.send_date))}"` : '';
-            return `<source source_message_id="${escapeExtractionXml(message.id)}" fingerprint="${escapeExtractionXml(getMessageRevision(message))}"${date} role="${message.is_user ? 'user' : 'assistant'}">[${escapeExtractionXml(speaker)}]: ${escapeExtractionXml(sanitizeMessageContent(message.mes, !!message.is_user))}</source>`;
+            return `<source source_message_id="${escapeExtractionXml(message.id)}" fingerprint="${escapeExtractionXml(getMessageRevision(message))}" role="${message.is_user ? 'user' : 'assistant'}">[${escapeExtractionXml(speaker)}]: ${escapeExtractionXml(sanitizeMessageContent(message.mes, !!message.is_user))}</source>`;
         })
         .join('\n');
     const prompt = buildFallbackExtractionPrompt({
         messages: sourceLines,
+        requiredSourceIds: requiredMessages.map((message) => message.id),
         preamble: contextParams.preamble,
         prefill: contextParams.prefill,
         outputLanguage: contextParams.outputLanguage,
@@ -210,7 +206,7 @@ async function fetchFallbackMemories(messages, contextParams, batchId, abortSign
             });
             record('llm_events', performance.now() - t0);
             const candidate = parseFallbackExtractionResponse(response);
-            const requested = new Set(messages.map((message) => message.id));
+            const requested = new Set(requiredMessages.map((message) => message.id));
             const seen = new Set();
             for (const item of candidate.fallbacks) {
                 if (!requested.has(item.source_message_id) || seen.has(item.source_message_id)) {
@@ -234,7 +230,7 @@ async function fetchFallbackMemories(messages, contextParams, batchId, abortSign
     }
     if (!validated || !parsed) throw lastError || new Error('Fallback extraction failed');
 
-    const byId = new Map(messages.map((message) => [message.id, message]));
+    const byId = new Map(requiredMessages.map((message) => [message.id, message]));
     return parsed.fallbacks.map((raw, index) => {
         const message = byId.get(raw.source_message_id);
         const fingerprint = getMessageRevision(message);
@@ -245,7 +241,7 @@ async function fetchFallbackMemories(messages, contextParams, batchId, abortSign
             type: 'event',
             summary,
             importance: 1,
-            temporal_anchor: fallbackTemporalAnchor(raw, message),
+            temporal_anchor: raw.temporal_anchor,
             is_transient: false,
             characters_involved: [],
             witnesses: [],
@@ -1201,8 +1197,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         const messagesText = messages
             .map((m) => {
                 const speaker = m.is_user ? userName : m.name || characterName;
-                const date = m.send_date ? ` date="${escapeExtractionXml(String(m.send_date))}"` : '';
-                return `<source source_message_id="${escapeExtractionXml(m.id)}" fingerprint="${escapeExtractionXml(getMessageRevision(m))}"${date} role="${m.is_user ? 'user' : 'assistant'}">[${escapeExtractionXml(speaker)}]: ${escapeExtractionXml(sanitizeMessageContent(m.mes, !!m.is_user))}</source>`;
+                return `<source source_message_id="${escapeExtractionXml(m.id)}" fingerprint="${escapeExtractionXml(getMessageRevision(m))}" role="${m.is_user ? 'user' : 'assistant'}">[${escapeExtractionXml(speaker)}]: ${escapeExtractionXml(sanitizeMessageContent(m.mes, !!m.is_user))}</source>`;
             })
             .join('\n\n');
 
@@ -1275,6 +1270,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
                 await rpmDelay(settings, 'Coverage fallback rate limit');
                 const fallbackEvents = await fetchFallbackMemories(
                     uncovered,
+                    messages,
                     { ...contextParams, names: { char: characterName, user: userName } },
                     batchId,
                     abortSignal

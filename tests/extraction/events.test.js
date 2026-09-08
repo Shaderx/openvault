@@ -104,6 +104,19 @@ describe('autoHideOldMessages (token-based)', () => {
         expect(saveFn).toHaveBeenCalled();
     });
 
+    it('does nothing on a second compaction once visible chat is within budget', async () => {
+        const { autoHideOldMessages } = await import('../../src/events.js');
+
+        await autoHideOldMessages();
+        const hiddenAfterFirstPass = mockChat.map((message) => message.is_system);
+        const savesAfterFirstPass = saveFn.mock.calls.length;
+
+        await autoHideOldMessages();
+
+        expect(mockChat.map((message) => message.is_system)).toEqual(hiddenAfterFirstPass);
+        expect(saveFn).toHaveBeenCalledTimes(savesAfterFirstPass);
+    });
+
     it('does not hide when under budget', async () => {
         // Re-setup with budget higher than total (16)
         setupTestContext({

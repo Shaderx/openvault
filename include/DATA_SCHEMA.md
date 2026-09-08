@@ -1,7 +1,7 @@
 # OpenVault Data Schema & Core Algorithms
 
 Authoritative reference for data structures, retrieval formulas, and storage constants.
-Implementation gotchas live in subdirectory CLAUDE.md files — see directory map in root `CLAUDE.md`.
+Implementation gotchas live in subdirectory `AGENTS.md` files — see the directory map in the root `AGENTS.md`.
 
 ### Immutable archive tiers (schema v4)
 
@@ -135,9 +135,9 @@ IDF is cached in `chatMetadata.openvault.idf_cache` at extraction time. The corp
 - **Layer 3 (Non-Grounded):** User-message stems NOT in corpus vocabulary. 2x boost (preserves scene context).
 
 ## 4. GRAPH MERGE, COMMUNITIES, DEDUP
-See `src/graph/CLAUDE.md` for semantic merge 4-guard system, edge consolidation, Louvain communities, hairball prevention.
-See `src/extraction/CLAUDE.md` for event dedup thresholds.
-See `src/retrieval/CLAUDE.md` for score-first soft balancing (context budgeting).
+See `src/graph/AGENTS.md` for semantic merge 4-guard system, edge consolidation, Louvain communities, hairball prevention.
+See `src/extraction/AGENTS.md` for event dedup thresholds.
+See `src/retrieval/AGENTS.md` for score-first soft balancing (context budgeting).
 
 ## 5. EMBEDDING MISMATCH PROTECTION
 - **Trigger:** On `CHAT_CHANGED` and Settings Dropdown change.

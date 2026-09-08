@@ -44,6 +44,18 @@ describe('UI structure', () => {
             expect(buttonHtml).toContain('repetition');
         });
 
+        it('shows visible token counts and manual compaction in Extraction Progress', () => {
+            const progressIndex = dashboardHtml.indexOf('Extraction Progress');
+            const visibleCountIndex = dashboardHtml.indexOf('id="openvault_visible_budget_text"', progressIndex);
+            const compactButtonIndex = dashboardHtml.indexOf('id="openvault_compact_now_btn"', progressIndex);
+
+            expect(visibleCountIndex).toBeGreaterThan(progressIndex);
+            expect(compactButtonIndex).toBeGreaterThan(visibleCountIndex);
+            expect(dashboardHtml.slice(compactButtonIndex, compactButtonIndex + 400)).toContain(
+                'sanitized visible tokens'
+            );
+        });
+
         it('has Emergency Cut modal at correct location', () => {
             // Modal should exist in the HTML
             expect(html).toContain('id="openvault_emergency_cut_modal"');
@@ -192,6 +204,16 @@ describe('Progressive Disclosure Integration', () => {
             expect(rearviewIndex).toBeGreaterThan(-1);
             expect(maxTurnsIndex).toBeGreaterThan(batchIndex);
             expect(maxTurnsIndex).toBeLessThan(rearviewIndex);
+        });
+    });
+
+    describe('Visible Chat Budget', () => {
+        it('documents sanitized tokens as the compaction threshold', () => {
+            const sliderIndex = html.indexOf('id="openvault_visible_chat_budget"');
+            const hintIndex = html.indexOf('sanitized count', sliderIndex);
+
+            expect(sliderIndex).toBeGreaterThan(-1);
+            expect(hintIndex).toBeGreaterThan(sliderIndex);
         });
     });
 });

@@ -28,7 +28,7 @@ Agentic memory extension for SillyTavern providing POV-aware memory, witness tra
 - **`npm run check` runs automatically on every commit** (sync-version, generate-types, lint, jsdoc, css, typecheck). The commit is aborted on any failure — fix errors, never skip them
 
 ## DIRECTORY KNOWLEDGE MAP
-Domain-specific rules live in subdirectory CLAUDE.md files (auto-discovered by Claude):
+Domain-specific rules live in subdirectory `AGENTS.md` files (auto-discovered by Codex):
 - `src/store/` — State management, stChanges contract, migrations
 - `src/store/migrations/` — Schema versioning, rollback patterns
 - `src/extraction/` — Background worker, turn boundaries, swipe protection, backfill
@@ -42,3 +42,17 @@ Domain-specific rules live in subdirectory CLAUDE.md files (auto-discovered by C
 - `src/utils/` — Codecs, logging, stemmers, AIMD queue
 - `tests/` — Test pyramid, mocking boundaries, factories
 - `include/DATA_SCHEMA.md` — Data schema & retrieval formulas (authoritative)
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in this repository's GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the five default canonical labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain documentation uses a single-context layout. See `docs/agents/domain.md`.

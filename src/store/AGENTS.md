@@ -28,7 +28,7 @@ Every store mutation that touches embeddings must return `{ toSync?, toDelete? }
 - **Return structured results.** Use `{ success, stChanges? }` for delete, `{ key, stChanges? }` for update.
 
 ## SCHEMA MIGRATIONS
-See `src/store/migrations/CLAUDE.md` for migration anatomy and rollback patterns.
+See `src/store/migrations/AGENTS.md` for migration anatomy and rollback patterns.
 - **Three-point updates:** When adding fields, update: (1) `getOpenVaultData()` for new chats, (2) migration backfill, (3) Zod schemas in `schemas.js`.
 - **No defensive domain checks.** Migrations must fully backfill so domain code can trust schema shape.
 

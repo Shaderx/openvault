@@ -1,7 +1,7 @@
 # Retrieval, Scoring, and World Context
 
 For alpha-blend formula, 4-tier BM25, and decay math see `include/DATA_SCHEMA.md` Section 3.
-For event dedup thresholds see `src/extraction/CLAUDE.md`.
+For event dedup thresholds see `src/extraction/AGENTS.md`.
 
 ## IMPLEMENTATION GOTCHAS
 
