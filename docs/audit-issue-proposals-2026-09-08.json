@@ -1,0 +1,497 @@
+{
+    "repo": "Shaderx/openvault",
+    "issues": [
+        {
+            "key": "migration",
+            "p": 1,
+            "label": "bug",
+            "title": "[P1] Migrate legacy keyed graph nodes and edge embeddings safely",
+            "problem": "The v2 migration iterates graph nodes with for...of even though production nodes are keyed objects. An affected legacy chat can throw before reaching the v5 rebuild gate. Edge embeddings are omitted; existing tests use array-shaped nodes.",
+            "evidence": [
+                "src/store/migrations/v2.js — migrateEmbeddings",
+                "src/store/schemas.js — GraphDataSchema",
+                "tests/store/migrations.test.js — legacy embedding fixture"
+            ],
+            "fix": [
+                "Iterate keyed graph collections with Object.values; support historically valid array fixtures only if needed for compatibility.",
+                "Convert legacy embeddings for memories, nodes, edges, and the actual legacy community fields without overwriting valid Base64 data.",
+                "Keep the sequential migration and rollback behavior; do not bypass mandatory v5 rebuild gating."
+            ],
+            "ac": [
+                "A production-shaped v1 graph reaches the current migration result without throwing.",
+                "All supported legacy embedding fields convert once; existing Base64, absent collections, and repeat runs are safe.",
+                "Regression fixtures include keyed nodes, edges, partial conversion, and migration rollback."
+            ],
+            "related": [3],
+            "body": "## Problem\n\nThe v2 migration iterates graph nodes with for...of even though production nodes are keyed objects. An affected legacy chat can throw before reaching the v5 rebuild gate. Edge embeddings are omitted; existing tests use array-shaped nodes.\n\n## Evidence\n\n- `src/store/migrations/v2.js — migrateEmbeddings`\n- `src/store/schemas.js — GraphDataSchema`\n- `tests/store/migrations.test.js — legacy embedding fixture`\n\n## Proposed fix\n\n1. Iterate keyed graph collections with Object.values; support historically valid array fixtures only if needed for compatibility.\n2. Convert legacy embeddings for memories, nodes, edges, and the actual legacy community fields without overwriting valid Base64 data.\n3. Keep the sequential migration and rollback behavior; do not bypass mandatory v5 rebuild gating.\n\n## Acceptance criteria\n\n- [ ] A production-shaped v1 graph reaches the current migration result without throwing.\n- [ ] All supported legacy embedding fields convert once; existing Base64, absent collections, and repeat runs are safe.\n- [ ] Regression fixtures include keyed nodes, edges, partial conversion, and migration rollback.\n\n## Priority and scope\n\nP1 — address first: correctness/data safety or the architecture contract that protects it. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #3.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "vector_mutations",
+            "p": 1,
+            "label": "bug",
+            "title": "[P1] Complete ST Vector changesets for entity, edge, and memory mutations",
+            "problem": "Entity rename deletes old edge hashes without queuing rewritten edges for sync, and entity deletion removes connected edges without deleting their vectors. Text replacement paths also need consistent deletion of the old indexed text.",
+            "evidence": [
+                "src/store/chat-data.js — updateEntity, deleteEntity, updateMemory, mergeEntities",
+                "src/graph/graph.js — syncNode and edge text/hash construction",
+                "src/store/AGENTS.md — stChanges contract"
+            ],
+            "fix": [
+                "Centralize exact indexed-text construction and replacement changesets: delete the previous hash when synced, invalidate stale embedding/sync state, and queue the new text.",
+                "For rename, update node and connected edge IDs/text; for deletion, include every connected synced edge.",
+                "Audit memory-summary and entity-description updates against the same contract; keep network I/O in orchestrators."
+            ],
+            "ac": [
+                "Synced rename emits exact old node/edge hashes and replacement sync items.",
+                "Deletion removes the node and connected edge vectors; unsynced items do not produce phantom deletes.",
+                "Text updates replace indexed content without leaving the old vector; hash payloads remain numeric.",
+                "Behavioral tests cover synced/unsynced edits, rename collisions, deletion, and unchanged text."
+            ],
+            "related": [1],
+            "body": "## Problem\n\nEntity rename deletes old edge hashes without queuing rewritten edges for sync, and entity deletion removes connected edges without deleting their vectors. Text replacement paths also need consistent deletion of the old indexed text.\n\n## Evidence\n\n- `src/store/chat-data.js — updateEntity, deleteEntity, updateMemory, mergeEntities`\n- `src/graph/graph.js — syncNode and edge text/hash construction`\n- `src/store/AGENTS.md — stChanges contract`\n\n## Proposed fix\n\n1. Centralize exact indexed-text construction and replacement changesets: delete the previous hash when synced, invalidate stale embedding/sync state, and queue the new text.\n2. For rename, update node and connected edge IDs/text; for deletion, include every connected synced edge.\n3. Audit memory-summary and entity-description updates against the same contract; keep network I/O in orchestrators.\n\n## Acceptance criteria\n\n- [ ] Synced rename emits exact old node/edge hashes and replacement sync items.\n- [ ] Deletion removes the node and connected edge vectors; unsynced items do not produce phantom deletes.\n- [ ] Text updates replace indexed content without leaving the old vector; hash payloads remain numeric.\n- [ ] Behavioral tests cover synced/unsynced edits, rename collisions, deletion, and unchanged text.\n\n## Priority and scope\n\nP1 — address first: correctness/data safety or the architecture contract that protects it. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #1.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "reflection_vectors",
+            "p": 1,
+            "label": "bug",
+            "title": "[P1] Delete stale ST Vector records when reflections are archived",
+            "problem": "Similarity replacement and capacity archival mark reflections archived without returning deletions for their old synced vectors. This violates the intended stChanges lifecycle.",
+            "evidence": [
+                "src/reflection/reflect.js — capacity archival and replacement application",
+                "src/extraction/extract.js — synthesizeReflections and applySyncChanges"
+            ],
+            "fix": [
+                "Use a shared archival operation that emits the exact old vector hash before clearing sync state.",
+                "Apply it to similarity replacement and per-character capacity archival; sync the replacement independently.",
+                "Normalize the disabled-generation result from toUpsert to the supported toSync/toDelete shape."
+            ],
+            "ac": [
+                "Both archival paths emit correct deletion hashes for synced reflections.",
+                "Archiving an unsynced or already archived item is idempotent.",
+                "Archived reflections remain excluded from active retrieval and IDF data.",
+                "All reflection paths return schema-valid changesets, including disabled generation."
+            ],
+            "related": [1],
+            "body": "## Problem\n\nSimilarity replacement and capacity archival mark reflections archived without returning deletions for their old synced vectors. This violates the intended stChanges lifecycle.\n\n## Evidence\n\n- `src/reflection/reflect.js — capacity archival and replacement application`\n- `src/extraction/extract.js — synthesizeReflections and applySyncChanges`\n\n## Proposed fix\n\n1. Use a shared archival operation that emits the exact old vector hash before clearing sync state.\n2. Apply it to similarity replacement and per-character capacity archival; sync the replacement independently.\n3. Normalize the disabled-generation result from toUpsert to the supported toSync/toDelete shape.\n\n## Acceptance criteria\n\n- [ ] Both archival paths emit correct deletion hashes for synced reflections.\n- [ ] Archiving an unsynced or already archived item is idempotent.\n- [ ] Archived reflections remain excluded from active retrieval and IDF data.\n- [ ] All reflection paths return schema-valid changesets, including disabled generation.\n\n## Priority and scope\n\nP1 — address first: correctness/data safety or the architecture contract that protects it. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #1.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "st_communities",
+            "p": 1,
+            "label": "bug",
+            "title": "[P1] Wire ST Vector community selection into production world-context retrieval",
+            "problem": "Production context construction omits communities, builds world context before scoring without stCommunityIds, and ignores returned communityIds. Local-community retrieval in ST Vector mode therefore lacks the IDs it requires; isolated scoring tests do not validate this wiring.",
+            "evidence": [
+                "src/retrieval/retrieve.js — buildRetrievalContext, selectFormatAndInject, _buildWorldText",
+                "src/retrieval/scoring.js — ST selection context and communityIds",
+                "src/retrieval/world-context.js — ST community branch"
+            ],
+            "fix": [
+                "Include eligible communities in retrieval context and separate candidate lookup from final budget allocation.",
+                "Perform ST candidate selection early enough to pass community IDs into world-context construction, then allocate the remaining dynamic scene budget.",
+                "Reuse the ST lookup; preserve macro global-world-state handling and exclude stale/dissolved communities."
+            ],
+            "ac": [
+                "An end-to-end ST-mode local query injects the selected eligible community through the normal entry point.",
+                "No IDs, unrelated IDs, and stale/dissolved communities produce no inappropriate world injection.",
+                "Macro queries and local embedding mode retain their behavior; dynamic budgets remain bounded.",
+                "A boundary-injected integration test exercises the real orchestration without mocking away the missing wiring."
+            ],
+            "related": [2],
+            "body": "## Problem\n\nProduction context construction omits communities, builds world context before scoring without stCommunityIds, and ignores returned communityIds. Local-community retrieval in ST Vector mode therefore lacks the IDs it requires; isolated scoring tests do not validate this wiring.\n\n## Evidence\n\n- `src/retrieval/retrieve.js — buildRetrievalContext, selectFormatAndInject, _buildWorldText`\n- `src/retrieval/scoring.js — ST selection context and communityIds`\n- `src/retrieval/world-context.js — ST community branch`\n\n## Proposed fix\n\n1. Include eligible communities in retrieval context and separate candidate lookup from final budget allocation.\n2. Perform ST candidate selection early enough to pass community IDs into world-context construction, then allocate the remaining dynamic scene budget.\n3. Reuse the ST lookup; preserve macro global-world-state handling and exclude stale/dissolved communities.\n\n## Acceptance criteria\n\n- [ ] An end-to-end ST-mode local query injects the selected eligible community through the normal entry point.\n- [ ] No IDs, unrelated IDs, and stale/dissolved communities produce no inappropriate world injection.\n- [ ] Macro queries and local embedding mode retain their behavior; dynamic budgets remain bounded.\n- [ ] A boundary-injected integration test exercises the real orchestration without mocking away the missing wiring.\n\n## Priority and scope\n\nP1 — address first: correctness/data safety or the architecture contract that protects it. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #2.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "architecture",
+            "p": 1,
+            "label": "documentation",
+            "title": "[P1] Align architecture guidance with schema v5 and immutable world archives",
+            "problem": "Converted guidance preserves the old dynamic-RAG description. It omits archive/rebuild invariants, gives a broader impression of POV enforcement than the archive implements, and links schema sources that still say v4 or v3.",
+            "evidence": [
+                "AGENTS.md — vision and directory map",
+                "src/store/AGENTS.md; src/store/migrations/AGENTS.md; src/extraction/AGENTS.md; src/retrieval/AGENTS.md",
+                "include/DATA_SCHEMA.md; codebase.md; README.md",
+                "src/archive/archive.js; src/rebuild/rebuild.js; src/store/migrations/v4.js and v5.js"
+            ],
+            "fix": [
+                "Adopt the world/story-memory-first direction of #3: immutable narrative history, dynamic POV-aware recall, and evolving current-world state.",
+                "Document durable chat metadata versus settings/runtime caches/optional derived vector indexes; preserve local-first execution and provider-independent structured outputs.",
+                "Document schema v5, direct backfill versus invalidation migrations, ready/needs_rebuild/rebuilding/rebuild_failed gates, fixed rebuild boundaries, recovery backups, and activation after completion.",
+                "Add scoped archive/rebuild guidance and root pointers for task-aware embeddings; define mutation ownership without allowing arbitrary domain writes.",
+                "Specify source attribution, complete coverage, one-sentence <=15-word fallback records, fallback exclusion from semantic enrichment, persistence before hiding, sealed integrity, bounded projections, protected overflow, and recovery.",
+                "Clarify archive narrator reference metadata versus code-filtered dynamic POV recall. Do not introduce per-POV archive regeneration or claim a hard secrecy guarantee.",
+                "Update authoritative schema, architecture report, relevant README claims, and domain references together; qualify compatibility helpers rather than enabling legacy production retrieval."
+            ],
+            "ac": [
+                "The root vision reflects #3 and every architecture reference names the current schema consistently.",
+                "All non-ready lifecycle states and archive safety checkpoints have explicit guidance and implementation pointers.",
+                "Archive POV scope is accurate and stable archive bytes remain a documented invariant across POV changes.",
+                "All 13 existing AGENTS files are accounted for by this issue or the linked domain follow-ups.",
+                "No runtime behavior changes are smuggled into this documentation change."
+            ],
+            "related": [2, 3],
+            "body": "## Problem\n\nConverted guidance preserves the old dynamic-RAG description. It omits archive/rebuild invariants, gives a broader impression of POV enforcement than the archive implements, and links schema sources that still say v4 or v3.\n\n## Evidence\n\n- `AGENTS.md — vision and directory map`\n- `src/store/AGENTS.md; src/store/migrations/AGENTS.md; src/extraction/AGENTS.md; src/retrieval/AGENTS.md`\n- `include/DATA_SCHEMA.md; codebase.md; README.md`\n- `src/archive/archive.js; src/rebuild/rebuild.js; src/store/migrations/v4.js and v5.js`\n\n## Proposed fix\n\n1. Adopt the world/story-memory-first direction of #3: immutable narrative history, dynamic POV-aware recall, and evolving current-world state.\n2. Document durable chat metadata versus settings/runtime caches/optional derived vector indexes; preserve local-first execution and provider-independent structured outputs.\n3. Document schema v5, direct backfill versus invalidation migrations, ready/needs_rebuild/rebuilding/rebuild_failed gates, fixed rebuild boundaries, recovery backups, and activation after completion.\n4. Add scoped archive/rebuild guidance and root pointers for task-aware embeddings; define mutation ownership without allowing arbitrary domain writes.\n5. Specify source attribution, complete coverage, one-sentence <=15-word fallback records, fallback exclusion from semantic enrichment, persistence before hiding, sealed integrity, bounded projections, protected overflow, and recovery.\n6. Clarify archive narrator reference metadata versus code-filtered dynamic POV recall. Do not introduce per-POV archive regeneration or claim a hard secrecy guarantee.\n7. Update authoritative schema, architecture report, relevant README claims, and domain references together; qualify compatibility helpers rather than enabling legacy production retrieval.\n\n## Acceptance criteria\n\n- [ ] The root vision reflects #3 and every architecture reference names the current schema consistently.\n- [ ] All non-ready lifecycle states and archive safety checkpoints have explicit guidance and implementation pointers.\n- [ ] Archive POV scope is accurate and stable archive bytes remain a documented invariant across POV changes.\n- [ ] All 13 existing AGENTS files are accounted for by this issue or the linked domain follow-ups.\n- [ ] No runtime behavior changes are smuggled into this documentation change.\n\n## Priority and scope\n\nP1 — address first: correctness/data safety or the architecture contract that protects it. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #2, #3.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "guarded_saves",
+            "p": 1,
+            "label": "bug",
+            "title": "[P1] Enforce captured-chat guards across asynchronous persistence paths",
+            "problem": "The store guide requires expectedChatId, but migration/event saves and several store mutators still use unguarded save calls. Multi-step operations that yield need a consistent way to avoid acting on a newly selected chat.",
+            "evidence": [
+                "src/events.js — migration save and rollback",
+                "src/store/chat-data.js — saveOpenVaultData and mutation save call sites",
+                "src/store/migrations/AGENTS.md — rollback example"
+            ],
+            "fix": [
+                "Trace each multi-step mutation and capture chat identity before its first asynchronous boundary.",
+                "Route saves through the guarded repository API and recheck identity/session cancellation before subsequent state updates or network synchronization.",
+                "Handle guard failure as cancellation without mutating the newly selected chat or performing a stale rollback.",
+                "Update the rollback example to use the dependency boundary and captured chat ID. Do not claim every immediate synchronous save is already a reproduced race."
+            ],
+            "ac": [
+                "Deferred-save tests switch chats at meaningful await boundaries and show no new-chat mutation or stale follow-up sync.",
+                "Unchanged-chat edits and migrations persist successfully.",
+                "Migration failure restores only the originating chat snapshot and retains session-scoped failure handling.",
+                "Covered mutation paths include memory, entity, community, merge, and embedding-invalidation operations."
+            ],
+            "related": [3],
+            "body": "## Problem\n\nThe store guide requires expectedChatId, but migration/event saves and several store mutators still use unguarded save calls. Multi-step operations that yield need a consistent way to avoid acting on a newly selected chat.\n\n## Evidence\n\n- `src/events.js — migration save and rollback`\n- `src/store/chat-data.js — saveOpenVaultData and mutation save call sites`\n- `src/store/migrations/AGENTS.md — rollback example`\n\n## Proposed fix\n\n1. Trace each multi-step mutation and capture chat identity before its first asynchronous boundary.\n2. Route saves through the guarded repository API and recheck identity/session cancellation before subsequent state updates or network synchronization.\n3. Handle guard failure as cancellation without mutating the newly selected chat or performing a stale rollback.\n4. Update the rollback example to use the dependency boundary and captured chat ID. Do not claim every immediate synchronous save is already a reproduced race.\n\n## Acceptance criteria\n\n- [ ] Deferred-save tests switch chats at meaningful await boundaries and show no new-chat mutation or stale follow-up sync.\n- [ ] Unchanged-chat edits and migrations persist successfully.\n- [ ] Migration failure restores only the originating chat snapshot and retains session-scoped failure handling.\n- [ ] Covered mutation paths include memory, entity, community, merge, and embedding-invalidation operations.\n\n## Priority and scope\n\nP1 — address first: correctness/data safety or the architecture contract that protects it. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #3.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "cdn",
+            "p": 2,
+            "label": "bug",
+            "title": "[P2] Pin scoped CDN imports and document the actual test override workflow",
+            "problem": "resolveVersion takes only the first slash-delimited component, so @huggingface/transformers does not resolve its pinned version. Root/graph guidance also describes Vitest CDN URL aliases that have been replaced by setup overrides.",
+            "evidence": [
+                "src/utils/cdn.js — CDN_VERSIONS and resolveVersion",
+                "src/embeddings.js — cdnImport('@huggingface/transformers')",
+                "tests/setup.js — CDN_SPECS and _setTestOverride",
+                "vitest.config.js; AGENTS.md; src/graph/AGENTS.md"
+            ],
+            "fix": [
+                "Parse scoped package roots as @scope/name and preserve subpaths when inserting the centrally pinned version.",
+                "Keep the cache/test-override key contract unchanged; reconcile package.json and CDN_VERSIONS, documenting any intentional browser-only dependency.",
+                "Update instructions to use setup overrides and local packages for tests; limit the no-bare-import rule to browser runtime code."
+            ],
+            "ac": [
+                "Behavioral importer tests cover unscoped, scoped, and scoped/unscoped subpath imports without network access.",
+                "Transformers is requested at its configured pinned version on each mirror.",
+                "Test overrides continue to work after module resets; dependency versions and documented exceptions are consistent."
+            ],
+            "related": [1],
+            "body": "## Problem\n\nresolveVersion takes only the first slash-delimited component, so @huggingface/transformers does not resolve its pinned version. Root/graph guidance also describes Vitest CDN URL aliases that have been replaced by setup overrides.\n\n## Evidence\n\n- `src/utils/cdn.js — CDN_VERSIONS and resolveVersion`\n- `src/embeddings.js — cdnImport('@huggingface/transformers')`\n- `tests/setup.js — CDN_SPECS and _setTestOverride`\n- `vitest.config.js; AGENTS.md; src/graph/AGENTS.md`\n\n## Proposed fix\n\n1. Parse scoped package roots as @scope/name and preserve subpaths when inserting the centrally pinned version.\n2. Keep the cache/test-override key contract unchanged; reconcile package.json and CDN_VERSIONS, documenting any intentional browser-only dependency.\n3. Update instructions to use setup overrides and local packages for tests; limit the no-bare-import rule to browser runtime code.\n\n## Acceptance criteria\n\n- [ ] Behavioral importer tests cover unscoped, scoped, and scoped/unscoped subpath imports without network access.\n- [ ] Transformers is requested at its configured pinned version on each mirror.\n- [ ] Test overrides continue to work after module resets; dependency versions and documented exceptions are consistent.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #1.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "edge_backfill",
+            "p": 2,
+            "label": "bug",
+            "title": "[P2] Include graph edges in embedding and ST Vector backfill",
+            "problem": "The ST backfill collector in backfillAllEmbeddings includes memories, nodes, and communities but omits graph edges. Invalidation already considers edges, so changing source/model can leave them unsynced.",
+            "evidence": [
+                "src/embeddings.js — backfillAllEmbeddings and allItems",
+                "src/embeddings/migration.js — item enumeration and invalidation",
+                "src/graph/graph.js — consolidated edge embedding and sync text"
+            ],
+            "fix": [
+                "Use a consistent four-type enumeration for backfill, progress counts, and invalidation.",
+                "Add eligible edges to ST sync using exactly the same OV_ID/text/hash format as normal edge insertion.",
+                "Check the local backfill branch too; preserve already valid embeddings and exclude ineligible/empty records according to current graph rules.",
+                "Document task-aware retrieval/matching behavior and edge lifecycle in embedding guidance."
+            ],
+            "ac": [
+                "After a source/model change, eligible edges regain local embeddings or ST sync along with other item types.",
+                "Counts include edges and reruns skip already-current work.",
+                "Tests cover both local and ST paths, exact edge hashes, cancellation, and chat switches."
+            ],
+            "related": [1],
+            "body": "## Problem\n\nThe ST backfill collector in backfillAllEmbeddings includes memories, nodes, and communities but omits graph edges. Invalidation already considers edges, so changing source/model can leave them unsynced.\n\n## Evidence\n\n- `src/embeddings.js — backfillAllEmbeddings and allItems`\n- `src/embeddings/migration.js — item enumeration and invalidation`\n- `src/graph/graph.js — consolidated edge embedding and sync text`\n\n## Proposed fix\n\n1. Use a consistent four-type enumeration for backfill, progress counts, and invalidation.\n2. Add eligible edges to ST sync using exactly the same OV_ID/text/hash format as normal edge insertion.\n3. Check the local backfill branch too; preserve already valid embeddings and exclude ineligible/empty records according to current graph rules.\n4. Document task-aware retrieval/matching behavior and edge lifecycle in embedding guidance.\n\n## Acceptance criteria\n\n- [ ] After a source/model change, eligible edges regain local embeddings or ST sync along with other item types.\n- [ ] Counts include edges and reruns skip already-current work.\n- [ ] Tests cover both local and ST paths, exact edge hashes, cancellation, and chat switches.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #1.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "reflection_retry",
+            "p": 2,
+            "label": "bug",
+            "title": "[P2] Preserve reflection importance on failure with bounded retry suppression",
+            "problem": "The accumulator is reset before generation and the catch path only logs. The guide promises restoration, while the implementation comments intentionally consume it to avoid repeated calls. The retry policy must be made explicit.",
+            "evidence": [
+                "src/extraction/extract.js — synthesizeReflections accumulator reset/catch",
+                "src/reflection/AGENTS.md — failure restoration claim",
+                "src/state.js — session lifecycle"
+            ],
+            "fix": [
+                "Proposed policy: snapshot the consumed amount and restore it on failure or cancellation only to the originating chat/character, preserving importance added meanwhile.",
+                "Prevent immediate retries with a per-character bounded retry/cooldown marker scoped to the session; centralize thresholds and clear markers on chat reset.",
+                "Define how a successful empty/deduplicated response consumes the trigger; do not retry it as a transport failure.",
+                "Document the chosen policy and avoid charging another LLM call on every worker wake."
+            ],
+            "ac": [
+                "Success consumes the intended amount; failure preserves it without overwriting newly accumulated importance.",
+                "Repeated failures cannot create an uncontrolled retry loop.",
+                "Chat switches never restore old importance into the new chat; AbortError remains cancellation.",
+                "Tests cover success, empty success, failure, concurrent accumulation, cooldown, and cancellation."
+            ],
+            "related": [],
+            "body": "## Problem\n\nThe accumulator is reset before generation and the catch path only logs. The guide promises restoration, while the implementation comments intentionally consume it to avoid repeated calls. The retry policy must be made explicit.\n\n## Evidence\n\n- `src/extraction/extract.js — synthesizeReflections accumulator reset/catch`\n- `src/reflection/AGENTS.md — failure restoration claim`\n- `src/state.js — session lifecycle`\n\n## Proposed fix\n\n1. Proposed policy: snapshot the consumed amount and restore it on failure or cancellation only to the originating chat/character, preserving importance added meanwhile.\n2. Prevent immediate retries with a per-character bounded retry/cooldown marker scoped to the session; centralize thresholds and clear markers on chat reset.\n3. Define how a successful empty/deduplicated response consumes the trigger; do not retry it as a transport failure.\n4. Document the chosen policy and avoid charging another LLM call on every worker wake.\n\n## Acceptance criteria\n\n- [ ] Success consumes the intended amount; failure preserves it without overwriting newly accumulated importance.\n- [ ] Repeated failures cannot create an uncontrolled retry loop.\n- [ ] Chat switches never restore old importance into the new chat; AbortError remains cancellation.\n- [ ] Tests cover success, empty success, failure, concurrent accumulation, cooldown, and cancellation.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "tiny_graph",
+            "p": 2,
+            "label": "improvement",
+            "title": "[P2] Resolve the unreachable tiny-graph community fallback",
+            "problem": "The guide promises a fallback for graphs under three nodes, but detectCommunities returns null before that fallback can run.",
+            "evidence": [
+                "src/graph/communities.js — detectCommunities early return and fallback branch",
+                "src/graph/AGENTS.md — hairball/tiny-graph description"
+            ],
+            "fix": [
+                "Recommended baseline: preserve the existing supported boundary (fewer than three nodes yields no communities), remove or restructure unreachable fallback code, and document that boundary.",
+                "Verify which filtered-graph condition the logarithmic fallback was meant to handle; retain it only where a reachable input justifies it.",
+                "If two-node communities are desired, implement them as an explicit behavior change with tests instead of silently moving the early return."
+            ],
+            "ac": [
+                "Behavior for 0, 1, 2, and 3 nodes is explicit and tested.",
+                "Sparse/self-loop inputs do not throw; stale community state is handled when no partition is returned.",
+                "Every retained fallback has a reachable fixture, and the guide matches the chosen behavior."
+            ],
+            "related": [3],
+            "body": "## Problem\n\nThe guide promises a fallback for graphs under three nodes, but detectCommunities returns null before that fallback can run.\n\n## Evidence\n\n- `src/graph/communities.js — detectCommunities early return and fallback branch`\n- `src/graph/AGENTS.md — hairball/tiny-graph description`\n\n## Proposed fix\n\n1. Recommended baseline: preserve the existing supported boundary (fewer than three nodes yields no communities), remove or restructure unreachable fallback code, and document that boundary.\n2. Verify which filtered-graph condition the logarithmic fallback was meant to handle; retain it only where a reachable input justifies it.\n3. If two-node communities are desired, implement them as an explicit behavior change with tests instead of silently moving the early return.\n\n## Acceptance criteria\n\n- [ ] Behavior for 0, 1, 2, and 3 nodes is explicit and tested.\n- [ ] Sparse/self-loop inputs do not throw; stale community state is handled when no partition is returned.\n- [ ] Every retained fallback has a reachable fixture, and the guide matches the chosen behavior.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #3.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "graph_docs",
+            "p": 2,
+            "label": "documentation",
+            "title": "[P2] Refresh graph guidance for current relationships and community validity",
+            "problem": "Graph guidance freezes the interval at 50, describes an unconditional cross-script distance of 2, and omits newer relationship status and community freshness semantics.",
+            "evidence": [
+                "src/graph/AGENTS.md; include/DATA_SCHEMA.md; README.md",
+                "src/constants.js — communityDetectionInterval",
+                "src/graph/graph.js — getCrossScriptMaxDistance",
+                "src/graph/communities.js — status, canonical inputs, summary validity"
+            ],
+            "fix": [
+                "Reference the configurable interval (current default 100) rather than a fixed cadence.",
+                "Describe the stricter short-name edit distance, exact-alias precedence, and matching-task versus retrieval embeddings.",
+                "Document active/weakened/resolved/superseded relationships, validity/revision fields, active-only clustering, stable community identity, and stale/dissolved summary exclusion.",
+                "Update tiny-graph wording after that follow-up is resolved; preserve conservative PERSON identity matching."
+            ],
+            "ac": [
+                "Root map, graph guide, schema reference, and relevant README claims agree.",
+                "Thresholds link to their source of truth and distinguish defaults from invariants.",
+                "A reader can determine which edges affect communities and when a summary is safe to retrieve."
+            ],
+            "related": [1, 3],
+            "deps": ["tiny_graph"],
+            "body": "## Problem\n\nGraph guidance freezes the interval at 50, describes an unconditional cross-script distance of 2, and omits newer relationship status and community freshness semantics.\n\n## Evidence\n\n- `src/graph/AGENTS.md; include/DATA_SCHEMA.md; README.md`\n- `src/constants.js — communityDetectionInterval`\n- `src/graph/graph.js — getCrossScriptMaxDistance`\n- `src/graph/communities.js — status, canonical inputs, summary validity`\n\n## Proposed fix\n\n1. Reference the configurable interval (current default 100) rather than a fixed cadence.\n2. Describe the stricter short-name edit distance, exact-alias precedence, and matching-task versus retrieval embeddings.\n3. Document active/weakened/resolved/superseded relationships, validity/revision fields, active-only clustering, stable community identity, and stale/dissolved summary exclusion.\n4. Update tiny-graph wording after that follow-up is resolved; preserve conservative PERSON identity matching.\n\n## Acceptance criteria\n\n- [ ] Root map, graph guide, schema reference, and relevant README claims agree.\n- [ ] Thresholds link to their source of truth and distinguish defaults from invariants.\n- [ ] A reader can determine which edges affect communities and when a summary is safe to retrieve.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #1, #3.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "reflection_docs",
+            "p": 2,
+            "label": "documentation",
+            "title": "[P2] Document current reflection candidates, evidence, importance, and toggles",
+            "problem": "The reflection guide describes a fixed 50-event limit, reflection IDs in source_ids, and fixed importance 4. The code uses token budgets, separate parent_ids, and clamped model importance.",
+            "evidence": [
+                "src/reflection/AGENTS.md",
+                "src/reflection/reflect.js — candidate selection and newReflections",
+                "src/constants.js — reflection generation/injection settings"
+            ],
+            "fix": [
+                "Adopt the current event-evidence source_ids and direct reflection-ancestor parent_ids representation.",
+                "Describe token-budgeted candidates and old-reflection inclusion rather than an unused fixed-count constant.",
+                "Document clamped importance with fallback 4, independent generation/injection controls, POV filtering, and fallback-memory exclusion.",
+                "Link failure policy and vector archival requirements to their implementation issues; update related schema explanations without inventing a schema change."
+            ],
+            "ac": [
+                "Level 1 and higher-level examples have correct event/parent provenance.",
+                "Budgeting, importance, toggles, and archival wording match implementation.",
+                "No documentation claims restoration or vector deletion until the corresponding fix is landed."
+            ],
+            "related": [],
+            "deps": ["reflection_retry", "reflection_vectors"],
+            "body": "## Problem\n\nThe reflection guide describes a fixed 50-event limit, reflection IDs in source_ids, and fixed importance 4. The code uses token budgets, separate parent_ids, and clamped model importance.\n\n## Evidence\n\n- `src/reflection/AGENTS.md`\n- `src/reflection/reflect.js — candidate selection and newReflections`\n- `src/constants.js — reflection generation/injection settings`\n\n## Proposed fix\n\n1. Adopt the current event-evidence source_ids and direct reflection-ancestor parent_ids representation.\n2. Describe token-budgeted candidates and old-reflection inclusion rather than an unused fixed-count constant.\n3. Document clamped importance with fallback 4, independent generation/injection controls, POV filtering, and fallback-memory exclusion.\n4. Link failure policy and vector archival requirements to their implementation issues; update related schema explanations without inventing a schema change.\n\n## Acceptance criteria\n\n- [ ] Level 1 and higher-level examples have correct event/parent provenance.\n- [ ] Budgeting, importance, toggles, and archival wording match implementation.\n- [ ] No documentation claims restoration or vector deletion until the corresponding fix is landed.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "schema_any",
+            "p": 2,
+            "label": "bug",
+            "title": "[P2] Replace the untyped relationship-impact Zod schema",
+            "problem": "RelationshipImpactSchema still uses z.any(), contradicting the root schema rule and weakening validation/type generation.",
+            "evidence": [
+                "src/extraction/structured.js — RelationshipImpactSchema",
+                "src/store/schemas.js; scripts/generate-types.js",
+                "AGENTS.md — generated types and z.any prohibition"
+            ],
+            "fix": [
+                "Inspect producers/consumers and define a typed value schema for relationship impacts; use z.unknown only if the data is intentionally opaque.",
+                "Keep tolerant parsing at the LLM boundary while validating any fields actually consumed.",
+                "Regenerate src/types.d.ts through npm run generate-types; never hand-edit the generated declaration."
+            ],
+            "ac": [
+                "The schema no longer uses z.any and legitimate supported payloads still parse.",
+                "Malformed consumed fields receive deliberate validation/fallback behavior.",
+                "Generated types and typecheck pass; focused tests distinguish accepted and rejected payloads."
+            ],
+            "related": [],
+            "body": "## Problem\n\nRelationshipImpactSchema still uses z.any(), contradicting the root schema rule and weakening validation/type generation.\n\n## Evidence\n\n- `src/extraction/structured.js — RelationshipImpactSchema`\n- `src/store/schemas.js; scripts/generate-types.js`\n- `AGENTS.md — generated types and z.any prohibition`\n\n## Proposed fix\n\n1. Inspect producers/consumers and define a typed value schema for relationship impacts; use z.unknown only if the data is intentionally opaque.\n2. Keep tolerant parsing at the LLM boundary while validating any fields actually consumed.\n3. Regenerate src/types.d.ts through npm run generate-types; never hand-edit the generated declaration.\n\n## Acceptance criteria\n\n- [ ] The schema no longer uses z.any and legitimate supported payloads still parse.\n- [ ] Malformed consumed fields receive deliberate validation/fallback behavior.\n- [ ] Generated types and typecheck pass; focused tests distinguish accepted and rejected payloads.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "prompt_docs",
+            "p": 2,
+            "label": "documentation",
+            "title": "[P2] Align prompt guidance with paired reasoning tags and coverage fallbacks",
+            "problem": "The guide mandates self-closing think tags although builders emit paired blocks, promises guaranteed compliance from constraint placement, and does not document the new coverage-fallback contract or the fork's English settings migration.",
+            "evidence": [
+                "src/prompts/AGENTS.md",
+                "src/prompts/shared/format-examples.js; preambles.js; rules.js",
+                "src/prompts/events/fallback.js; src/prompts/graph/rules.js",
+                "src/settings.js — language migration"
+            ],
+            "fix": [
+                "Specify paired <think>...</think> output, preserve parser tolerance for historical/self-closing/orphaned tags, and correct the graph instruction's missing-space typo.",
+                "Describe constraint ordering as a prompt strategy, with schema validation and fallback handling still required.",
+                "Document source-ID fidelity, complete fallback coverage, one sentence and <=15 Unicode words, and exclusion of raw source bodies from archives.",
+                "Separate configured English defaults/migration from optional automatic language mirroring; preserve original-script entity names.",
+                "Describe example diversity as behavior coverage and robustness, rather than a claim of guaranteed refusal-filter bypass."
+            ],
+            "ac": [
+                "Guide examples match builder output and parser compatibility is preserved.",
+                "Language instructions accurately describe configured English and auto modes.",
+                "Fallback guidance matches current source attribution/length validation; protocol tests do not depend on arbitrary prose.",
+                "No prompt wording claims guaranteed model compliance."
+            ],
+            "related": [3],
+            "body": "## Problem\n\nThe guide mandates self-closing think tags although builders emit paired blocks, promises guaranteed compliance from constraint placement, and does not document the new coverage-fallback contract or the fork's English settings migration.\n\n## Evidence\n\n- `src/prompts/AGENTS.md`\n- `src/prompts/shared/format-examples.js; preambles.js; rules.js`\n- `src/prompts/events/fallback.js; src/prompts/graph/rules.js`\n- `src/settings.js — language migration`\n\n## Proposed fix\n\n1. Specify paired <think>...</think> output, preserve parser tolerance for historical/self-closing/orphaned tags, and correct the graph instruction's missing-space typo.\n2. Describe constraint ordering as a prompt strategy, with schema validation and fallback handling still required.\n3. Document source-ID fidelity, complete fallback coverage, one sentence and <=15 Unicode words, and exclusion of raw source bodies from archives.\n4. Separate configured English defaults/migration from optional automatic language mirroring; preserve original-script entity names.\n5. Describe example diversity as behavior coverage and robustness, rather than a claim of guaranteed refusal-filter bypass.\n\n## Acceptance criteria\n\n- [ ] Guide examples match builder output and parser compatibility is preserved.\n- [ ] Language instructions accurately describe configured English and auto modes.\n- [ ] Fallback guidance matches current source attribution/length validation; protocol tests do not depend on arbitrary prose.\n- [ ] No prompt wording claims guaranteed model compliance.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #3.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "boundaries",
+            "p": 2,
+            "label": "improvement",
+            "title": "[P2] Restore settings and logging boundaries in new infrastructure paths",
+            "problem": "New rebuild/archive code reads raw extension settings and repeats fallback values; CDN/queue infrastructure logs directly despite the documented dependency/settings/logger boundaries.",
+            "evidence": [
+                "src/rebuild/rebuild.js — raw getExtensionSettings",
+                "src/archive/archive.js — settings entry points and fallback thresholds",
+                "src/utils/cdn.js; src/utils/queue.js — direct console calls",
+                "src/settings.js; src/constants.js; src/utils/logging.js"
+            ],
+            "fix": [
+                "Route runtime settings reads through getSettings; keep pure functions receiving explicit settings snapshots and source defaults from constants.",
+                "Move shared thresholds/protocol enums to central frozen definitions where appropriate; avoid turning every local implementation string into a global enum.",
+                "Route queue logging through injected loggers. For CDN bootstrap, choose a cycle-safe minimal logger/injected callback or document a narrow bootstrap exception supported by the import graph.",
+                "Update utils/root instructions to distinguish justified bootstrap boundaries from accidental bypasses."
+            ],
+            "ac": [
+                "Rebuild/archive entry points use the settings facade and documented defaults.",
+                "Logger dependencies do not create a CDN/settings import cycle; injected test logging works.",
+                "Warnings/errors remain visible and debug logging follows the intended toggle.",
+                "Focused settings/cancellation checks preserve behavior; no unrelated architectural rewrite."
+            ],
+            "related": [3],
+            "body": "## Problem\n\nNew rebuild/archive code reads raw extension settings and repeats fallback values; CDN/queue infrastructure logs directly despite the documented dependency/settings/logger boundaries.\n\n## Evidence\n\n- `src/rebuild/rebuild.js — raw getExtensionSettings`\n- `src/archive/archive.js — settings entry points and fallback thresholds`\n- `src/utils/cdn.js; src/utils/queue.js — direct console calls`\n- `src/settings.js; src/constants.js; src/utils/logging.js`\n\n## Proposed fix\n\n1. Route runtime settings reads through getSettings; keep pure functions receiving explicit settings snapshots and source defaults from constants.\n2. Move shared thresholds/protocol enums to central frozen definitions where appropriate; avoid turning every local implementation string into a global enum.\n3. Route queue logging through injected loggers. For CDN bootstrap, choose a cycle-safe minimal logger/injected callback or document a narrow bootstrap exception supported by the import graph.\n4. Update utils/root instructions to distinguish justified bootstrap boundaries from accidental bypasses.\n\n## Acceptance criteria\n\n- [ ] Rebuild/archive entry points use the settings facade and documented defaults.\n- [ ] Logger dependencies do not create a CDN/settings import cycle; injected test logging works.\n- [ ] Warnings/errors remain visible and debug logging follows the intended toggle.\n- [ ] Focused settings/cancellation checks preserve behavior; no unrelated architectural rewrite.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #3.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "ui",
+            "p": 2,
+            "label": "bug",
+            "title": "[P2] Fix UI async error handling and refresh tab/binding guidance",
+            "problem": "Some fire-and-forget side-panel imports lack catches, Escape does not stop propagation as documented, and the guide names an obsolete World tab and the wrong settings initializer. Merge options carry unused data-key attributes that the rule forbids.",
+            "evidence": [
+                "src/ui/render.js — side-panel imports and initBrowser",
+                "src/ui/settings.js — modal Escape and bindUIElements",
+                "src/ui/templates.js — merge datalist options",
+                "templates/settings_panel.html; src/ui/AGENTS.md"
+            ],
+            "fix": [
+                "Catch fire-and-forget import failures with suitable reporting; avoid silent unhandled rejections.",
+                "Stop modal Escape propagation when OpenVault handles cancellation, preserving focus restoration and normal outside-modal behavior.",
+                "Remove unused option data-key attributes and keep text-based target resolution.",
+                "Describe the current six tabs and separate settings binding in bindUIElements from browser delegation in initBrowser; retain payload/reset invariants."
+            ],
+            "ac": [
+                "Rejected lazy imports do not produce unhandled rejections.",
+                "Escape cancels the OpenVault modal without reaching conflicting ST handlers; focus returns appropriately.",
+                "Merge selection still resolves names/aliases without option metadata.",
+                "Guide matches current tabs and initializer ownership; targeted interaction checks cover the changed behavior."
+            ],
+            "related": [],
+            "body": "## Problem\n\nSome fire-and-forget side-panel imports lack catches, Escape does not stop propagation as documented, and the guide names an obsolete World tab and the wrong settings initializer. Merge options carry unused data-key attributes that the rule forbids.\n\n## Evidence\n\n- `src/ui/render.js — side-panel imports and initBrowser`\n- `src/ui/settings.js — modal Escape and bindUIElements`\n- `src/ui/templates.js — merge datalist options`\n- `templates/settings_panel.html; src/ui/AGENTS.md`\n\n## Proposed fix\n\n1. Catch fire-and-forget import failures with suitable reporting; avoid silent unhandled rejections.\n2. Stop modal Escape propagation when OpenVault handles cancellation, preserving focus restoration and normal outside-modal behavior.\n3. Remove unused option data-key attributes and keep text-based target resolution.\n4. Describe the current six tabs and separate settings binding in bindUIElements from browser delegation in initBrowser; retain payload/reset invariants.\n\n## Acceptance criteria\n\n- [ ] Rejected lazy imports do not produce unhandled rejections.\n- [ ] Escape cancels the OpenVault modal without reaching conflicting ST handlers; focus returns appropriately.\n- [ ] Merge selection still resolves names/aliases without option metadata.\n- [ ] Guide matches current tabs and initializer ownership; targeted interaction checks cover the changed behavior.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "tests",
+            "p": 2,
+            "label": "improvement",
+            "title": "[P2] Make testing guidance support boundary regressions without brittle suite limits",
+            "problem": "The no-internal-mock rule and 3–5 orchestrator-test cap do not describe the existing suite, and literal prompt snapshots/real waits remain. More importantly, green tests missed production-shaped migration and ST community wiring.",
+            "evidence": [
+                "tests/AGENTS.md; tests/setup.js",
+                "tests/store/migrations.test.js; tests/retrieval/retrieve.test.js",
+                "tests/graph/graph.test.js; tests/graph/communities.test.js",
+                "tests/prompts; tests/extraction/fallback.test.js; tests/llm/llm.test.js"
+            ],
+            "fix": [
+                "Retain pure tests for pure logic and injected external boundaries for orchestration; replace the hard cap/locked-file language with a requirement that each integration test cover a distinct boundary or failure invariant.",
+                "Document narrow justified internal-mock exceptions without normalizing broad mocking of the behavior under test.",
+                "Replace brittle prose assertions with structural/behavioral protocol checks; retain stable required tokens only where semantically necessary.",
+                "Replace real timer waits in touched tests with fake timers or controlled deferred promises.",
+                "Use production-shaped factories and ensure regression tests in the linked fixes exercise real migration and retrieval composition. Avoid an indiscriminate suite rewrite."
+            ],
+            "ac": [
+                "Guidance permits necessary archive/rebuild/race regressions and states concrete mocking boundaries.",
+                "No test required by the linked fixes is blocked by an arbitrary file count.",
+                "Affected prompt/timer tests verify behavior without arbitrary prose snapshots or wall-clock sleeps.",
+                "The migration-shape and ST orchestration regressions are covered in their respective fixes."
+            ],
+            "related": [2, 3],
+            "body": "## Problem\n\nThe no-internal-mock rule and 3–5 orchestrator-test cap do not describe the existing suite, and literal prompt snapshots/real waits remain. More importantly, green tests missed production-shaped migration and ST community wiring.\n\n## Evidence\n\n- `tests/AGENTS.md; tests/setup.js`\n- `tests/store/migrations.test.js; tests/retrieval/retrieve.test.js`\n- `tests/graph/graph.test.js; tests/graph/communities.test.js`\n- `tests/prompts; tests/extraction/fallback.test.js; tests/llm/llm.test.js`\n\n## Proposed fix\n\n1. Retain pure tests for pure logic and injected external boundaries for orchestration; replace the hard cap/locked-file language with a requirement that each integration test cover a distinct boundary or failure invariant.\n2. Document narrow justified internal-mock exceptions without normalizing broad mocking of the behavior under test.\n3. Replace brittle prose assertions with structural/behavioral protocol checks; retain stable required tokens only where semantically necessary.\n4. Replace real timer waits in touched tests with fake timers or controlled deferred promises.\n5. Use production-shaped factories and ensure regression tests in the linked fixes exercise real migration and retrieval composition. Avoid an indiscriminate suite rewrite.\n\n## Acceptance criteria\n\n- [ ] Guidance permits necessary archive/rebuild/race regressions and states concrete mocking boundaries.\n- [ ] No test required by the linked fixes is blocked by an arbitrary file count.\n- [ ] Affected prompt/timer tests verify behavior without arbitrary prose snapshots or wall-clock sleeps.\n- [ ] The migration-shape and ST orchestration regressions are covered in their respective fixes.\n\n## Priority and scope\n\nP2 — next: reliability and maintainable implementation guidance. This issue proposes work; it does not claim the fix is implemented.\n\nRelated existing feature issues: #2, #3.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "perf",
+            "p": 3,
+            "label": "bug",
+            "title": "[P3] Register global synthesis timing and correct persistence guidance",
+            "problem": "global_synthesis is recorded but absent from the metric registry, so record silently drops it. The guide says 12 metrics although there are 13, and 'auto-saves' obscures that record only mutates chat metadata until a save occurs.",
+            "evidence": [
+                "src/graph/communities.js — synthesizeInChunks timing",
+                "src/constants.js — PERF_METRICS and PERF_THRESHOLDS",
+                "src/perf/store.js — record",
+                "src/perf/AGENTS.md"
+            ],
+            "fix": [
+                "Register the intended global-synthesis metric with label/sync classification and a justified threshold, or use the existing correct metric if it was a naming error.",
+                "Reference the registry instead of duplicating a count in documentation.",
+                "Describe metadata mutation, hydration, and durable save timing accurately; avoid adding an expensive disk save on every metric."
+            ],
+            "ac": [
+                "A global synthesis timing appears in the store, UI, and export.",
+                "Registry and thresholds agree; unknown IDs remain deliberately rejected.",
+                "Documentation matches actual persistence and hydration behavior."
+            ],
+            "related": [],
+            "body": "## Problem\n\nglobal_synthesis is recorded but absent from the metric registry, so record silently drops it. The guide says 12 metrics although there are 13, and 'auto-saves' obscures that record only mutates chat metadata until a save occurs.\n\n## Evidence\n\n- `src/graph/communities.js — synthesizeInChunks timing`\n- `src/constants.js — PERF_METRICS and PERF_THRESHOLDS`\n- `src/perf/store.js — record`\n- `src/perf/AGENTS.md`\n\n## Proposed fix\n\n1. Register the intended global-synthesis metric with label/sync classification and a justified threshold, or use the existing correct metric if it was a naming error.\n2. Reference the registry instead of duplicating a count in documentation.\n3. Describe metadata mutation, hydration, and durable save timing accurately; avoid adding an expensive disk save on every metric.\n\n## Acceptance criteria\n\n- [ ] A global synthesis timing appears in the store, UI, and export.\n- [ ] Registry and thresholds agree; unknown IDs remain deliberately rejected.\n- [ ] Documentation matches actual persistence and hydration behavior.\n\n## Priority and scope\n\nP3 — follow-up: observability and workflow accuracy. This issue proposes work; it does not claim the fix is implemented.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        },
+        {
+            "key": "workflow",
+            "p": 3,
+            "label": "documentation",
+            "title": "[P3] Align agent workflow pointers and canonical triage labels with the fork",
+            "problem": "The domain guide presents CONTEXT.md/docs/adr as an existing layout although neither exists, and the triage guide maps labels that are not configured in the fork. GitHub currently has standard labels plus improvement.",
+            "evidence": [
+                "docs/agents/domain.md; issue-tracker.md; triage-labels.md",
+                "AGENTS.md — agent-workflow links",
+                "GitHub label inventory checked 2026-09-08"
+            ],
+            "fix": [
+                "Describe CONTEXT/ADR layout as optional/intended and point to existing schema/architecture references; do not fabricate ADRs or resolved design decisions.",
+                "Install the four missing canonical labels (needs-triage, needs-info, ready-for-agent, ready-for-human), retain wontfix, and keep documentation synchronized; alternatively record an explicit real mapping if the maintainer chooses different labels.",
+                "Use --body-file examples for multiline GitHub text that work from PowerShell; preserve the gh-only tracker convention.",
+                "Clarify that publishing issues/comments requires task authorization and that a skill's publishing instruction alone is not user authorization."
+            ],
+            "ac": [
+                "Every claimed existing documentation target resolves or is marked optional.",
+                "Canonical label mappings resolve to real labels.",
+                "Tracker examples preserve multiline text safely in this workspace shell.",
+                "Root links and agent-workflow docs agree."
+            ],
+            "related": [],
+            "body": "## Problem\n\nThe domain guide presents CONTEXT.md/docs/adr as an existing layout although neither exists, and the triage guide maps labels that are not configured in the fork. GitHub currently has standard labels plus improvement.\n\n## Evidence\n\n- `docs/agents/domain.md; issue-tracker.md; triage-labels.md`\n- `AGENTS.md — agent-workflow links`\n- `GitHub label inventory checked 2026-09-08`\n\n## Proposed fix\n\n1. Describe CONTEXT/ADR layout as optional/intended and point to existing schema/architecture references; do not fabricate ADRs or resolved design decisions.\n2. Install the four missing canonical labels (needs-triage, needs-info, ready-for-agent, ready-for-human), retain wontfix, and keep documentation synchronized; alternatively record an explicit real mapping if the maintainer chooses different labels.\n3. Use --body-file examples for multiline GitHub text that work from PowerShell; preserve the gh-only tracker convention.\n4. Clarify that publishing issues/comments requires task authorization and that a skill's publishing instruction alone is not user authorization.\n\n## Acceptance criteria\n\n- [ ] Every claimed existing documentation target resolves or is marked optional.\n- [ ] Canonical label mappings resolve to real labels.\n- [ ] Tracker examples preserve multiline text safely in this workspace shell.\n- [ ] Root links and agent-workflow docs agree.\n\n## Priority and scope\n\nP3 — follow-up: observability and workflow accuracy. This issue proposes work; it does not claim the fix is implemented.\n\nOrigin: the 2026-09-08 audit of all 13 AGENTS.md files against the local fork based on commit `48b62ca`, including uncommitted conversion/fallback changes. Recheck the latest checkout before editing; some cited AGENTS files may still have their CLAUDE.md names on GitHub. Existing targeted tests passed but did not cover all reported paths.\n"
+        }
+    ]
+}

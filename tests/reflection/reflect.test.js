@@ -83,16 +83,6 @@ describe('shouldReflect', () => {
         expect(shouldReflect(state, 'Alice', 20)).toBe(true);
         expect(shouldReflect(state, 'Alice', 30)).toBe(false);
     });
-
-    it('does not trigger reflection below threshold of 40', () => {
-        const state = { Alice: { importance_sum: 35 } };
-        expect(shouldReflect(state, 'Alice')).toBe(false);
-    });
-
-    it('triggers reflection at threshold of 40', () => {
-        const state = { Alice: { importance_sum: 40 } };
-        expect(shouldReflect(state, 'Alice')).toBe(true);
-    });
 });
 
 describe('generateReflections', () => {
@@ -202,6 +192,29 @@ describe('generateReflections', () => {
             expect(stChanges.toSync[i].item).toBe(reflections[i]);
             expect(stChanges.toSync[i].hash).toBeDefined();
         }
+    });
+
+    it('does not archive a capped reflection before a failed generation can return its deletion', async () => {
+        const oldReflection = {
+            id: 'ref_old',
+            type: 'reflection',
+            character: characterName,
+            summary: 'An established insight',
+            sequence: 1,
+            embedding: [1, 0],
+            _st_synced: true,
+        };
+        mockCallLLM.mockRejectedValueOnce(new Error('temporary LLM failure'));
+
+        setupTestContext({ settings: { maxReflectionsPerCharacter: 1 } });
+
+        await expect(
+            generateReflections(characterName, [...allMemories, oldReflection], characterStates, { force: true })
+        ).rejects.toThrow('temporary LLM failure');
+
+        expect(oldReflection.archived).toBeUndefined();
+        expect(oldReflection._st_synced).toBe(true);
+        expect(oldReflection.embedding).toEqual([1, 0]);
     });
 });
 

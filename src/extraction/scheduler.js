@@ -7,6 +7,7 @@
 
 import { PROCESSED_MESSAGES_KEY, SWIPE_PROTECTION_TAIL_MESSAGES } from '../constants.js';
 import { cyrb53 } from '../utils/embedding-codec.js';
+import { integrityDigest } from '../utils/integrity-digest.js';
 import { logDebug } from '../utils/logging.js';
 import {
     getSanitizedTokenCount as getMessageTokenCount,
@@ -16,14 +17,25 @@ import { countTurns, snapToTurnBoundary } from '../utils/tokens.js';
 
 /**
  * Get a stable fingerprint for a message.
- * Uses send_date (timestamp) when available, falls back to content hash.
+ * Legacy source locator retained for imported v1-v3 metadata.
  * @param {object} msg - Message object
  * @returns {string} Fingerprint string
  */
 export function getFingerprint(msg) {
     if (msg.send_date) return String(msg.send_date);
-    // Fallback: content hash for imported chats without send_date
     return `hash_${cyrb53((msg.name || '') + (msg.mes || ''))}`;
+}
+
+/**
+ * Content-addressed revision used by v4 processing and irreversible sealing.
+ * @param {object} msg Message object
+ * @returns {string} Strong revision fingerprint
+ */
+export function getMessageRevision(msg) {
+    const identity = [msg.send_date || '', msg.name || '', msg.is_user ? 'user' : 'assistant', msg.mes || ''].join(
+        '\u001f'
+    );
+    return `v4_${integrityDigest(identity)}`;
 }
 
 /**
@@ -39,21 +51,20 @@ export function getProcessedFingerprints(data) {
 /**
  * Get array of message indices that have not been extracted yet.
  * Now uses fingerprint matching and filters out system messages.
- * Excludes the latest message to avoid extracting content the user
- * may still be regenerating.
+ * Callers doing background extraction explicitly exclude the latest message.
  * @param {Object[]} chat - Chat messages array
  * @param {Set<string>} processedFps - Set of already processed fingerprint strings
  * @param {Object} [opts] - Options
- * @param {boolean} [opts.includeLatest=false] - Include the latest message (for backfill/emergency)
+ * @param {boolean} [opts.includeLatest=true] - Include the latest message
  * @returns {number[]} Array of unextracted message indices
  */
-export function getUnextractedMessageIds(chat, processedFps, { includeLatest = false } = {}) {
+export function getUnextractedMessageIds(chat, processedFps, { includeLatest = true } = {}) {
     const unextractedIds = [];
     const limit = includeLatest ? chat.length : Math.max(0, chat.length - 1);
     for (let i = 0; i < limit; i++) {
         const msg = chat[i];
         if (msg.is_system) continue;
-        if (!processedFps.has(getFingerprint(msg))) {
+        if (!processedFps.has(getMessageRevision(msg)) && !processedFps.has(getFingerprint(msg))) {
             unextractedIds.push(i);
         }
     }
@@ -154,7 +165,7 @@ export function trimTailTurns(chat, messageIds, turnsToTrim) {
  */
 export function getNextBatch(chat, data, tokenBudget, isEmergencyCut = false, maxTurns = Infinity) {
     const processedFps = getProcessedFingerprints(data);
-    const unextractedIds = getUnextractedMessageIds(chat, processedFps, { includeLatest: isEmergencyCut });
+    const unextractedIds = getUnextractedMessageIds(chat, processedFps);
 
     const totalTokens = getTokenSum(chat, unextractedIds);
     // Emergency Cut bypasses token budget - extract all unextracted messages

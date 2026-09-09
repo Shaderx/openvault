@@ -1,12 +1,12 @@
 # UI, DOM, and Progressive Disclosure
 
 ## PROGRESSIVE DISCLOSURE ARCHITECTURE
-- **Structure tabs by workflow.** `Dashboard` (Status/Toggles/Emergency Cut), `Memories` (Browser/Extract settings), `World` (Pure viewer), `Advanced` (Expert math/Danger Zone), `Perf` (Metrics).
+- **Structure tabs by workflow.** The panel currently has six tabs: `Dashboard` (Status/Toggles/Emergency Cut), `Memories` (Browser/Extract settings), `Entities` (entity CRUD), `Communities` (read-only community viewer), `Advanced` (Expert math/Danger Zone), and `Perf` (Metrics).
 - **Hide expert settings in Drawers.** Use `<details class="openvault-details">`. Do not expose vector thresholds or decay lambda without a warning banner.
 - **Decouple DOM from Domain.** Route UI clicks through thin wrapper functions in `settings.js`. Pass callbacks (`onProgress`, `onError`) down to domain orchestrators (`extract.js`).
 
 ## DOM & JQUERY CONVENTIONS
-- **Bind events centrally.** Use `bindSetting()` in `initBrowser()`. Never use inline HTML `onclick`.
+- **Bind events centrally.** `bindUIElements()` in `settings.js` owns settings controls and action handlers; `initBrowser()` in `render.js` owns browser/list event delegation. Use `bindSetting()` for standard settings and never use inline HTML `onclick`.
 - **Mount modals to `document.body`.** Avoid SillyTavern's extension panel CSS stacking context issues (e.g. `z-index` clipping) by appending the Emergency Cut modal directly to the body.
 - **Trap keyboard focus.** Ensure modal `Escape` handlers work, but `stopPropagation()` to prevent ST from swallowing the keypress.
 - **Sanitize dynamically rendered text.** Wrap all user-generated strings (summaries, character names) in `escapeHtml()`.
@@ -15,7 +15,7 @@
 - **Always chain `.catch()` on fire-and-forget promises.** Clipboard API calls (`navigator.clipboard.writeText`) and dynamic imports (`import('./module')`) that aren't `await`ed must have `.catch(() => {})` on the outer `.then()` to prevent unhandled rejection warnings in the browser.
 
 ## PAYLOAD CALCULATOR
-- **Use `PAYLOAD_CALC` as the single source of truth.** (`src/constants.js`). 
+- **Use `PAYLOAD_CALC` as the single source of truth.** (`src/constants.js`).
 - **Include overhead in warnings.** Calculate `Budget + Rearview + 12k Overhead`. Display severity colors: Green (≤32k), Yellow (≤48k), Orange (≤64k), Red (>64k).
 
 ## SETTINGS MANAGEMENT

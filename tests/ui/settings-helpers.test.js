@@ -89,5 +89,39 @@ describe('Emergency Cut Modal Helpers', () => {
 
             expect($('#openvault_emergency_cut_modal').hasClass('hidden')).toBe(true);
         });
+
+        it('restores focus to the control that opened the modal', async () => {
+            const { showEmergencyCutModal, hideEmergencyCutModal } = await import('../../src/ui/settings.js');
+            const trigger = document.createElement('button');
+            document.body.appendChild(trigger);
+            trigger.focus();
+
+            showEmergencyCutModal();
+            hideEmergencyCutModal();
+
+            expect(document.activeElement).toBe(trigger);
+        });
+    });
+});
+
+describe('compaction blocker messages', () => {
+    it('identifies the first unprocessed message', async () => {
+        const { formatCompactionBlockMessage } = await import('../../src/ui/settings.js');
+
+        expect(formatCompactionBlockMessage({ blocked: 'unprocessed_source', message_index: 4 })).toContain(
+            'Message 5'
+        );
+    });
+
+    it('reports uncovered archive sources with their first position', async () => {
+        const { formatCompactionBlockMessage } = await import('../../src/ui/settings.js');
+        const message = formatCompactionBlockMessage({
+            blocked: 'coverage_incomplete',
+            uncovered_messages: 3,
+            first_message_index: 7,
+        });
+
+        expect(message).toContain('3 message(s)');
+        expect(message).toContain('message 8');
     });
 });

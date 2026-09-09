@@ -1,0 +1,224 @@
+// @ts-check
+
+import { compactIfNeeded } from '../archive/archive.js';
+import {
+    CHARACTERS_KEY,
+    CHAT_LIFECYCLE,
+    defaultSettings,
+    EMBEDDING_SOURCES,
+    MEMORIES_KEY,
+    PROCESSED_MESSAGES_KEY,
+} from '../constants.js';
+import { getDeps } from '../deps.js';
+import { extractMemories, runPhase2Enrichment } from '../extraction/extract.js';
+import { getMessageRevision, getProcessedFingerprints } from '../extraction/scheduler.js';
+import { createEmptyGraph } from '../graph/graph.js';
+import { purgeSTCollection } from '../services/st-vector.js';
+import { getSettings } from '../settings.js';
+import { getSessionSignal, operationState } from '../state.js';
+import { getCurrentChatId, getOpenVaultData, saveOpenVaultData } from '../store/chat-data.js';
+import { logInfo } from '../utils/logging.js';
+import { getSanitizedTokenCount } from '../utils/message-sanitizer.js';
+
+function backupLegacyData(data) {
+    const copy = structuredClone(data);
+    delete copy.recovery_backup;
+    return copy;
+}
+
+function resetDerivedData(data) {
+    data[MEMORIES_KEY] = [];
+    data[CHARACTERS_KEY] = {};
+    data[PROCESSED_MESSAGES_KEY] = [];
+    data.reflection_state = {};
+    data.graph = createEmptyGraph();
+    data.communities = {};
+    data.graph_message_count = 0;
+    delete data.global_world_state;
+    delete data.embedding_model_id;
+    data.archives = { revision: 0, segments: [], next_sequence: 1, rollups: [] };
+}
+
+function createBatches(chat, boundary, tokenBudget, maxTurns) {
+    const ids = [];
+    for (let index = 0; index < boundary; index++) {
+        if (!chat[index]?.is_system) ids.push(index);
+    }
+    const batches = [];
+    let batch = [];
+    let tokens = 0;
+    let turns = 0;
+    for (const index of ids) {
+        batch.push(index);
+        tokens += getSanitizedTokenCount(chat, index);
+        if (!chat[index].is_user) turns++;
+        const next = chat[index + 1];
+        const completeTurn = !next || next.is_user;
+        if (completeTurn && (tokens >= tokenBudget || turns >= maxTurns)) {
+            batches.push(batch);
+            batch = [];
+            tokens = 0;
+            turns = 0;
+        }
+    }
+    if (batch.length > 0) batches.push(batch);
+    return batches;
+}
+
+function assertSameChat(expectedChatId, signal) {
+    if (signal?.aborted || getCurrentChatId() !== expectedChatId) {
+        throw new DOMException('Rebuild cancelled by chat switch', 'AbortError');
+    }
+}
+
+/** Persist a rebuild checkpoint while retaining the originating chat guard. */
+async function saveRebuildCheckpoint(expectedChatId, signal, reason) {
+    assertSameChat(expectedChatId, signal);
+    const saved = await saveOpenVaultData(expectedChatId);
+    if (!saved) {
+        // saveOpenVaultData returns false for both a chat switch and a failed
+        // dependency save. Preserve cancellation semantics for the former.
+        assertSameChat(expectedChatId, signal);
+        throw new Error(reason);
+    }
+    assertSameChat(expectedChatId, signal);
+}
+
+/**
+ * Start or resume the mandatory full-chat rebuild. Partial state is never made
+ * retrievable; progress and the fixed source boundary remain persisted.
+ */
+export async function startFullRebuild(options = {}) {
+    const deps = getDeps();
+    const context = deps.getContext();
+    const data = getOpenVaultData();
+    const chat = context?.chat || [];
+    // Capture a settings snapshot through the facade so a rebuild does not
+    // depend on raw SillyTavern extension-settings shape or local fallbacks.
+    const settings = { ...defaultSettings, ...(getSettings() || {}) };
+    const expectedChatId = getCurrentChatId();
+    const signal = options.abortSignal || getSessionSignal();
+    if (!data || !expectedChatId) throw new Error('No chat loaded');
+    if (operationState.extractionInProgress) throw new Error('Another OpenVault extraction is running');
+
+    const isResume = data.lifecycle?.status === CHAT_LIFECYCLE.REBUILD_FAILED && data.lifecycle.rebuild_id;
+    if (!isResume) {
+        data.recovery_backup = backupLegacyData(data);
+        if (settings.embeddingSource === EMBEDDING_SOURCES.ST_VECTOR) {
+            const purged = await purgeSTCollection(expectedChatId);
+            assertSameChat(expectedChatId, signal);
+            if (!purged) {
+                throw new Error('Could not purge legacy ST vectors; rebuild did not start');
+            }
+        }
+        let restored = 0;
+        for (const message of chat) {
+            if (message.openvault_hidden) {
+                message.is_system = false;
+                delete message.openvault_hidden;
+                delete message.openvault_archive_id;
+                restored++;
+            }
+        }
+        const sourceCount = chat.filter((message) => !message.is_system).length;
+        const legacyProcessed = data[PROCESSED_MESSAGES_KEY]?.length || 0;
+        const missingSourceWarning = legacyProcessed > sourceCount;
+        resetDerivedData(data);
+        data.lifecycle = {
+            status: CHAT_LIFECYCLE.REBUILDING,
+            rebuild_id: `rebuild-${deps.Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+            boundary: chat.length,
+            processed: 0,
+            restored,
+            missing_source_warning: missingSourceWarning,
+        };
+        data.diagnostics.rebuild = { status: 'rebuilding', boundary: chat.length, processed: 0 };
+
+        await saveRebuildCheckpoint(expectedChatId, signal, 'Could not persist rebuild preparation');
+    } else {
+        assertSameChat(expectedChatId, signal);
+        data.lifecycle.status = CHAT_LIFECYCLE.REBUILDING;
+        delete data.lifecycle.error;
+        await saveRebuildCheckpoint(expectedChatId, signal, 'Could not persist rebuild resume state');
+    }
+
+    operationState.extractionInProgress = true;
+    try {
+        const boundary = data.lifecycle.boundary;
+        const batches = createBatches(chat, boundary, settings.extractionTokenBudget, settings.extractionMaxTurns);
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            assertSameChat(expectedChatId, signal);
+            const processedFingerprints = getProcessedFingerprints(data);
+            const unprocessed = batches[batchIndex].filter(
+                (index) => !processedFingerprints.has(getMessageRevision(chat[index]))
+            );
+            if (unprocessed.length === 0) continue;
+            let result;
+            do {
+                result = await extractMemories(unprocessed, expectedChatId, {
+                    isBackfill: true,
+                    silent: true,
+                    abortSignal: signal,
+                });
+                assertSameChat(expectedChatId, signal);
+            } while (result?.status === 'no_events_retry');
+            assertSameChat(expectedChatId, signal);
+            data.lifecycle.processed = Math.min(boundary, data.lifecycle.processed + unprocessed.length);
+            data.diagnostics.rebuild = {
+                status: 'rebuilding',
+                boundary,
+                processed: data.lifecycle.processed,
+                batches_complete: batchIndex + 1,
+                batches_total: batches.length,
+            };
+            options.onProgress?.(data.diagnostics.rebuild);
+            await saveRebuildCheckpoint(expectedChatId, signal, 'Could not persist rebuild progress');
+        }
+
+        assertSameChat(expectedChatId, signal);
+        await runPhase2Enrichment(data, settings, expectedChatId, { abortSignal: signal });
+        assertSameChat(expectedChatId, signal);
+        const processed = data.lifecycle.processed || boundary;
+        data.lifecycle = { status: CHAT_LIFECYCLE.READY, rebuilt_at: deps.Date.now() };
+        data.diagnostics.rebuild = { status: 'ready', boundary, processed };
+        await saveRebuildCheckpoint(expectedChatId, signal, 'Could not activate rebuilt OpenVault data');
+        operationState.extractionInProgress = false;
+        assertSameChat(expectedChatId, signal);
+        await compactIfNeeded(settings);
+        logInfo(`OpenVault rebuild completed through message ${boundary}`);
+        return { success: true, boundary };
+    } catch (error) {
+        // A chat switch or cancellation invalidates every in-memory mutation
+        // still in flight. Do not stamp the old snapshot as failed or attempt
+        // a guarded save against the newly selected chat.
+        if (error.name === 'AbortError' || signal?.aborted || getCurrentChatId() !== expectedChatId) {
+            throw error;
+        }
+        // Source messages remain visible unless a fully durable archive segment
+        // was sealed after activation. Partial derived data stays gated.
+        data.lifecycle.status = CHAT_LIFECYCLE.REBUILD_FAILED;
+        data.lifecycle.error = error.message;
+        data.diagnostics.rebuild = {
+            status: 'failed',
+            boundary: data.lifecycle.boundary,
+            processed: data.lifecycle.processed,
+            error: error.message,
+        };
+        await saveOpenVaultData(expectedChatId);
+        throw error;
+    } finally {
+        operationState.extractionInProgress = false;
+    }
+}
+
+export function getRebuildNotice(data) {
+    const status = data?.lifecycle?.status;
+    if (status === CHAT_LIFECYCLE.READY) return '';
+    if (status === CHAT_LIFECYCLE.REBUILDING) {
+        return 'OpenVault is rebuilding this chat. Retrieval and compaction remain disabled until it finishes.';
+    }
+    if (status === CHAT_LIFECYCLE.REBUILD_FAILED) {
+        return 'OpenVault rebuild did not finish. Source messages remain available; use Resume Full Rebuild.';
+    }
+    return 'This chat uses an older OpenVault memory format. Run Full Rebuild to recreate memory from the beginning. Retrieval and compaction are disabled until rebuilding completes.';
+}

@@ -71,10 +71,15 @@ export function buildGlobalSynthesisPrompt(communities, preamble, outputLanguage
         outputLanguage,
     });
 
+    const escapeData = (value) =>
+        String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;');
     const communityText = communities
         .map(
             (c, i) =>
-                `${i + 1}. ${c.title}\n${c.summary}${c.findings?.length ? '\nKey findings: ' + c.findings.join('; ') : ''}`
+                `${i + 1}. ${escapeData(c.title)}\n${escapeData(c.summary)}${c.findings?.length ? '\nKey findings: ' + c.findings.map(escapeData).join('; ') : ''}`
         )
         .join('\n\n');
 

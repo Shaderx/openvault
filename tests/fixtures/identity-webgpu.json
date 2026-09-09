@@ -1,0 +1,39 @@
+{
+    "observedAt": "2026-09-09",
+    "runtime": "Codex in-app browser WebGPU, Transformers.js 4.0.1",
+    "inputShape": "PERSON: name - A resident involved in the current story.",
+    "models": {
+        "qwen3-embedding-0.6b": {
+            "dtype": "q8",
+            "pooling": "last_token",
+            "dimensions": 1024,
+            "selectedThreshold": 0.88,
+            "cosines": [
+                0.8541397509852117, 0.904407738518042, 0.7972634899620644, 0.8212833422639024, 0.8599751992429971,
+                0.8094314817875818, 0.8387450755458323, 0.8752821133041442, 0.821566412849436
+            ]
+        },
+        "embeddinggemma-300m": {
+            "dtype": "q4",
+            "pooling": "mean",
+            "dimensions": 768,
+            "selectedThreshold": 0.94,
+            "cosines": [
+                0.9370411716385959, 0.9649394286472565, 0.9128589440408614, 0.9582977098626764, 0.9334977950101963,
+                0.9338024231428556, 0.895379406379495, 0.934039112864034, 0.910656670410962
+            ]
+        }
+    },
+    "pairs": [
+        { "left": "Red", "right": "Reddington \"Red\" Steele", "positive": true },
+        { "left": "Mina", "right": "Мина", "positive": true },
+        { "left": "Captain Voss", "right": "Alexander Voss", "positive": true },
+        { "left": "The Iron Duke", "right": "Duke Harlan, known as The Iron Duke", "positive": true },
+        { "left": "John Smith", "right": "James Smith", "positive": false },
+        { "left": "Captain Voss", "right": "Captain Ross", "positive": false },
+        { "left": "Alice the healer", "right": "Maria the healer", "positive": false },
+        { "left": "Red Dragon", "right": "Red", "positive": false },
+        { "left": "Mina", "right": "Nina", "positive": false }
+    ],
+    "limitations": "Small synthetic operating-point check, not broad accuracy certification. Positive alias labels assume established narrative identity. All measured vector norms were within 0.000001 of 1. Final resolver includes aliases, cross-script and name guards."
+}

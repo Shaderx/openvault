@@ -227,6 +227,42 @@ describe('migration', () => {
             expect(data.st_vector_model).toBe('text-embedding-3-large');
             expect(data.memories[0].embedding_b64).toBeUndefined();
         });
+
+        it('leaves the originating chat untouched when purge resumes after a chat switch', async () => {
+            const fetchSpy = vi.fn().mockImplementation(async () => {
+                mockContext.chatId = 'new-chat-456';
+                return { ok: true };
+            });
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: {
+                        enabled: true,
+                        embeddingSource: 'st_vector',
+                    },
+                    vectors: {
+                        source: 'openrouter',
+                        openrouter_model: 'new-model',
+                    },
+                }),
+                fetch: fetchSpy,
+            });
+            const data = {
+                embedding_model_id: 'st_vector',
+                st_vector_source: 'ollama',
+                st_vector_model: 'old-model',
+                memories: [{ id: '1', summary: 'legacy', _st_synced: true }],
+                graph: { nodes: {}, edges: {} },
+                communities: {},
+            };
+
+            expect(await invalidateStaleEmbeddings(data, 'st_vector')).toBe(0);
+            expect(data.memories[0]._st_synced).toBe(true);
+            expect(data.st_vector_source).toBe('ollama');
+            expect(data.st_vector_model).toBe('old-model');
+            expect(fetchSpy).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('deleteCurrentChatEmbeddings', () => {

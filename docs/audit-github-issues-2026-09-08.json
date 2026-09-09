@@ -1,0 +1,116 @@
+[
+    {
+        "key": "migration",
+        "title": "[P1] Migrate legacy keyed graph nodes and edge embeddings safely",
+        "priority": 1,
+        "url": "https://github.com/Shaderx/openvault/issues/4"
+    },
+    {
+        "key": "vector_mutations",
+        "title": "[P1] Complete ST Vector changesets for entity, edge, and memory mutations",
+        "priority": 1,
+        "url": "https://github.com/Shaderx/openvault/issues/5"
+    },
+    {
+        "key": "reflection_vectors",
+        "title": "[P1] Delete stale ST Vector records when reflections are archived",
+        "priority": 1,
+        "url": "https://github.com/Shaderx/openvault/issues/6"
+    },
+    {
+        "key": "st_communities",
+        "title": "[P1] Wire ST Vector community selection into production world-context retrieval",
+        "priority": 1,
+        "url": "https://github.com/Shaderx/openvault/issues/7"
+    },
+    {
+        "key": "architecture",
+        "title": "[P1] Align architecture guidance with schema v5 and immutable world archives",
+        "priority": 1,
+        "url": "https://github.com/Shaderx/openvault/issues/8"
+    },
+    {
+        "key": "guarded_saves",
+        "title": "[P1] Enforce captured-chat guards across asynchronous persistence paths",
+        "priority": 1,
+        "url": "https://github.com/Shaderx/openvault/issues/9"
+    },
+    {
+        "key": "cdn",
+        "title": "[P2] Pin scoped CDN imports and document the actual test override workflow",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/10"
+    },
+    {
+        "key": "edge_backfill",
+        "title": "[P2] Include graph edges in embedding and ST Vector backfill",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/11"
+    },
+    {
+        "key": "reflection_retry",
+        "title": "[P2] Preserve reflection importance on failure with bounded retry suppression",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/12"
+    },
+    {
+        "key": "tiny_graph",
+        "title": "[P2] Resolve the unreachable tiny-graph community fallback",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/13"
+    },
+    {
+        "key": "graph_docs",
+        "title": "[P2] Refresh graph guidance for current relationships and community validity",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/14"
+    },
+    {
+        "key": "reflection_docs",
+        "title": "[P2] Document current reflection candidates, evidence, importance, and toggles",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/15"
+    },
+    {
+        "key": "schema_any",
+        "title": "[P2] Replace the untyped relationship-impact Zod schema",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/16"
+    },
+    {
+        "key": "prompt_docs",
+        "title": "[P2] Align prompt guidance with paired reasoning tags and coverage fallbacks",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/17"
+    },
+    {
+        "key": "boundaries",
+        "title": "[P2] Restore settings and logging boundaries in new infrastructure paths",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/18"
+    },
+    {
+        "key": "ui",
+        "title": "[P2] Fix UI async error handling and refresh tab/binding guidance",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/19"
+    },
+    {
+        "key": "tests",
+        "title": "[P2] Make testing guidance support boundary regressions without brittle suite limits",
+        "priority": 2,
+        "url": "https://github.com/Shaderx/openvault/issues/20"
+    },
+    {
+        "key": "perf",
+        "title": "[P3] Register global synthesis timing and correct persistence guidance",
+        "priority": 3,
+        "url": "https://github.com/Shaderx/openvault/issues/21"
+    },
+    {
+        "key": "workflow",
+        "title": "[P3] Align agent workflow pointers and canonical triage labels with the fork",
+        "priority": 3,
+        "url": "https://github.com/Shaderx/openvault/issues/22"
+    }
+]

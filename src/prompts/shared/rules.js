@@ -12,3 +12,6 @@ OUTPUT LANGUAGE PROTOCOL:
 • LANGUAGE ANCHOR = Narrative prose in <messages>, not dialogue or instruction language.
 • NO MIXING within a single output field.
 </language_rules>`;
+
+/** Canonical story-time contract shared by every event-memory extraction pass. */
+export const TEMPORAL_ANCHOR_RULE = `temporal_anchor: REQUIRED FIELD — always include it in output. Extract ONLY the roleplay/story date and time stated in the source message text, especially an explicit timestamp header such as "Time: 8:45 AM — Thursday, March 6, 2025". NEVER use message metadata, the real-world send date, source_message_id, fingerprint, or processing time. Prefer story date + time, then story date only, then story time only. Return null ONLY when the source text contains no story-time information. Strip decorative elements such as emojis, locations, and weather, but preserve the chosen story date/time wording.`;

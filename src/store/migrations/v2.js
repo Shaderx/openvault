@@ -66,34 +66,22 @@ function migrateProcessedMessages(data, chat) {
 function migrateEmbeddings(data) {
     let converted = false;
 
-    // Memories
-    for (const mem of data[MEMORIES_KEY] || []) {
-        if (mem.embedding && Array.isArray(mem.embedding)) {
-            mem.embedding_b64 = _migrateEncodeBase64(mem.embedding);
-            delete mem.embedding;
-            converted = true;
+    const collections = [data[MEMORIES_KEY], data.graph?.nodes, data.graph?.edges, data.communities];
+    for (const collection of collections) {
+        for (const item of Object.values(collection || {})) {
+            if (!item) continue;
+            for (const field of ['embedding', 'summary_embedding']) {
+                if (!Array.isArray(item[field])) continue;
+                const encodedField = `${field}_b64`;
+                // A completed conversion wins over a leftover legacy array.
+                if (typeof item[encodedField] !== 'string' || !item[encodedField]) {
+                    item[encodedField] = _migrateEncodeBase64(item[field]);
+                }
+                delete item[field];
+                converted = true;
+            }
         }
     }
-
-    // Graph nodes
-    for (const node of data.graph?.nodes || []) {
-        if (node.embedding && Array.isArray(node.embedding)) {
-            node.embedding_b64 = _migrateEncodeBase64(node.embedding);
-            delete node.embedding;
-            converted = true;
-        }
-    }
-
-    // Communities (summaries may have embeddings)
-    for (const key of Object.keys(data.communities || {})) {
-        const comm = data.communities[key];
-        if (comm?.summary_embedding && Array.isArray(comm.summary_embedding)) {
-            comm.summary_embedding_b64 = _migrateEncodeBase64(comm.summary_embedding);
-            delete comm.summary_embedding;
-            converted = true;
-        }
-    }
-
     return converted;
 }
 

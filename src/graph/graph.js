@@ -33,10 +33,11 @@ import {
     resolveOutputLanguage,
 } from '../prompts/index.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
-import { cyrb53, setEmbedding } from '../utils/embedding-codec.js';
+import { cyrb53, deleteEmbedding, setEmbedding } from '../utils/embedding-codec.js';
 import { logDebug, logError } from '../utils/logging.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { yieldToMain } from '../utils/st-helpers.js';
+import { getEdgeEmbeddingText, getEdgeIndexText, getNodeIndexText } from '../utils/st-index.js';
 import { stemWord } from '../utils/stemmer.js';
 import { ALL_STOPWORDS } from '../utils/stopwords.js';
 import { jaccardSimilarity } from '../utils/text.js';
@@ -279,28 +280,42 @@ export function upsertEntity(graphData, name, type, description, cap = 3) {
  * @param {string} description - Relationship description
  * @param {number} [cap=5] - Maximum number of description segments to retain
  * @param {Object} [settings=null] - Optional settings for consolidation behavior
- * @returns {void}
+ * @returns {{toSync: Array, toDelete: Array}} ST Vector changes for the edge mutation
  */
-export function upsertRelationship(graphData, source, target, description, cap = 5, settings = null) {
+export function upsertRelationship(graphData, source, target, description, cap = 5, settings = null, state = {}) {
+    const stChanges = { toSync: [], toDelete: [] };
     const srcKey = _resolveKey(graphData, source);
     const tgtKey = _resolveKey(graphData, target);
 
     // Prevent self-loops
     if (srcKey === tgtKey) {
         logDebug(`[graph] Edge skipped: ${source} -> ${target} — self-loops not allowed`);
-        return;
+        return stChanges;
     }
 
     if (!graphData.nodes[srcKey] || !graphData.nodes[tgtKey]) {
         logDebug(`[graph] Edge skipped: ${source} (${srcKey}) -> ${target} (${tgtKey}) — missing node`);
-        return;
+        return stChanges;
     }
 
     const edgeKey = `${srcKey}__${tgtKey}`;
     const existing = graphData.edges[edgeKey];
 
     if (existing) {
-        existing.weight += 1;
+        const oldDescription = existing.description;
+        const oldText = getEdgeIndexText(existing);
+        const wasSynced = existing._st_synced === true;
+        const status = state.status || 'active';
+        existing.status = status;
+        existing.revision = (existing.revision || 0) + 1;
+        existing.last_confirmed = state.messageCount || existing.last_confirmed || 0;
+        if (status === 'resolved' || status === 'superseded') {
+            existing.valid_to = state.messageCount || existing.last_confirmed;
+            existing.weight = 0;
+        } else {
+            existing.valid_to = null;
+            existing.weight = Math.max(1, existing.weight || 0) + 1;
+        }
 
         // Jaccard guard: only append if description is sufficiently different (>60% new content)
         const jaccard = jaccardSimilarity(existing.description, description, tokenize);
@@ -324,12 +339,26 @@ export function upsertRelationship(graphData, source, target, description, cap =
         if (existing._descriptionTokens > threshold) {
             markEdgeForConsolidation(graphData, edgeKey);
         }
+
+        if (existing.description !== oldDescription) {
+            if (wasSynced) stChanges.toDelete.push({ hash: cyrb53(oldText) });
+            deleteEmbedding(existing);
+            if (existing.status !== 'resolved' && existing.status !== 'superseded') {
+                const text = getEdgeIndexText(existing);
+                stChanges.toSync.push({ hash: cyrb53(text), text, item: existing });
+            }
+        }
     } else {
         const newEdge = {
             source: srcKey,
             target: tgtKey,
             description,
-            weight: 1,
+            weight: state.status === 'resolved' || state.status === 'superseded' ? 0 : 1,
+            status: state.status || 'active',
+            valid_from: state.messageCount || 0,
+            valid_to: state.status === 'resolved' || state.status === 'superseded' ? state.messageCount || 0 : null,
+            last_confirmed: state.messageCount || 0,
+            revision: 1,
             _descriptionTokens: countTokens(description),
         };
         graphData.edges[edgeKey] = newEdge;
@@ -339,7 +368,14 @@ export function upsertRelationship(graphData, source, target, description, cap =
         if (newEdge._descriptionTokens > threshold) {
             markEdgeForConsolidation(graphData, edgeKey);
         }
+
+        if (newEdge.description && newEdge.status !== 'resolved' && newEdge.status !== 'superseded') {
+            const text = getEdgeIndexText(newEdge);
+            stChanges.toSync.push({ hash: cyrb53(text), text, item: newEdge });
+        }
     }
+
+    return stChanges;
 }
 
 /**
@@ -508,31 +544,42 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
     const key = normalizeKey(name);
     const stChanges = { toSync: [], toDelete: [] };
 
-    /** Push updated node to stChanges.toSync */
-    const syncNode = (nodeKey) => {
+    /**
+     * Queue a node for ST sync, deleting the previous indexed payload when
+     * the description changed after a prior sync.
+     */
+    const syncNode = (nodeKey, previousText = undefined, wasSynced = false) => {
         const n = graphData.nodes[nodeKey];
         if (n) {
-            const t = `[OV_ID:${nodeKey}] ${n.description}`;
+            const t = getNodeIndexText(nodeKey, n);
+            if (wasSynced && previousText !== undefined && previousText !== t) {
+                stChanges.toDelete.push({ hash: cyrb53(previousText) });
+                deleteEmbedding(n);
+            }
             stChanges.toSync.push({ hash: cyrb53(t), text: t, item: n });
         }
     };
 
     // Fast path: exact key match
     if (graphData.nodes[key]) {
+        const oldText = getNodeIndexText(key, graphData.nodes[key]);
+        const wasSynced = graphData.nodes[key]._st_synced === true;
         upsertEntity(graphData, name, type, description, cap);
         deduplicateAliases(graphData.nodes[key]);
-        syncNode(key);
+        syncNode(key, oldText, wasSynced);
         return { key, stChanges };
     }
 
     // Persisted aliases are authoritative and must not be rediscovered via cosine.
     const aliasMatch = findExactAliasMatch(graphData, key, type);
     if (aliasMatch) {
+        const oldText = getNodeIndexText(aliasMatch, graphData.nodes[aliasMatch]);
+        const wasSynced = graphData.nodes[aliasMatch]._st_synced === true;
         upsertEntity(graphData, graphData.nodes[aliasMatch].name, type, description, cap);
         deduplicateAliases(graphData.nodes[aliasMatch]);
         if (!graphData._mergeRedirects) graphData._mergeRedirects = {};
         graphData._mergeRedirects[key] = aliasMatch;
-        syncNode(aliasMatch);
+        syncNode(aliasMatch, oldText, wasSynced);
         return { key: aliasMatch, stChanges };
     }
 
@@ -559,13 +606,15 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
                 logDebug(
                     `[graph] Cross-script merge: "${name}" (${key}) → "${node.name}" (${existingKey}), transliterated: "${transliterateCyrToLat(cyrKey)}"`
                 );
+                const oldText = getNodeIndexText(existingKey, node);
+                const wasSynced = node._st_synced === true;
                 upsertEntity(graphData, node.name, type, description, cap);
                 addUniqueAlias(node, name);
                 if (!graphData._mergeRedirects) graphData._mergeRedirects = {};
                 if (key !== existingKey) {
                     graphData._mergeRedirects[key] = existingKey;
                 }
-                syncNode(existingKey);
+                syncNode(existingKey, oldText, wasSynced);
                 return { key: existingKey, stChanges };
             }
         }
@@ -638,6 +687,8 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
         logDebug(
             `[graph] Entity merged: "${name}" (${key}) → "${graphData.nodes[bestMatch].name}" (${bestMatch}), similarity: ${bestScore.toFixed(3)}`
         );
+        const oldText = getNodeIndexText(bestMatch, graphData.nodes[bestMatch]);
+        const wasSynced = graphData.nodes[bestMatch]._st_synced === true;
         upsertEntity(graphData, graphData.nodes[bestMatch].name, type, description, cap);
         // Persist alias for retrieval-time alternate name matching
         addUniqueAlias(graphData.nodes[bestMatch], name);
@@ -646,7 +697,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
         if (key !== bestMatch) {
             graphData._mergeRedirects[key] = bestMatch;
         }
-        syncNode(bestMatch);
+        syncNode(bestMatch, oldText, wasSynced);
         return { key: bestMatch, stChanges };
     }
 
@@ -660,7 +711,7 @@ export async function mergeOrInsertEntity(graphData, name, type, description, ca
     }
 
     const node = graphData.nodes[key];
-    const text = `[OV_ID:${key}] ${node.description}`;
+    const text = getNodeIndexText(key, node);
     stChanges.toSync.push({ hash: cyrb53(text), text, item: node });
 
     return { key, stChanges };
@@ -702,9 +753,7 @@ export async function consolidateEdges(graphData, _settings) {
                     if (result.consolidated_description) {
                         // Queue old embedding for ST deletion before overwrite
                         if (edge._st_synced) {
-                            const oldEdgeId = `edge_${edge.source}_${edge.target}`;
-                            const oldText = `[OV_ID:${oldEdgeId}] ${edge.description}`;
-                            stChanges.toDelete.push({ hash: cyrb53(oldText) });
+                            stChanges.toDelete.push({ hash: cyrb53(getEdgeIndexText(edge)) });
                         }
 
                         edge.description = result.consolidated_description;
@@ -712,15 +761,12 @@ export async function consolidateEdges(graphData, _settings) {
 
                         // Re-embed for accurate RAG (only if embeddings enabled)
                         if (isEmbeddingsEnabled()) {
-                            const newEmbedding = await getDocumentEmbedding(
-                                `relationship: ${edge.source} - ${edge.target}: ${edge.description}`
-                            );
+                            const newEmbedding = await getDocumentEmbedding(getEdgeEmbeddingText(edge));
                             setEmbedding(edge, newEmbedding);
                         }
 
                         // Return edge for ST sync (orchestrator handles bulk I/O)
-                        const edgeId = `edge_${edge.source}_${edge.target}`;
-                        const text = `[OV_ID:${edgeId}] ${edge.description}`;
+                        const text = getEdgeIndexText(edge);
                         stChanges.toSync.push({ hash: cyrb53(text), text, item: edge });
 
                         return edgeKey;

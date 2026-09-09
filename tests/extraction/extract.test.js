@@ -18,6 +18,7 @@ import {
     synthesizeReflections,
     updateIDFCache,
 } from '../../src/extraction/extract.js';
+import { clearReflectionRetryState } from '../../src/state.js';
 
 /**
  * Standard LLM response data for extraction tests.
@@ -326,6 +327,33 @@ describe('runPhase2Enrichment', () => {
         expect(reflection.summary).toContain('King Aldric');
     });
 
+    it('stops before enrichment when the chat changes during rate spacing', async () => {
+        const sendRequest = vi.fn();
+        const save = vi.fn(async () => true);
+        const data = {
+            memories: [{ id: 'event_1', summary: 'Old chat event' }],
+            reflection_state: {},
+            graph: { nodes: {}, edges: {} },
+        };
+        mockContext.chatMetadata = { openvault: data };
+        setupTestContext({
+            context: mockContext,
+            settings: getExtractionSettings(),
+            deps: {
+                connectionManager: getMockConnectionManager(sendRequest),
+                saveChatConditional: save,
+            },
+        });
+        const pending = runPhase2Enrichment(
+            data,
+            { ...getExtractionSettings(), backfillMaxRPM: Infinity },
+            'test-chat'
+        );
+        mockContext.chatId = 'new-chat';
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        expect(sendRequest).not.toHaveBeenCalled();
+        expect(save).not.toHaveBeenCalled();
+    });
     it('returns early if no memories exist', async () => {
         const sendRequest = vi.fn();
         setupTestContext({
@@ -406,7 +434,7 @@ describe('extractAllMessages Emergency Cut support', () => {
     });
 });
 
-// ── synthesizeReflections accumulator reset (bugfix tests) ──
+// ── synthesizeReflections accumulator retry policy (bugfix tests) ──
 
 // Mock the reflection module to control generateReflections
 // Default implementation passes through to original for other tests
@@ -424,6 +452,7 @@ describe('synthesizeReflections accumulator reset', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
         generateReflections.mockReset();
+        clearReflectionRetryState();
     });
 
     afterEach(() => {
@@ -431,7 +460,7 @@ describe('synthesizeReflections accumulator reset', () => {
         vi.clearAllMocks();
     });
 
-    it('should reset importance_sum even when LLM fails', async () => {
+    it('should restore importance_sum when LLM fails', async () => {
         const data = {
             reflection_state: {
                 TestCharacter: { importance_sum: 45 },
@@ -469,8 +498,8 @@ describe('synthesizeReflections accumulator reset', () => {
 
         await synthesizeReflections(data, ['TestCharacter'], settings);
 
-        // importance_sum should be reset even though LLM failed
-        expect(data.reflection_state.TestCharacter.importance_sum).toBe(0);
+        // The consumed trigger is restored so a later, bounded retry can use it.
+        expect(data.reflection_state.TestCharacter.importance_sum).toBe(45);
     });
 
     it('should not retry failed reflection on next call', async () => {
@@ -511,9 +540,130 @@ describe('synthesizeReflections accumulator reset', () => {
         await synthesizeReflections(data, ['TestCharacter'], settings);
         expect(generateReflections).toHaveBeenCalledTimes(1);
 
-        // Second call - importance_sum is now 0, should NOT attempt reflection
+        // Second call - the restored trigger is in cooldown, so it should NOT
+        // charge another LLM request immediately.
         await synthesizeReflections(data, ['TestCharacter'], settings);
         expect(generateReflections).toHaveBeenCalledTimes(1); // Still 1, not 2
+        expect(data.reflection_state.TestCharacter.importance_sum).toBe(45);
+    });
+
+    it('consumes the trigger after an empty successful response', async () => {
+        const data = {
+            reflection_state: {
+                TestCharacter: { importance_sum: 45 },
+            },
+            memories: [],
+            characters: {},
+        };
+        const settings = { reflectionThreshold: 40, maxConcurrency: 1 };
+        generateReflections.mockResolvedValue({ reflections: [], stChanges: { toSync: [], toDelete: [] } });
+        setupTestContext({
+            context: { chat: [], chatMetadata: { openvault: data } },
+            settings,
+            deps: { saveChatConditional: vi.fn(async () => true) },
+        });
+
+        await synthesizeReflections(data, ['TestCharacter'], settings);
+
+        expect(generateReflections).toHaveBeenCalledTimes(1);
+        expect(data.reflection_state.TestCharacter.importance_sum).toBe(0);
+    });
+
+    it('restores only consumed importance when extraction adds importance concurrently', async () => {
+        const data = {
+            reflection_state: {
+                TestCharacter: { importance_sum: 45 },
+            },
+            memories: [],
+            characters: {},
+        };
+        const settings = { reflectionThreshold: 40, maxConcurrency: 1 };
+        let rejectGeneration;
+        generateReflections.mockImplementation(
+            () =>
+                new Promise((_, reject) => {
+                    rejectGeneration = reject;
+                })
+        );
+        setupTestContext({
+            context: { chat: [], chatMetadata: { openvault: data } },
+            settings,
+            deps: { saveChatConditional: vi.fn(async () => true) },
+        });
+
+        const synthesis = synthesizeReflections(data, ['TestCharacter'], settings);
+        await vi.waitFor(() => expect(generateReflections).toHaveBeenCalledTimes(1));
+        data.reflection_state.TestCharacter.importance_sum += 7;
+        rejectGeneration(new Error('concurrent timeout'));
+        await synthesis;
+
+        expect(data.reflection_state.TestCharacter.importance_sum).toBe(52);
+    });
+
+    it('allows a bounded retry after cooldown and suppresses repeated failures', async () => {
+        let now = 1_000_000;
+        const data = {
+            reflection_state: {
+                TestCharacter: { importance_sum: 45 },
+            },
+            memories: [],
+            characters: {},
+        };
+        const settings = {
+            reflectionThreshold: 40,
+            maxConcurrency: 1,
+            reflectionRetryCooldownMs: 100,
+            reflectionRetryMaxFailures: 2,
+        };
+        generateReflections
+            .mockRejectedValueOnce(new Error('first timeout'))
+            .mockRejectedValueOnce(new Error('second timeout'))
+            .mockResolvedValue({ reflections: [], stChanges: { toSync: [], toDelete: [] } });
+        setupTestContext({
+            context: { chat: [], chatId: 'retry-chat', chatMetadata: { openvault: data } },
+            settings,
+            deps: { Date: { now: () => now }, saveChatConditional: vi.fn(async () => true) },
+        });
+
+        await synthesizeReflections(data, ['TestCharacter'], settings);
+        await synthesizeReflections(data, ['TestCharacter'], settings);
+        expect(generateReflections).toHaveBeenCalledTimes(1);
+        now += 101;
+        await synthesizeReflections(data, ['TestCharacter'], settings);
+        expect(generateReflections).toHaveBeenCalledTimes(2);
+        now += 101;
+        await synthesizeReflections(data, ['TestCharacter'], settings);
+
+        expect(generateReflections).toHaveBeenCalledTimes(2);
+        expect(data.reflection_state.TestCharacter.importance_sum).toBe(45);
+    });
+
+    it('restores the trigger for AbortError without recording a retry marker', async () => {
+        const data = {
+            reflection_state: {
+                TestCharacter: { importance_sum: 45 },
+            },
+            memories: [],
+            characters: {},
+        };
+        const settings = { reflectionThreshold: 40, maxConcurrency: 1 };
+        generateReflections
+            .mockRejectedValueOnce(new DOMException('Aborted', 'AbortError'))
+            .mockResolvedValueOnce({ reflections: [], stChanges: { toSync: [], toDelete: [] } });
+        setupTestContext({
+            context: { chat: [], chatId: 'cancel-chat', chatMetadata: { openvault: data } },
+            settings,
+            deps: { saveChatConditional: vi.fn(async () => true) },
+        });
+
+        await expect(synthesizeReflections(data, ['TestCharacter'], settings)).rejects.toThrow(
+            expect.objectContaining({ name: 'AbortError' })
+        );
+        expect(data.reflection_state.TestCharacter.importance_sum).toBe(45);
+        await synthesizeReflections(data, ['TestCharacter'], settings);
+
+        expect(generateReflections).toHaveBeenCalledTimes(2);
+        expect(data.reflection_state.TestCharacter.importance_sum).toBe(0);
     });
 });
 

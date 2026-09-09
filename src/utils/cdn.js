@@ -55,8 +55,12 @@ const CDN_VERSIONS = Object.freeze({
  * @param {string} packageSpec
  * @returns {string}
  */
-function resolveVersion(packageSpec) {
-    const base = packageSpec.split('/')[0];
+export function resolveVersion(packageSpec) {
+    // A scoped package root contains two slash-delimited components.  Treating
+    // only the first component as the root turns `@scope/name` into `@scope@v`,
+    // which every supported CDN interprets as an invalid package specifier.
+    const parts = packageSpec.split('/');
+    const base = packageSpec.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
     const version = CDN_VERSIONS[base];
     if (!version) return packageSpec;
     return packageSpec === base ? `${base}@${version}` : `${base}@${version}/${packageSpec.slice(base.length + 1)}`;
@@ -69,6 +73,56 @@ const MIRRORS = [
     (pkg) => `https://esm.run/${pkg}`,
     (pkg) => `https://unpkg.com/${pkg}?module`, // ?module forces ESM mode
 ];
+
+/** @type {((url: string) => Promise<object>) | null} */
+let _testImporter = null;
+
+/** @type {((message: string, data?: unknown) => void) | null} */
+let _cdnWarningLogger = null;
+
+/**
+ * Install a warning sink for tests or the host bootstrap.
+ * @param {((message: string, data?: unknown) => void) | null} logger
+ */
+export function _setCdnWarningLogger(logger) {
+    _cdnWarningLogger = logger;
+}
+
+/**
+ * Install a test-only URL importer so mirror pinning can be checked without
+ * network access. Passing null restores browser dynamic imports.
+ * @param {((url: string) => Promise<object>) | null} importer
+ */
+export function _setTestImporter(importer) {
+    _testImporter = importer;
+}
+
+/**
+ * Build every mirror URL for a package specifier.
+ * @param {string} packageSpec
+ * @returns {string[]}
+ */
+export function getCdnUrls(packageSpec) {
+    const pinnedSpec = resolveVersion(packageSpec);
+    return MIRRORS.map((mirror) => mirror(pinnedSpec));
+}
+
+/**
+ * CDN loading is imported by schema/type-generation bootstraps before the
+ * dependency facade is available. Keep this narrow warning path cycle-free;
+ * normal runtime modules use `utils/logging.js` instead.
+ * @param {string} message
+ * @param {unknown} [data]
+ */
+function logCdnWarning(message, data) {
+    if (_cdnWarningLogger) {
+        _cdnWarningLogger(message, data);
+        return;
+    }
+    // Deliberate bootstrap exception: importing deps.js here would load the
+    // SillyTavern runtime while scripts/generate-types.js is still starting.
+    globalThis.console?.warn?.(`[OpenVault] ${message}`, data);
+}
 
 /** Full mirror cycle repeated this many times before giving up. */
 const MAX_ROUNDS = 2;
@@ -113,21 +167,21 @@ export async function cdnImport(packageSpec) {
     // Application-level cache — same package spec never fetched twice
     if (cache.has(packageSpec)) return cache.get(packageSpec);
 
-    // Resolve pinned version for CDN URL, but cache/test-lookup uses bare spec
-    const pinnedSpec = resolveVersion(packageSpec);
-
     let lastError;
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
-        for (const mirror of MIRRORS) {
-            const url = mirror(pinnedSpec);
+        for (const url of getCdnUrls(packageSpec)) {
             try {
-                const mod = await import(/* webpackIgnore: true */ url);
+                const mod = _testImporter ? await _testImporter(url) : await import(/* webpackIgnore: true */ url);
                 cache.set(packageSpec, mod);
                 return mod;
             } catch (err) {
                 lastError = err;
-                console.warn(`[OpenVault CDN] ${url} failed (round ${round + 1}/${MAX_ROUNDS}): ${err.message}`);
+                logCdnWarning(`CDN import failed (round ${round + 1}/${MAX_ROUNDS})`, {
+                    packageSpec,
+                    url,
+                    error: err instanceof Error ? err.message : String(err),
+                });
             }
         }
     }

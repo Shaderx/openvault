@@ -16,13 +16,14 @@ export const GRAPH_RULES = `Extract named entities mentioned or clearly implied 
 - ${ENTITY_TYPES.CONCEPT}: Named abilities, spells, diseases, prophecies, or strict dietary/lifestyle requirements (e.g., "Peanut Allergy", "Veganism"). Do NOT extract temporary physical states (e.g., "soreness", "arousal") as concepts.
 
 Also extract relationships between pairs of entities when the connection is stated or clearly implied. Do NOT re-describe existing static relationships unless a specific progression or change occurred in this batch.
+Mark each relationship active, weakened, resolved, or superseded. If the text ends, reverses, or replaces an earlier relationship, emit the affected pair with resolved/superseded status and describe the current fact. Do not leave obsolete alliances, ownership, locations, or conflicts active.
 
 IMPORTANT: Capture durable character preferences as relationships (e.g., Character -> CONCEPT: "Strongly dislikes").
 
 IMPORTANT: Extract entities and relationships even when no events are extracted. Entity data builds world knowledge over time and is always valuable. Limit output to the most significant updates per batch.
 
 <draft_process>
-Think step by step, but only keep a minimal draft for each step, with 8 words at most per step. Use symbols: -> for causation/actions, + for conjunction, != for contrast. Write your work inside<think> tags BEFORE outputting the JSON:
+Think step by step, but only keep a minimal draft for each step, with 8 words at most per step. Use symbols: -> for causation/actions, + for conjunction, != for contrast. Write your work inside <think> tags BEFORE outputting the JSON:
 
 Step 1: Scan -> list Entity(type) mentioned or implied.
 Step 2: Validate types (${Object.values(ENTITY_TYPES).join(', ')}); skip mundane.

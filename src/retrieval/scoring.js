@@ -14,6 +14,7 @@
 /** @typedef {import('../types').ForgetfulnessConstants} ForgetfulnessConstants */
 /** @typedef {import('../types').ScoringSettings} ScoringSettings */
 /** @typedef {import('../types').IDFCache} IDFCache */
+/** @typedef {RetrievalContext & { stResults?: Object[] }} StRetrievalContext */
 
 import { DEBUG_TRIMMED_CANDIDATES, OVER_FETCH_MULTIPLIER } from '../constants.js';
 import { getQueryEmbedding, getStrategy, isEmbeddingsEnabled } from '../embeddings.js';
@@ -89,7 +90,7 @@ async function scoreMemoriesDirect(
 /**
  * Select relevant memories using forgetfulness curve scoring
  * @param {Memory[]} memories - Available memories
- * @param {RetrievalContext} ctx - Retrieval context object
+ * @param {StRetrievalContext} ctx - Retrieval context object
  * @param {number} limit - Maximum memories to return
  * @param {Memory[]} [allHiddenMemories] - All hidden memories for IDF corpus
  * @param {IDFCache|null} [idfCache] - Pre-computed IDF cache
@@ -180,7 +181,7 @@ async function selectRelevantMemoriesSimple(memories, ctx, limit, allHiddenMemor
  * Select relevant memories using ST Vector Storage + Alpha-Blend reranking.
  * Over-fetches from ST, assigns rank-position proxy scores, then feeds into scoreMemories.
  * @param {Memory[]} memories - Available memories
- * @param {RetrievalContext} ctx - Retrieval context object
+ * @param {StRetrievalContext} ctx - Retrieval context object
  * @param {number} limit - Maximum memories to return
  * @param {Memory[]} allHiddenMemories - All hidden memories for IDF corpus
  * @param {IDFCache|null} idfCache - Pre-computed IDF cache
@@ -201,11 +202,17 @@ export async function selectRelevantMemoriesWithST(
 
     // Over-fetch from ST for reranking headroom
     const stTopK = limit * OVER_FETCH_MULTIPLIER;
-    const stResults = await strategy.searchItems(
-        userMessages || recentContext?.slice(-500) || '',
-        stTopK,
-        scoringConfig.vectorSimilarityThreshold
-    );
+    // The retrieval orchestrator may prefetch this lookup so community IDs can
+    // be selected before world-context budgeting. An explicitly supplied empty
+    // array is meaningful: it means the lookup completed without matches and
+    // must not be repeated.
+    const stResults = Array.isArray(ctx.stResults)
+        ? ctx.stResults
+        : await strategy.searchItems(
+              userMessages || recentContext?.slice(-500) || '',
+              stTopK,
+              scoringConfig.vectorSimilarityThreshold
+          );
 
     // Build lookup map for memories and communities
     const memoriesById = new Map(memories.map((m) => [m.id, m]));
@@ -316,6 +323,39 @@ export async function selectRelevantMemoriesWithST(
         ...fallbackResult,
         communityIds: communityResults,
     };
+}
+
+/**
+ * Prefetch one ST Vector lookup for the complete retrieval pipeline.
+ *
+ * Community summaries and memories share the ST collection, so this result is
+ * intentionally returned to the caller instead of issuing a second search
+ * after the world-context budget is known.
+ *
+ * @param {StRetrievalContext} ctx - Retrieval context
+ * @param {number} [limit=1000] - Number of memory candidates before over-fetch
+ * @returns {Promise<{stResults: Object[], communityIds: string[]}|null>}
+ */
+export async function prefetchSTResults(ctx, limit = 1000) {
+    const source = ctx.scoringConfig?.embeddingSource;
+    const strategy = getStrategy(source);
+    if (!strategy.usesExternalStorage()) return null;
+
+    const stTopK = limit * OVER_FETCH_MULTIPLIER;
+    const stResults = await strategy.searchItems(
+        ctx.userMessages || ctx.recentContext?.slice(-500) || '',
+        stTopK,
+        ctx.scoringConfig.vectorSimilarityThreshold
+    );
+    const communities = ctx.communities || {};
+    const communityIds = [];
+    const seen = new Set();
+    for (const result of Array.isArray(stResults) ? stResults : []) {
+        if (!communities[result.id] || seen.has(result.id)) continue;
+        seen.add(result.id);
+        communityIds.push(result.id);
+    }
+    return { stResults: Array.isArray(stResults) ? stResults : [], communityIds };
 }
 
 /**

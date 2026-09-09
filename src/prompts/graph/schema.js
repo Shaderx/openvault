@@ -18,7 +18,8 @@ export const GRAPH_SCHEMA = `Output EXACTLY ONE JSON object with this structure:
     {
       "source": "Entity A",
       "target": "Entity B",
-      "description": "How A relates to B"
+      "description": "How A currently relates to B",
+      "status": "active"
     }
   ]
 }
@@ -28,7 +29,8 @@ FORMAT RULES:
 2. BOTH keys ("entities", "relationships") MUST always be present. If nothing found: empty arrays. Do not just stop generating.
 3. Do NOT wrap in markdown code blocks.
 4. "type" MUST be one of: ${Object.values(ENTITY_TYPES).join(', ')}.
-5. NEVER use string concatenation ("+") inside JSON values. Write all text as a single, unbroken line within the quotes.`;
+5. Relationship "status" MUST be active, weakened, resolved, or superseded.
+6. NEVER use string concatenation ("+") inside JSON values. Write all text as a single, unbroken line within the quotes.`;
 
 export const EDGE_CONSOLIDATION_SCHEMA = `Output EXACTLY ONE JSON object with this structure:
 

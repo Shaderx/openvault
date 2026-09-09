@@ -16,6 +16,71 @@ let _sessionController = new AbortController();
 // Unlike global settings, this only affects the current chat session
 let _sessionDisabled = false;
 
+/** @typedef {{failures: number, nextRetryAt: number, suppressed: boolean}} ReflectionRetryMarker */
+
+// Reflection transport failures are retried per character, but only inside
+// the current chat session. A chat change clears this map with the session
+// controller so a failure in one chat cannot suppress another chat's work.
+/** @type {Map<string, ReflectionRetryMarker>} */
+const _reflectionRetryMarkers = new Map();
+
+/**
+ * Return a copy of the current character retry marker.
+ * @param {string} characterName
+ * @returns {ReflectionRetryMarker | null}
+ */
+export function getReflectionRetryMarker(characterName) {
+    const marker = _reflectionRetryMarkers.get(characterName);
+    return marker ? { ...marker } : null;
+}
+
+/**
+ * Check whether a character's failed reflection should wait before retrying.
+ * @param {string} characterName
+ * @param {number} [now]
+ * @returns {boolean}
+ */
+export function isReflectionRetrySuppressed(characterName, now = getDeps().Date.now()) {
+    const marker = _reflectionRetryMarkers.get(characterName);
+    if (!marker) return false;
+    return marker.suppressed || marker.nextRetryAt > Number(now);
+}
+
+/**
+ * Record one non-cancellation reflection failure.
+ * @param {string} characterName
+ * @param {number} cooldownMs
+ * @param {number} maxFailures
+ * @param {number} [now]
+ * @returns {ReflectionRetryMarker}
+ */
+export function recordReflectionRetryFailure(characterName, cooldownMs, maxFailures, now = getDeps().Date.now()) {
+    const previous = _reflectionRetryMarkers.get(characterName);
+    const boundedMaxFailures = Number.isFinite(Number(maxFailures)) ? Math.max(1, Math.floor(Number(maxFailures))) : 1;
+    const boundedCooldownMs = Number.isFinite(Number(cooldownMs)) ? Math.max(0, Number(cooldownMs)) : 0;
+    const failures = Math.min((previous?.failures || 0) + 1, boundedMaxFailures);
+    const marker = {
+        failures,
+        nextRetryAt: Number(now) + boundedCooldownMs,
+        suppressed: failures >= boundedMaxFailures,
+    };
+    _reflectionRetryMarkers.set(characterName, marker);
+    return { ...marker };
+}
+
+/**
+ * Clear a character marker after successful generation.
+ * @param {string} characterName
+ */
+export function clearReflectionRetry(characterName) {
+    _reflectionRetryMarkers.delete(characterName);
+}
+
+/** Clear all session-scoped reflection retry markers. */
+export function clearReflectionRetryState() {
+    _reflectionRetryMarkers.clear();
+}
+
 /**
  * Get the current session's AbortSignal.
  * Leaf I/O functions (callLLM, embedding) read this as their default signal.
@@ -33,6 +98,7 @@ export function resetSessionController() {
     _sessionController.abort();
     _sessionController = new AbortController();
     _sessionDisabled = false; // Reset kill-switch on chat change
+    clearReflectionRetryState();
 }
 
 /**

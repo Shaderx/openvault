@@ -66,22 +66,33 @@ export function retrieveWorldContext(
     const settings = getSettings();
     const isStVectorMode = settings?.embeddingSource === 'st_vector';
 
-    if (isStVectorMode && stCommunityIds && stCommunityIds.length > 0) {
+    if (isStVectorMode && Array.isArray(stCommunityIds) && stCommunityIds.length > 0) {
         const selected = [];
+        const selectedIds = [];
         let usedTokens = 0;
+        const seenIds = new Set();
         for (const id of stCommunityIds) {
+            if (seenIds.has(id)) continue;
+            seenIds.add(id);
             const community = communities[id];
-            if (!community?.summary) continue;
+            if (
+                !community?.summary ||
+                community.status === 'stale' ||
+                community.status === 'dissolved' ||
+                community.lineage?.children?.length > 0
+            )
+                continue;
             const entry = formatCommunityEntry(community);
             const tokens = countTokens(entry);
             if (usedTokens + tokens > tokenBudget) break;
             selected.push(entry);
+            selectedIds.push(id);
             usedTokens += tokens;
         }
-        if (selected.length === 0) return { text: '', communityIds: stCommunityIds, isMacroIntent: false };
+        if (selected.length === 0) return { text: '', communityIds: [], isMacroIntent: false };
         return {
             text: '<world_context>\n' + selected.join('\n\n') + '\n</world_context>',
-            communityIds: stCommunityIds,
+            communityIds: selectedIds,
             isMacroIntent: false,
         };
     }
@@ -94,6 +105,8 @@ export function retrieveWorldContext(
     // Score communities by cosine similarity (local mode only)
     const scored = [];
     for (const [id, community] of Object.entries(communities)) {
+        if (community.status === 'stale' || community.status === 'dissolved' || community.lineage?.children?.length > 0)
+            continue;
         if (!hasEmbedding(community)) continue;
         const score = cosineSimilarity(queryEmbedding, getEmbedding(community));
         scored.push({ id, community, score });

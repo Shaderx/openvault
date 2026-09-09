@@ -425,15 +425,12 @@ export function renderEntityMergePicker(sourceKey, sourceNode, graphNodes) {
         .flatMap(([key, node]) => {
             const displayName = escapeHtml(node.name || key);
             const typeLabel = node.type ? ` [${node.type}]` : '';
-            const primaryOption = `<option value="${displayName}${typeLabel}" data-key="${escapeHtml(key)}">`;
+            const primaryOption = `<option value="${displayName}${typeLabel}">`;
 
             // Also add alias options pointing to same entity
             const aliasOptions = (node.aliases || [])
                 .filter((alias) => alias !== node.name)
-                .map(
-                    (alias) =>
-                        `<option value="${escapeHtml(alias)} [alias of ${displayName}]" data-key="${escapeHtml(key)}">`
-                );
+                .map((alias) => `<option value="${escapeHtml(alias)} [alias of ${displayName}]">`);
 
             return [primaryOption, ...aliasOptions];
         })

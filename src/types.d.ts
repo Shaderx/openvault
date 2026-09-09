@@ -20,6 +20,8 @@ export type Memory = {
     archived?: boolean | undefined;
     temporal_anchor?: (string | null) | undefined;
     is_transient?: boolean | undefined;
+    is_secret?: boolean | undefined;
+    coverage_fallback?: boolean | undefined;
     _st_synced?: boolean | undefined;
     _proxyVectorScore?: number | undefined;
 };
@@ -44,6 +46,11 @@ export type GraphEdge = {
     embedding?: number[] | undefined;
     embedding_b64?: string | undefined;
     _st_synced?: boolean | undefined;
+    status?: ("active" | "weakened" | "resolved" | "superseded") | undefined;
+    valid_from?: number | undefined;
+    valid_to?: (number | null) | undefined;
+    last_confirmed?: number | undefined;
+    revision?: number | undefined;
 };
 
 export type GraphData = {
@@ -69,6 +76,11 @@ export type GraphData = {
             embedding?: number[] | undefined;
             embedding_b64?: string | undefined;
             _st_synced?: boolean | undefined;
+            status?: ("active" | "weakened" | "resolved" | "superseded") | undefined;
+            valid_from?: number | undefined;
+            valid_to?: (number | null) | undefined;
+            last_confirmed?: number | undefined;
+            revision?: number | undefined;
         };
     };
     _mergeRedirects?: {
@@ -112,6 +124,8 @@ export type ScoredMemory = {
         archived?: boolean | undefined;
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
+        is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     };
@@ -147,6 +161,7 @@ export type Relationship = {
     target: string;
     /** Description of the relationship */
     description: string;
+    status: "active" | "weakened" | "resolved" | "superseded";
 };
 
 export type ExtractedEvent = {
@@ -164,6 +179,7 @@ export type ExtractedEvent = {
     relationship_impact: {
         [key: string]: string;
     } | undefined;
+    source_message_ids?: number[] | undefined;
 };
 
 export type EventExtraction = {
@@ -182,6 +198,7 @@ export type EventExtraction = {
         relationship_impact: {
             [key: string]: string;
         } | undefined;
+        source_message_ids?: number[] | undefined;
     }[];
 };
 
@@ -200,6 +217,7 @@ export type GlobalWorldState = {
     summary: string;
     last_updated: number;
     community_count: number;
+    community_revision?: number | undefined;
 };
 
 export type CommunitySummary = {
@@ -209,6 +227,22 @@ export type CommunitySummary = {
     entities?: string[] | undefined;
     findings?: string[] | undefined;
     last_updated?: number | undefined;
+    nodeKeys?: string[] | undefined;
+    inputHash?: string | undefined;
+    status?: ("active" | "stale" | "dissolved") | undefined;
+    lineage?: {
+        parents: string[];
+        children: string[];
+    } | undefined;
+    boundaryEdges?: string[] | undefined;
+    retrievalText?: string | undefined;
+    lastKnownSummary?: string | undefined;
+    parentId?: string | undefined;
+    parentInputHash?: string | undefined;
+    pendingSplitHash?: string | undefined;
+    embedding_b64?: string | undefined;
+    embedding?: number[] | undefined;
+    _st_synced?: boolean | undefined;
 };
 
 export type OpenVaultData = {
@@ -232,6 +266,8 @@ export type OpenVaultData = {
         archived?: boolean | undefined;
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
+        is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[] | undefined;
@@ -266,6 +302,11 @@ export type OpenVaultData = {
                 embedding?: number[] | undefined;
                 embedding_b64?: string | undefined;
                 _st_synced?: boolean | undefined;
+                status?: ("active" | "weakened" | "resolved" | "superseded") | undefined;
+                valid_from?: number | undefined;
+                valid_to?: (number | null) | undefined;
+                last_confirmed?: number | undefined;
+                revision?: number | undefined;
             };
         };
         _mergeRedirects?: {
@@ -281,6 +322,22 @@ export type OpenVaultData = {
             entities?: string[] | undefined;
             findings?: string[] | undefined;
             last_updated?: number | undefined;
+            nodeKeys?: string[] | undefined;
+            inputHash?: string | undefined;
+            status?: ("active" | "stale" | "dissolved") | undefined;
+            lineage?: {
+                parents: string[];
+                children: string[];
+            } | undefined;
+            boundaryEdges?: string[] | undefined;
+            retrievalText?: string | undefined;
+            lastKnownSummary?: string | undefined;
+            parentId?: string | undefined;
+            parentInputHash?: string | undefined;
+            pendingSplitHash?: string | undefined;
+            embedding_b64?: string | undefined;
+            embedding?: number[] | undefined;
+            _st_synced?: boolean | undefined;
         };
     } | undefined;
     reflection_state?: {
@@ -292,8 +349,77 @@ export type OpenVaultData = {
         summary: string;
         last_updated: number;
         community_count: number;
+        community_revision?: number | undefined;
     } | undefined;
+    community_state_revision?: number | undefined;
     embedding_model_id?: string | undefined;
+    lifecycle: {
+        status: "ready" | "needs_rebuild" | "rebuilding" | "rebuild_failed";
+        reason?: string | undefined;
+        detected_at?: number | undefined;
+        rebuild_id?: string | undefined;
+        boundary?: number | undefined;
+        processed?: number | undefined;
+        error?: string | undefined;
+        rebuilt_at?: number | undefined;
+        restored?: number | undefined;
+        missing_source_warning?: boolean | undefined;
+    };
+    archives: {
+        revision: number;
+        segments: {
+            id: string;
+            sequence: number;
+            state: "prepared" | "sealed" | "inactive";
+            active: boolean;
+            sources: {
+                index: number;
+                fingerprint: string;
+                role: "user" | "assistant";
+            }[];
+            memory_ids: string[];
+            content: string;
+            content_hash: string;
+            token_count: number;
+            prepared_at: number;
+            sealed_at?: number | undefined;
+            rollup_required?: boolean | undefined;
+            entries?: {
+                memory_id: string;
+                integrity: string;
+                kind: "event" | "fallback" | "correction";
+                importance: number;
+                summary: string;
+                temporal_anchor?: (string | null) | undefined;
+                source_fingerprints: string[];
+                source_start?: number | undefined;
+                source_end?: number | undefined;
+                is_secret?: boolean | undefined;
+                witnesses?: string[] | undefined;
+            }[] | undefined;
+            entries_hash?: string | undefined;
+            coverage_complete?: boolean | undefined;
+        }[];
+        next_sequence: number;
+        rollups: string[];
+        projection?: {
+            revision: number;
+            budget: number;
+            entry_ids: string[];
+            content: string;
+            content_hash: string;
+            token_count: number;
+            built_at: number;
+            rollup_required?: boolean | undefined;
+            settings_signature?: string | undefined;
+        } | undefined;
+    };
+    recovery_backup?: {
+        [key: string]: unknown;
+    } | undefined;
+    diagnostics: {
+        [key: string]: unknown;
+    };
 };
 
 export type StVectorItem = {
@@ -359,6 +485,8 @@ export type StSyncChanges = {
             archived?: boolean | undefined;
             temporal_anchor?: (string | null) | undefined;
             is_transient?: boolean | undefined;
+            is_secret?: boolean | undefined;
+            coverage_fallback?: boolean | undefined;
             _st_synced?: boolean | undefined;
             _proxyVectorScore?: number | undefined;
         } | {
@@ -379,6 +507,11 @@ export type StSyncChanges = {
             embedding?: number[] | undefined;
             embedding_b64?: string | undefined;
             _st_synced?: boolean | undefined;
+            status?: ("active" | "weakened" | "resolved" | "superseded") | undefined;
+            valid_from?: number | undefined;
+            valid_to?: (number | null) | undefined;
+            last_confirmed?: number | undefined;
+            revision?: number | undefined;
         } | {
             id: string;
             title: string;
@@ -386,6 +519,22 @@ export type StSyncChanges = {
             entities?: string[] | undefined;
             findings?: string[] | undefined;
             last_updated?: number | undefined;
+            nodeKeys?: string[] | undefined;
+            inputHash?: string | undefined;
+            status?: ("active" | "stale" | "dissolved") | undefined;
+            lineage?: {
+                parents: string[];
+                children: string[];
+            } | undefined;
+            boundaryEdges?: string[] | undefined;
+            retrievalText?: string | undefined;
+            lastKnownSummary?: string | undefined;
+            parentId?: string | undefined;
+            parentInputHash?: string | undefined;
+            pendingSplitHash?: string | undefined;
+            embedding_b64?: string | undefined;
+            embedding?: number[] | undefined;
+            _st_synced?: boolean | undefined;
         };
     }[] | undefined;
     toDelete?: {
@@ -445,6 +594,8 @@ export type GenerateReflectionsResult = {
         archived?: boolean | undefined;
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
+        is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[];
@@ -471,6 +622,8 @@ export type GenerateReflectionsResult = {
                 archived?: boolean | undefined;
                 temporal_anchor?: (string | null) | undefined;
                 is_transient?: boolean | undefined;
+                is_secret?: boolean | undefined;
+                coverage_fallback?: boolean | undefined;
                 _st_synced?: boolean | undefined;
                 _proxyVectorScore?: number | undefined;
             } | {
@@ -491,6 +644,11 @@ export type GenerateReflectionsResult = {
                 embedding?: number[] | undefined;
                 embedding_b64?: string | undefined;
                 _st_synced?: boolean | undefined;
+                status?: ("active" | "weakened" | "resolved" | "superseded") | undefined;
+                valid_from?: number | undefined;
+                valid_to?: (number | null) | undefined;
+                last_confirmed?: number | undefined;
+                revision?: number | undefined;
             } | {
                 id: string;
                 title: string;
@@ -498,6 +656,22 @@ export type GenerateReflectionsResult = {
                 entities?: string[] | undefined;
                 findings?: string[] | undefined;
                 last_updated?: number | undefined;
+                nodeKeys?: string[] | undefined;
+                inputHash?: string | undefined;
+                status?: ("active" | "stale" | "dissolved") | undefined;
+                lineage?: {
+                    parents: string[];
+                    children: string[];
+                } | undefined;
+                boundaryEdges?: string[] | undefined;
+                retrievalText?: string | undefined;
+                lastKnownSummary?: string | undefined;
+                parentId?: string | undefined;
+                parentInputHash?: string | undefined;
+                pendingSplitHash?: string | undefined;
+                embedding_b64?: string | undefined;
+                embedding?: number[] | undefined;
+                _st_synced?: boolean | undefined;
             };
         }[] | undefined;
         toDelete?: {
@@ -531,6 +705,8 @@ export type ConsolidateEdgesResult = {
                 archived?: boolean | undefined;
                 temporal_anchor?: (string | null) | undefined;
                 is_transient?: boolean | undefined;
+                is_secret?: boolean | undefined;
+                coverage_fallback?: boolean | undefined;
                 _st_synced?: boolean | undefined;
                 _proxyVectorScore?: number | undefined;
             } | {
@@ -551,6 +727,11 @@ export type ConsolidateEdgesResult = {
                 embedding?: number[] | undefined;
                 embedding_b64?: string | undefined;
                 _st_synced?: boolean | undefined;
+                status?: ("active" | "weakened" | "resolved" | "superseded") | undefined;
+                valid_from?: number | undefined;
+                valid_to?: (number | null) | undefined;
+                last_confirmed?: number | undefined;
+                revision?: number | undefined;
             } | {
                 id: string;
                 title: string;
@@ -558,6 +739,22 @@ export type ConsolidateEdgesResult = {
                 entities?: string[] | undefined;
                 findings?: string[] | undefined;
                 last_updated?: number | undefined;
+                nodeKeys?: string[] | undefined;
+                inputHash?: string | undefined;
+                status?: ("active" | "stale" | "dissolved") | undefined;
+                lineage?: {
+                    parents: string[];
+                    children: string[];
+                } | undefined;
+                boundaryEdges?: string[] | undefined;
+                retrievalText?: string | undefined;
+                lastKnownSummary?: string | undefined;
+                parentId?: string | undefined;
+                parentInputHash?: string | undefined;
+                pendingSplitHash?: string | undefined;
+                embedding_b64?: string | undefined;
+                embedding?: number[] | undefined;
+                _st_synced?: boolean | undefined;
             };
         }[] | undefined;
         toDelete?: {
@@ -591,6 +788,8 @@ export type MergeEntityResult = {
                 archived?: boolean | undefined;
                 temporal_anchor?: (string | null) | undefined;
                 is_transient?: boolean | undefined;
+                is_secret?: boolean | undefined;
+                coverage_fallback?: boolean | undefined;
                 _st_synced?: boolean | undefined;
                 _proxyVectorScore?: number | undefined;
             } | {
@@ -611,6 +810,11 @@ export type MergeEntityResult = {
                 embedding?: number[] | undefined;
                 embedding_b64?: string | undefined;
                 _st_synced?: boolean | undefined;
+                status?: ("active" | "weakened" | "resolved" | "superseded") | undefined;
+                valid_from?: number | undefined;
+                valid_to?: (number | null) | undefined;
+                last_confirmed?: number | undefined;
+                revision?: number | undefined;
             } | {
                 id: string;
                 title: string;
@@ -618,6 +822,22 @@ export type MergeEntityResult = {
                 entities?: string[] | undefined;
                 findings?: string[] | undefined;
                 last_updated?: number | undefined;
+                nodeKeys?: string[] | undefined;
+                inputHash?: string | undefined;
+                status?: ("active" | "stale" | "dissolved") | undefined;
+                lineage?: {
+                    parents: string[];
+                    children: string[];
+                } | undefined;
+                boundaryEdges?: string[] | undefined;
+                retrievalText?: string | undefined;
+                lastKnownSummary?: string | undefined;
+                parentId?: string | undefined;
+                parentInputHash?: string | undefined;
+                pendingSplitHash?: string | undefined;
+                embedding_b64?: string | undefined;
+                embedding?: number[] | undefined;
+                _st_synced?: boolean | undefined;
             };
         }[] | undefined;
         toDelete?: {
@@ -704,6 +924,11 @@ export type RetrievalContext = {
             embedding?: number[] | undefined;
             embedding_b64?: string | undefined;
             _st_synced?: boolean | undefined;
+            status?: ("active" | "weakened" | "resolved" | "superseded") | undefined;
+            valid_from?: number | undefined;
+            valid_to?: (number | null) | undefined;
+            last_confirmed?: number | undefined;
+            revision?: number | undefined;
         };
     } | undefined;
     communities?: {
@@ -714,6 +939,22 @@ export type RetrievalContext = {
             entities?: string[] | undefined;
             findings?: string[] | undefined;
             last_updated?: number | undefined;
+            nodeKeys?: string[] | undefined;
+            inputHash?: string | undefined;
+            status?: ("active" | "stale" | "dissolved") | undefined;
+            lineage?: {
+                parents: string[];
+                children: string[];
+            } | undefined;
+            boundaryEdges?: string[] | undefined;
+            retrievalText?: string | undefined;
+            lastKnownSummary?: string | undefined;
+            parentId?: string | undefined;
+            parentInputHash?: string | undefined;
+            pendingSplitHash?: string | undefined;
+            embedding_b64?: string | undefined;
+            embedding?: number[] | undefined;
+            _st_synced?: boolean | undefined;
         };
     } | undefined;
     allAvailableMemories?: {
@@ -735,6 +976,8 @@ export type RetrievalContext = {
         archived?: boolean | undefined;
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
+        is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[] | undefined;
@@ -801,6 +1044,8 @@ export type PromptContext = {
         archived?: boolean | undefined;
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
+        is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[] | undefined;
@@ -834,6 +1079,8 @@ export type BasePromptParams = {
             archived?: boolean | undefined;
             temporal_anchor?: (string | null) | undefined;
             is_transient?: boolean | undefined;
+            is_secret?: boolean | undefined;
+            coverage_fallback?: boolean | undefined;
             _st_synced?: boolean | undefined;
             _proxyVectorScore?: number | undefined;
         }[] | undefined;
@@ -871,6 +1118,8 @@ export type GraphPromptParams = {
             archived?: boolean | undefined;
             temporal_anchor?: (string | null) | undefined;
             is_transient?: boolean | undefined;
+            is_secret?: boolean | undefined;
+            coverage_fallback?: boolean | undefined;
             _st_synced?: boolean | undefined;
             _proxyVectorScore?: number | undefined;
         }[] | undefined;
@@ -893,6 +1142,11 @@ export type EdgeConsolidationParams = {
         embedding?: number[] | undefined;
         embedding_b64?: string | undefined;
         _st_synced?: boolean | undefined;
+        status?: ("active" | "weakened" | "resolved" | "superseded") | undefined;
+        valid_from?: number | undefined;
+        valid_to?: (number | null) | undefined;
+        last_confirmed?: number | undefined;
+        revision?: number | undefined;
     };
     preamble: string;
     prefill: string;
@@ -920,6 +1174,8 @@ export type ReflectionPromptParams = {
         archived?: boolean | undefined;
         temporal_anchor?: (string | null) | undefined;
         is_transient?: boolean | undefined;
+        is_secret?: boolean | undefined;
+        coverage_fallback?: boolean | undefined;
         _st_synced?: boolean | undefined;
         _proxyVectorScore?: number | undefined;
     }[];
@@ -944,6 +1200,22 @@ export type GlobalSynthesisParams = {
         entities?: string[] | undefined;
         findings?: string[] | undefined;
         last_updated?: number | undefined;
+        nodeKeys?: string[] | undefined;
+        inputHash?: string | undefined;
+        status?: ("active" | "stale" | "dissolved") | undefined;
+        lineage?: {
+            parents: string[];
+            children: string[];
+        } | undefined;
+        boundaryEdges?: string[] | undefined;
+        retrievalText?: string | undefined;
+        lastKnownSummary?: string | undefined;
+        parentId?: string | undefined;
+        parentInputHash?: string | undefined;
+        pendingSplitHash?: string | undefined;
+        embedding_b64?: string | undefined;
+        embedding?: number[] | undefined;
+        _st_synced?: boolean | undefined;
     }[];
     preamble: string;
     prefill: string;

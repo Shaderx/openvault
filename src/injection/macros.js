@@ -6,6 +6,7 @@ import { getDeps } from '../deps.js';
  * Mutating properties (not reassigning) updates macro return values in-place.
  */
 export const cachedContent = {
+    archive: '',
     memory: '',
     world: '',
 };
@@ -26,6 +27,11 @@ export function initMacros() {
             description: 'OpenVault injected memory content',
             category: 'misc',
         });
+        newRegistry.registerMacro('openvault_archive', {
+            handler: () => cachedContent.archive,
+            description: 'OpenVault immutable world archive',
+            category: 'misc',
+        });
         newRegistry.registerMacro('openvault_world', {
             handler: () => cachedContent.world,
             description: 'OpenVault injected world info content',
@@ -34,6 +40,7 @@ export function initMacros() {
     } else if (context.registerMacro) {
         // Legacy API (pre-1.16.0) — accepts (name, fn) directly
         context.registerMacro('openvault_memory', () => cachedContent.memory);
+        context.registerMacro('openvault_archive', () => cachedContent.archive);
         context.registerMacro('openvault_world', () => cachedContent.world);
     }
 }

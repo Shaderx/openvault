@@ -30,7 +30,7 @@ describe('think tag support', () => {
                     '{'
                 ),
         ],
-        ['UNIFIED_REFLECTION_SCHEMA', () => buildUnifiedReflectionPrompt('Alice', [], 'auto', 'auto', '{')],
+        ['UNIFIED_REFLECTION_SCHEMA', () => buildUnifiedReflectionPrompt('Alice', [], [], '', 'auto', 'auto', '{')],
         ['COMMUNITY_SCHEMA', () => buildCommunitySummaryPrompt(['- Node'], ['- Edge'], 'auto', 'auto', '{')],
         [
             'GLOBAL_SYNTHESIS_SCHEMA',

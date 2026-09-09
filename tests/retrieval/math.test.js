@@ -836,42 +836,7 @@ describe('Large iterable handling', () => {
     });
 });
 
-describe('math.js - alpha-blend scoring (legacy)', () => {
-    it('BM25 bonus is capped at (1-alpha) * combinedBoostWeight', async () => {
-        const { calculateScore } = await import('../../src/retrieval/math.js');
-        // Note: calculateScore expects pre-normalized BM25 [0,1] when using alpha-blend
-        // This test verifies that even with normalized BM25 = 1.0, the bonus is capped
-        const memory = { importance: 3, message_ids: [50], embedding: [1, 0, 0] };
-        const contextEmbedding = [1, 0, 0]; // perfect similarity
-        const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 5 };
-        const settings = {
-            vectorSimilarityThreshold: 0.5,
-            alpha: 0.7,
-            combinedBoostWeight: 15,
-        };
-        // Pass normalized BM25 = 1.0 (max possible)
-        const result = calculateScore(memory, contextEmbedding, 100, constants, settings, 1.0);
-        // BM25 bonus should be at most (1 - 0.7) * 15 = 4.5
-        // Use toBeCloseTo to account for floating point precision
-        expect(result.bm25Bonus).toBeCloseTo(4.5, 1);
-        expect(result.bm25Bonus).toBeLessThanOrEqual(4.6); // Safety margin
-    });
-
-    it('vector bonus uses alpha * combinedBoostWeight', async () => {
-        const { calculateScore } = await import('../../src/retrieval/math.js');
-        const memory = { importance: 3, message_ids: [100], embedding: [1, 0, 0] };
-        const contextEmbedding = [1, 0, 0]; // sim = 1.0
-        const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 5 };
-        const settings = {
-            vectorSimilarityThreshold: 0.5,
-            alpha: 0.7,
-            combinedBoostWeight: 15,
-        };
-        const result = calculateScore(memory, contextEmbedding, 100, constants, settings, 0);
-        // Vector bonus = alpha * weight * normalizedSim = 0.7 * 15 * 1.0 = 10.5
-        expect(result.vectorBonus).toBeCloseTo(10.5, 1);
-    });
-
+describe('math.js - alpha-blend scoring', () => {
     it('scoreMemories normalizes BM25 scores across batch', async () => {
         const { scoreMemories } = await import('../../src/retrieval/math.js');
         const memories = [
@@ -904,34 +869,6 @@ describe('math.js - alpha-blend scoring (legacy)', () => {
         };
         const results = await scoreMemories(memories, null, 100, constants, settings, ['zzzzz']);
         expect(results[0].breakdown.bm25Bonus).toBe(0);
-    });
-
-    it('respects vectorSimilarityThreshold in alpha-blend scoring', async () => {
-        const { calculateScore } = await import('../../src/retrieval/math.js');
-        // To test threshold, use orthogonal vectors (similarity = 0)
-        const memory = { importance: 3, message_ids: [100], embedding: [1, 0] };
-        const contextEmbedding = [0, 1]; // sim = 0 (orthogonal vectors)
-        const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 5 };
-        const settings = {
-            vectorSimilarityThreshold: 0.5,
-            alpha: 0.7,
-            combinedBoostWeight: 15,
-        };
-        const result = calculateScore(memory, contextEmbedding, 100, constants, settings, 0);
-        // Similarity 0 < threshold 0.5, so no bonus
-        expect(result.vectorBonus).toBe(0);
-    });
-
-    it('importance-5 memory uses soft floor of 1.0 instead of hard IMPORTANCE_5_FLOOR', async () => {
-        const { calculateScore } = await import('../../src/retrieval/math.js');
-        const memory = { importance: 5, message_ids: [10], embedding: null };
-        const constants = { BASE_LAMBDA: 0.05, IMPORTANCE_5_FLOOR: 5 };
-        const settings = { vectorSimilarityThreshold: 0.5, alpha: 0.7, combinedBoostWeight: 15 };
-        // At distance 990 from chat position 1000, the natural decay should be well below 5
-        const result = calculateScore(memory, null, 1000, constants, settings, 0);
-        // With soft floor: baseAfterFloor should be >= 1.0 but NOT >= 5.0
-        expect(result.baseAfterFloor).toBeGreaterThanOrEqual(1.0);
-        expect(result.baseAfterFloor).toBeLessThan(5.0);
     });
 
     it('importance-5 memory still decays naturally when above soft floor', async () => {

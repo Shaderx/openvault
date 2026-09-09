@@ -13,13 +13,27 @@ import { safeParseJSON, stripMarkdownFences, stripThinkingTags } from '../utils/
 /**
  * Schema for relationship impact between characters
  */
-export const RelationshipImpactSchema = z.record(z.string(), z.any());
+export const RelationshipImpactSchema = z.record(
+    z.string().trim().min(1, 'Relationship key must not be empty'),
+    z.string().trim().min(1, 'Relationship impact must not be empty')
+);
 
 /**
  * Schema for a single memory event
  * Re-exported from store/schemas.js
  */
 export { EventSchema, EventExtractionSchema };
+
+/** Schema used by the post-extraction coverage pass. */
+export const FallbackExtractionSchema = z.object({
+    fallbacks: z.array(
+        z.object({
+            source_message_id: z.number().int().nonnegative(),
+            summary: z.string().min(1),
+            temporal_anchor: z.string().min(1).nullable(),
+        })
+    ),
+});
 
 /**
  * Schema for an entity (person, place, organization, object, or concept)
@@ -45,6 +59,7 @@ export const RelationshipSchema = z.object({
     description: BaseRelationshipSchema.shape.description
         .catch('No description')
         .describe('Description of the relationship'),
+    status: BaseRelationshipSchema.shape.status.catch('active'),
 });
 
 /**
@@ -176,6 +191,11 @@ export function getEventExtractionJsonSchema() {
     return toJsonSchema(EventExtractionSchema, 'EventExtraction');
 }
 
+/** Get jsonSchema for the low-priority uncovered-message pass. */
+export function getFallbackExtractionJsonSchema() {
+    return toJsonSchema(FallbackExtractionSchema, 'FallbackExtraction');
+}
+
 /**
  * Get jsonSchema for Stage 2: Graph extraction
  * @returns {Object} ConnectionManager jsonSchema object
@@ -188,9 +208,10 @@ export function getGraphExtractionJsonSchema() {
  * Parse event extraction response (Stage 1)
  *
  * @param {string} content - Raw LLM response
+ * @param {{requireSourceAttribution?: boolean}} [options]
  * @returns {Object} Validated event extraction response with {events}
  */
-export function parseEventExtractionResponse(content) {
+export function parseEventExtractionResponse(content, options = {}) {
     // Handle lazy exits: strip thinking tags and check for empty output
     const stripped = stripThinkingTags(content);
     if (stripped.trim().length === 0) {
@@ -231,7 +252,10 @@ export function parseEventExtractionResponse(content) {
     const validEvents = [];
     for (const raw of rawEvents) {
         const eventResult = EventSchema.safeParse(raw);
-        if (eventResult.success) {
+        if (
+            eventResult.success &&
+            (!options.requireSourceAttribution || eventResult.data.source_message_ids?.length > 0)
+        ) {
             validEvents.push(eventResult.data);
         }
     }
@@ -241,6 +265,12 @@ export function parseEventExtractionResponse(content) {
     }
 
     return { events: validEvents };
+}
+
+/** Parse the batched uncovered-message fallback response. */
+export function parseFallbackExtractionResponse(content) {
+    const result = parseStructuredResponse(content, FallbackExtractionSchema);
+    return { fallbacks: result.fallbacks };
 }
 
 /**
@@ -419,6 +449,18 @@ export const CommunitySummarySchema = z.object({
     title: z.string().min(1, 'Title is required'),
     summary: z.string().min(1, 'Summary is required'),
     findings: z.array(z.string()).min(1, 'At least one finding required').max(5, 'Maximum 5 findings'),
+    subcommunities: z
+        .array(
+            z.object({
+                entity_ids: z.array(z.string()).min(2),
+                title: z.string().min(1),
+                summary: z.string().min(1),
+                findings: z.array(z.string()).min(1).max(5),
+                rationale: z.string().min(1),
+            })
+        )
+        .max(4)
+        .default([]),
 });
 
 /**

@@ -167,6 +167,15 @@
     text-align: right;
 }
 
+.openvault-visible-progress {
+    flex-wrap: wrap;
+}
+
+.openvault-visible-progress .openvault-batch-progress-label {
+    flex: 0 0 100%;
+    text-align: left;
+}
+
 /* Embedding status */
 .openvault-embedding-status {
     display: inline-flex;

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetDeps } from '../../src/deps.js';
+import { getMessageRevision } from '../../src/extraction/scheduler.js';
 import { setWorkerRunning } from '../../src/state.js';
 
 describe('autoHideOldMessages (token-based)', () => {
@@ -34,6 +35,7 @@ describe('autoHideOldMessages (token-based)', () => {
         ];
 
         mockData = {
+            schema_version: 5,
             memories: [],
             processed_message_ids: [
                 '1000000',
@@ -46,6 +48,16 @@ describe('autoHideOldMessages (token-based)', () => {
                 '1000007',
             ], // All extracted
         };
+        mockData.memories = [0, 1, 2, 3].map((turn, index) => {
+            const messageIds = [turn * 2, turn * 2 + 1];
+            return {
+                id: `event-${index}`,
+                summary: `Turn ${index} established a durable narrative fact for the archive.`,
+                importance: 3,
+                message_ids: messageIds,
+                message_fingerprints: messageIds.map((id) => getMessageRevision(mockChat[id])),
+            };
+        });
 
         setupTestContext({
             context: {
@@ -92,6 +104,19 @@ describe('autoHideOldMessages (token-based)', () => {
         expect(saveFn).toHaveBeenCalled();
     });
 
+    it('does nothing on a second compaction once visible chat is within budget', async () => {
+        const { autoHideOldMessages } = await import('../../src/events.js');
+
+        await autoHideOldMessages();
+        const hiddenAfterFirstPass = mockChat.map((message) => message.is_system);
+        const savesAfterFirstPass = saveFn.mock.calls.length;
+
+        await autoHideOldMessages();
+
+        expect(mockChat.map((message) => message.is_system)).toEqual(hiddenAfterFirstPass);
+        expect(saveFn).toHaveBeenCalledTimes(savesAfterFirstPass);
+    });
+
     it('does not hide when under budget', async () => {
         // Re-setup with budget higher than total (16)
         setupTestContext({
@@ -122,23 +147,22 @@ describe('autoHideOldMessages (token-based)', () => {
         expect(saveFn).not.toHaveBeenCalled();
     });
 
-    it('skips unextracted messages and continues past them', async () => {
+    it('stops compaction at the first unprocessed hole', async () => {
         // Mark messages 2,3 as NOT extracted
         mockData.processed_message_ids = ['1000000', '1000001', '1000004', '1000005', '1000006', '1000007'];
-        mockData.memories = [];
+        mockData.memories = [mockData.memories[0]];
 
         const { autoHideOldMessages } = await import('../../src/events.js');
         await autoHideOldMessages();
 
-        // excess = 8 tokens. Hide 0,1 (extracted, 4 tokens), skip 2,3 (unextracted),
-        // continue with 4,5 (extracted, 4 tokens) → total hidden = 8
-        // Snap after 1: next is U(2) ✓. Snap after 5: next is U(6) ✓.
+        // Only the oldest contiguous processed turn can be archived. Crossing
+        // the hole would silently claim source coverage that does not exist.
         expect(mockChat[0].is_system).toBe(true);
         expect(mockChat[1].is_system).toBe(true);
         expect(mockChat[2].is_system).toBe(false); // Unextracted, skipped
         expect(mockChat[3].is_system).toBe(false); // Unextracted, skipped
-        expect(mockChat[4].is_system).toBe(true);
-        expect(mockChat[5].is_system).toBe(true);
+        expect(mockChat[4].is_system).toBe(false);
+        expect(mockChat[5].is_system).toBe(false);
     });
 
     it('respects turn boundaries — does not split mid-turn', async () => {
@@ -345,11 +369,14 @@ describe('onChatChanged embedding model mismatch detection', () => {
 
         // Setup: chat has embeddings from old model
         mockData = {
-            schema_version: 2, // Already on v2 to avoid triggering schema migration
+            schema_version: 5,
+            lifecycle: { status: 'ready' },
             embedding_model_id: 'old-model',
             memories: [{ id: '1', embedding_b64: 'abc' }],
             graph: { nodes: { alice: { name: 'Alice', type: 'CHARACTER', embedding_b64: 'def' } }, edges: {} },
             communities: { C0: { title: 'G', embedding_b64: 'ghi' } },
+            archives: { revision: 0, segments: [], next_sequence: 1, rollups: [] },
+            diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
         };
 
         setupTestContext({
@@ -397,39 +424,6 @@ describe('onChatChanged embedding model mismatch detection', () => {
     });
 });
 
-describe('onBeforeGeneration AbortError handling', () => {
-    afterEach(() => {
-        resetDeps();
-        vi.clearAllMocks();
-    });
-
-    it('does not set error status on AbortError during retrieval', async () => {
-        // This test verifies the behavior after we add AbortError handling.
-        // We mock updateInjection to throw AbortError.
-        setupTestContext({
-            context: {
-                chat: [{ mes: 'test', is_user: true, is_system: false }],
-                chatMetadata: {
-                    openvault: {
-                        memories: [{ id: 'm1', summary: 'test' }],
-                    },
-                },
-                chatId: 'test-chat',
-            },
-            settings: { enabled: true },
-        });
-
-        const { onBeforeGeneration } = await import('../../src/events.js');
-
-        // We need to verify that after AbortError, status is NOT set to 'error'.
-        // Since updateInjection is dynamically imported, this is hard to mock
-        // without vi.mock. Instead, test structurally by checking no error toast
-        // appears. The key assertion is that the function doesn't throw.
-        // Full integration verification is done via manual testing.
-        expect(typeof onBeforeGeneration).toBe('function');
-    });
-});
-
 describe('onChatChanged migration', () => {
     let mockContext;
     let mockConsole;
@@ -463,7 +457,50 @@ describe('onChatChanged migration', () => {
         vi.clearAllMocks();
     });
 
-    it('migrates v1 data and shows toast', async () => {
+    it('does not roll back or disable a new chat after an old migration save fails', async () => {
+        const { getDeps, setDeps } = await import('../../src/deps.js');
+        const { isSessionDisabled } = await import('../../src/state.js');
+        const { onChatChanged } = await import('../../src/events.js');
+        const oldData = { schema_version: 1, memories: [] };
+        mockContext.chatMetadata.openvault = oldData;
+        let finishSave;
+        let saveStarted;
+        const started = new Promise((resolve) => {
+            saveStarted = resolve;
+        });
+        setDeps({
+            ...getDeps(),
+            saveChatConditional: () => {
+                saveStarted();
+                return new Promise((_, reject) => {
+                    finishSave = reject;
+                });
+            },
+        });
+        const pending = onChatChanged();
+        await started;
+        const newData = { schema_version: 5, memories: [] };
+        mockToast.mockClear();
+        mockContext.chatId = 'new-chat';
+        mockContext.chatMetadata = { openvault: newData };
+        finishSave(new Error('Save failed'));
+        await pending;
+        expect(mockContext.chatMetadata.openvault).toBe(newData);
+        expect(isSessionDisabled()).toBe(false);
+        expect(mockToast.mock.calls.some((call) => /full rebuild/i.test(call[1]))).toBe(false);
+    });
+    it('restores the originating snapshot and disables its session when migration cannot persist', async () => {
+        const { getDeps, setDeps } = await import('../../src/deps.js');
+        const { isSessionDisabled } = await import('../../src/state.js');
+        const { onChatChanged } = await import('../../src/events.js');
+        const original = { schema_version: 1, memories: [], graph: { nodes: {}, edges: {} } };
+        mockContext.chatMetadata.openvault = structuredClone(original);
+        setDeps({ ...getDeps(), saveChatConditional: vi.fn().mockRejectedValue(new Error('disk failure')) });
+        await onChatChanged();
+        expect(mockContext.chatMetadata.openvault).toEqual(original);
+        expect(isSessionDisabled()).toBe(true);
+    });
+    it('gates v1 data for a mandatory full rebuild', async () => {
         const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 
         // v1 data with index-based processed_message_ids
@@ -476,13 +513,17 @@ describe('onChatChanged migration', () => {
         const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
-        // Should have migrated through v2 and v3
-        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(3);
+        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(5);
+        expect(mockContext.chatMetadata[METADATA_KEY].lifecycle.status).toBe('needs_rebuild');
         expect(mockContext.chatMetadata[METADATA_KEY][PROCESSED_MESSAGES_KEY]).toContain('1000000');
-        expect(mockToast).toHaveBeenCalledWith('info', expect.stringContaining('optimized'), 'Data Migration', {});
+        expect(
+            mockToast.mock.calls.some(
+                (call) => call[0] === 'warning' && /full rebuild/i.test(call[1]) && call[3]?.timeOut === 0
+            )
+        ).toBe(true);
     });
 
-    it('rolls back on migration failure and sets session disabled', async () => {
+    it('gates legacy data even when old processed locators have missing sources', async () => {
         const { METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 
         // Create v1 data with index that will be out of bounds
@@ -494,25 +535,18 @@ describe('onChatChanged migration', () => {
         const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
-        // Migration should have succeeded (the v2 migration handles missing messages gracefully)
-        // So we test a different scenario: data that causes actual failure
-        // Let's test that session disabled flag works correctly
-        const { setSessionDisabled } = await import('../../src/state.js');
-
-        // Manually set session disabled and verify onChatChanged respects it
-        setSessionDisabled(true);
-        mockToast.mockClear();
-
-        await onChatChanged();
-
-        // Should NOT have called toast (early return due to session disabled)
-        expect(mockToast).not.toHaveBeenCalled();
-
-        // Reset for next test
-        setSessionDisabled(false);
+        expect(mockContext.chatMetadata[METADATA_KEY]).toMatchObject({
+            schema_version: 5,
+            lifecycle: { status: 'needs_rebuild' },
+        });
+        expect(
+            mockToast.mock.calls.some(
+                (call) => call[0] === 'warning' && /full rebuild/i.test(call[1]) && call[3]?.timeOut === 0
+            )
+        ).toBe(true);
     });
 
-    it('skips migration when schema_version is already 2', async () => {
+    it('gates schema v2 chats instead of running legacy retrieval migration', async () => {
         const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 
         // v2 data already
@@ -525,13 +559,14 @@ describe('onChatChanged migration', () => {
         const { onChatChanged } = await import('../../src/events.js');
         await onChatChanged();
 
-        // Should still be v2
-        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(2);
-        // Should not show migration toast (only embedding-related toast might show)
-        const optimizedToasts = mockToast.mock.calls.filter(
-            (call) => call[1]?.includes?.('optimized') || call[1]?.includes?.('Migration')
-        );
-        expect(optimizedToasts.length).toBe(0);
+        expect(mockContext.chatMetadata[METADATA_KEY].schema_version).toBe(5);
+        expect(mockContext.chatMetadata[METADATA_KEY].lifecycle.status).toBe('needs_rebuild');
+        expect(mockContext.chatMetadata[METADATA_KEY].embedding_model_id).toBeUndefined();
+        expect(
+            mockToast.mock.calls.some(
+                (call) => call[0] === 'warning' && /full rebuild/i.test(call[1]) && call[3]?.timeOut === 0
+            )
+        ).toBe(true);
     });
 });
 

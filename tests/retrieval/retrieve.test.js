@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings, extensionName } from '../../src/constants.js';
-import { resetDeps } from '../../src/deps.js';
+import { getDeps, resetDeps } from '../../src/deps.js';
 import { buildRetrievalContext, updateInjection } from '../../src/retrieval/retrieve.js';
 
 describe('selectMemoriesWithSoftBalance', () => {
@@ -311,6 +311,62 @@ describe('retrieve pipeline', () => {
         expect(memoryCall).toBeDefined();
     });
 
+    for (const entryPoint of ['updateInjection', 'retrieveAndInjectContext']) {
+        it(`${entryPoint}: does not fall back to inaccessible secret memories`, async () => {
+            mockSetPrompt = vi.fn();
+            const secret = 'Bob alone learned the forbidden launch code';
+            setupTestContext({
+                context: {
+                    chat: [
+                        { mes: 'Hidden source', name: 'Bob', is_user: false, is_system: true, send_date: 'secret-1' },
+                        { mes: 'Alice asks what happened', name: 'Alice', is_user: false, is_system: false },
+                    ],
+                    chatMetadata: {
+                        openvault: {
+                            schema_version: 4,
+                            lifecycle: { status: 'ready' },
+                            memories: [
+                                {
+                                    id: 'secret-event',
+                                    type: 'event',
+                                    summary: secret,
+                                    importance: 5,
+                                    message_ids: [0],
+                                    characters_involved: ['Bob'],
+                                    witnesses: ['Bob'],
+                                    is_secret: true,
+                                },
+                            ],
+                            characters: { Alice: { known_events: [] }, Bob: { known_events: ['secret-event'] } },
+                            graph: { nodes: {}, edges: {} },
+                            communities: {},
+                            archives: { revision: 0, segments: [], next_sequence: 1, rollups: [] },
+                            diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
+                        },
+                    },
+                    chatId: 'secret-chat',
+                    name1: 'User',
+                    name2: 'Alice',
+                    groupId: 'group-one',
+                    groups: [{ id: 'group-one', members: [] }],
+                },
+                settings: { enabled: true, embeddingSource: 'ollama' },
+                deps: {
+                    setExtensionPrompt: mockSetPrompt,
+                    extension_prompt_types: { IN_PROMPT: 0 },
+                    saveChatConditional: vi.fn().mockResolvedValue(undefined),
+                },
+            });
+
+            const retrieval = await import('../../src/retrieval/retrieve.js');
+            const result = await retrieval[entryPoint]();
+            expect(result ?? null).toBeNull();
+            expect(mockSetPrompt.mock.calls.flat().join('\n')).not.toContain(secret);
+            const memoryCall = mockSetPrompt.mock.calls.find((call) => call[0] === extensionName);
+            expect(memoryCall?.[1] || '').toBe('');
+        });
+    }
+
     it('macro intent: summarize request uses global state injection', async () => {
         mockSetPrompt = vi.fn();
 
@@ -379,6 +435,78 @@ describe('retrieve pipeline', () => {
         expect(worldCall).toBeDefined();
         expect(worldCall[1]).toContain('world_context');
         expect(worldCall[1]).toContain('Test global state');
+    });
+
+    it.each([
+        ['updateInjection', 'normal'],
+        ['updateInjection', 'empty'],
+        ['updateInjection', 'visible'],
+        ['retrieveAndInjectContext', 'empty'],
+        ['retrieveAndInjectContext', 'visible'],
+    ])('%s wires ST communities with %s recall once', async (entryPoint, recallMode) => {
+        mockSetPrompt = vi.fn();
+        const embeddingsModule = await import('../../src/embeddings.js');
+        const searchItems = vi.fn().mockResolvedValue([
+            { id: 'ev1', hash: 1, text: '[OV_ID:ev1] An event' },
+            { id: 'C0', hash: 2, text: '[OV_ID:C0] Relevant community' },
+            { id: 'C1', hash: 3, text: '[OV_ID:C1] Stale community' },
+            { id: 'unrelated', hash: 4, text: '[OV_ID:unrelated] Other chat' },
+        ]);
+        const strategy = {
+            usesExternalStorage: vi.fn().mockReturnValue(true),
+            searchItems,
+        };
+        vi.spyOn(embeddingsModule, 'getStrategy').mockReturnValue(strategy);
+
+        setupTestContext({
+            context: {
+                chat: [
+                    { mes: 'Hidden event', is_user: false, is_system: true },
+                    { mes: 'Tell me about the village', is_user: true, is_system: false },
+                ],
+                name1: 'User',
+                name2: 'Alice',
+                chatMetadata: {
+                    openvault: {
+                        memories: [
+                            {
+                                id: 'ev1',
+                                type: 'event',
+                                summary: 'Alice visited the village',
+                                importance: 3,
+                                message_ids: [0],
+                                characters_involved: ['Alice'],
+                                witnesses: ['Alice'],
+                            },
+                        ],
+                        graph: { nodes: {}, edges: {} },
+                        communities: {
+                            C0: { title: 'Village', summary: 'A peaceful village.' },
+                            C1: { title: 'Stale', summary: 'Old facts', status: 'stale' },
+                        },
+                    },
+                },
+            },
+            settings: { embeddingSource: 'st_vector' },
+            deps: {
+                setExtensionPrompt: mockSetPrompt,
+                extension_prompt_types: { IN_PROMPT: 0 },
+            },
+        });
+
+        const context = getDeps().getContext();
+        if (recallMode === 'empty') context.chatMetadata.openvault.memories = [];
+        if (recallMode === 'visible') context.chat[0].is_system = false;
+        const retrieval = await import('../../src/retrieval/retrieve.js');
+        await retrieval[entryPoint]();
+
+        const worldCall = mockSetPrompt.mock.calls.find((call) => call[0] === 'openvault_world');
+        expect(worldCall?.[1]).toContain('Village');
+        expect(worldCall?.[1]).not.toContain('Stale');
+        expect(worldCall?.[1]).not.toContain('Other chat');
+        expect(searchItems).toHaveBeenCalledTimes(1);
+
+        vi.restoreAllMocks();
     });
 });
 

@@ -202,4 +202,24 @@ describe('ST Vector world context integration', () => {
         expect(result.text).toContain('Village');
         expect(result.communityIds).toEqual(['C0', 'C1']);
     });
+
+    it('does not inject unknown or stale ST community IDs', async () => {
+        setupTestContext({ settings: { embeddingSource: 'st_vector' } });
+
+        const { retrieveWorldContext } = await import('../../src/retrieval/world-context.js');
+        const result = retrieveWorldContext(
+            {
+                stale: { title: 'Stale', summary: 'Old facts', status: 'stale' },
+                dissolved: { title: 'Dissolved', summary: 'Removed facts', status: 'dissolved' },
+            },
+            null,
+            'local query',
+            null,
+            2000,
+            ['missing', 'stale', 'dissolved']
+        );
+
+        expect(result.text).toBe('');
+        expect(result.communityIds).toEqual([]);
+    });
 });

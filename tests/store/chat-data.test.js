@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHARACTERS_KEY, extensionName, MEMORIES_KEY, METADATA_KEY } from '../../src/constants.js';
 import { resetDeps, setDeps } from '../../src/deps.js';
 import { normalizeKey } from '../../src/graph/graph.js';
+import { resetSessionController } from '../../src/state.js';
 import {
     addMemories,
     deleteCurrentChatData,
@@ -16,6 +17,7 @@ import {
     updateEntity,
     updateMemory,
 } from '../../src/store/chat-data.js';
+import { cyrb53 } from '../../src/utils/embedding-codec.js';
 import * as stHelpers from '../../src/utils/st-helpers.js';
 import { buildMockGraphNode } from '../factories.js';
 
@@ -45,7 +47,7 @@ describe('store/chat-data', () => {
     describe('getOpenVaultData', () => {
         it('creates complete schema for new chats', () => {
             const data = getOpenVaultData();
-            expect(data.schema_version).toBe(3);
+            expect(data.schema_version).toBe(5);
             expect(data.memories).toEqual([]);
             expect(data.character_states).toEqual({});
             expect(data.graph).toBeDefined();
@@ -57,7 +59,7 @@ describe('store/chat-data', () => {
         it('creates empty data structure if none exists', () => {
             const data = getOpenVaultData();
             expect(data).toEqual({
-                schema_version: 3,
+                schema_version: 5,
                 [MEMORIES_KEY]: [],
                 [CHARACTERS_KEY]: {},
                 processed_message_ids: [],
@@ -65,6 +67,9 @@ describe('store/chat-data', () => {
                 graph: expect.any(Object),
                 communities: {},
                 graph_message_count: 0,
+                lifecycle: { status: 'ready' },
+                archives: { revision: 0, segments: [], next_sequence: 1, rollups: [] },
+                diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
             });
         });
 
@@ -191,6 +196,66 @@ describe('store/chat-data', () => {
 
             // Verify saveChatConditional was called between the yields
             expect(saveChatConditionalSpy).toHaveBeenCalledTimes(1);
+
+            yieldToMainSpy.mockRestore();
+        });
+
+        it('aborts an old session even when the chat ID returns to the same value', async () => {
+            const mockSave = vi.fn().mockResolvedValue(undefined);
+            const yieldToMainSpy = vi.spyOn(stHelpers, 'yieldToMain').mockImplementationOnce(async () => {
+                resetSessionController();
+            });
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: { debugMode: true },
+                }),
+                saveChatConditional: mockSave,
+            });
+
+            expect(await saveOpenVaultData('test-chat-123')).toBe(false);
+            expect(mockSave).not.toHaveBeenCalled();
+            expect(mockConsole.error).not.toHaveBeenCalled();
+
+            yieldToMainSpy.mockRestore();
+        });
+
+        it('treats AbortError as cancellation without reporting a save failure', async () => {
+            const mockToast = vi.fn();
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: { debugMode: true },
+                }),
+                saveChatConditional: vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError')),
+                showToast: mockToast,
+            });
+
+            expect(await saveOpenVaultData('test-chat-123')).toBe(false);
+            expect(mockConsole.error).not.toHaveBeenCalled();
+            expect(mockToast).not.toHaveBeenCalled();
+        });
+
+        it('rejects a save that switches chats during the underlying write', async () => {
+            const yieldToMainSpy = vi.spyOn(stHelpers, 'yieldToMain').mockResolvedValue(undefined);
+            const mockSave = vi.fn().mockImplementation(async () => {
+                mockContext.chatId = 'new-chat-456';
+            });
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: { debugMode: true },
+                }),
+                saveChatConditional: mockSave,
+            });
+
+            expect(await saveOpenVaultData('test-chat-123')).toBe(false);
+            expect(mockSave).toHaveBeenCalledTimes(1);
+            expect(yieldToMainSpy).toHaveBeenCalledTimes(1);
+            expect(mockConsole.error).not.toHaveBeenCalled();
 
             yieldToMainSpy.mockRestore();
         });
@@ -346,6 +411,28 @@ describe('store/chat-data', () => {
             expect(result.stChanges.toSync).toBeDefined();
             expect(result.stChanges.toSync.length).toBeGreaterThan(0);
         });
+
+        it('queues the complete old indexed text hash before syncing a replacement', async () => {
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: { debugMode: true },
+                }),
+                saveChatConditional: vi.fn().mockResolvedValue(undefined),
+            });
+            const data = getOpenVaultData();
+            data[MEMORIES_KEY] = [{ id: 'mem1', summary: 'Old summary', _st_synced: true }];
+
+            const result = await updateMemory('mem1', { summary: 'New summary' });
+
+            expect(result.success).toBe(true);
+            expect(result.stChanges.toDelete).toEqual([{ hash: expect.any(Number) }]);
+            expect(result.stChanges.toSync[0].text).toBe('[OV_ID:mem1] New summary');
+            expect(result.stChanges.toDelete[0].hash).not.toBe(result.stChanges.toSync[0].hash);
+            expect(data[MEMORIES_KEY][0].embedding).toBeUndefined();
+            expect(data[MEMORIES_KEY][0]._st_synced).toBeUndefined();
+        });
     });
 
     describe('deleteMemory — stChanges', () => {
@@ -485,6 +572,32 @@ describe('store/chat-data', () => {
                 expect.stringContaining('Failed to purge ST collection'),
                 expect.any(Error)
             );
+        });
+
+        it('does not clear a reloaded same-ID chat after the purge boundary', async () => {
+            mockContext.chatMetadata[METADATA_KEY] = {
+                [MEMORIES_KEY]: [{ id: '1' }],
+            };
+            const fetchSpy = vi.fn().mockImplementation(async () => {
+                resetSessionController();
+                return { ok: true };
+            });
+            setDeps({
+                console: mockConsole,
+                getContext: () => mockContext,
+                getExtensionSettings: () => ({
+                    [extensionName]: {
+                        debugMode: true,
+                        embeddingSource: 'st_vector',
+                    },
+                }),
+                saveChatConditional: vi.fn().mockResolvedValue(undefined),
+                fetch: fetchSpy,
+                getRequestHeaders: () => ({ 'X-CSRF-Token': 'test-token' }),
+            });
+
+            expect(await deleteCurrentChatData()).toBe(false);
+            expect(mockContext.chatMetadata[METADATA_KEY]).toBeDefined();
         });
 
         it('only unhides messages tagged by OpenVault, preserves ST-native hidden messages', async () => {
@@ -651,6 +764,34 @@ describe('deleteEntity', () => {
         expect(data.graph.edges.tavern__marcus_hale).toBeUndefined();
     });
 
+    it('returns old node and connected edge hashes for synced records', async () => {
+        const data = getOpenVaultData();
+        data.graph.nodes.marcus_hale = buildMockGraphNode({
+            name: 'Marcus Hale',
+            type: 'PERSON',
+            description: 'A soldier',
+            _st_synced: true,
+        });
+        data.graph.nodes.tavern = buildMockGraphNode({
+            name: 'The Tavern',
+            type: 'PLACE',
+            description: 'A pub',
+        });
+        data.graph.edges.marcus_hale__tavern = {
+            source: 'marcus_hale',
+            target: 'tavern',
+            description: 'frequents the tavern',
+            _st_synced: true,
+        };
+
+        const result = await deleteEntity('marcus_hale');
+
+        expect(result.stChanges.toDelete).toEqual([
+            { hash: cyrb53('[OV_ID:marcus_hale] A soldier') },
+            { hash: cyrb53('[OV_ID:edge_marcus_hale_tavern] frequents the tavern') },
+        ]);
+    });
+
     it('should clean up merge redirects when deleting entity', async () => {
         const data = getOpenVaultData();
         data.graph.nodes.marcus_hale = buildMockGraphNode({
@@ -783,6 +924,42 @@ describe('updateEntity', () => {
         expect(result.stChanges.toDelete.length).toBe(1);
         expect(result.stChanges.toDelete[0]).toHaveProperty('hash');
         expect(typeof result.stChanges.toDelete[0].hash).toBe('number');
+    });
+
+    it('deletes and resyncs connected edges when renaming a synced entity', async () => {
+        const data = getOpenVaultData();
+        const oldKey = normalizeKey('Marcus Hale');
+        const newKey = normalizeKey('Marcus the Brave');
+        const tavernKey = normalizeKey('The Tavern');
+        data.graph.nodes[oldKey] = buildMockGraphNode({
+            name: 'Marcus Hale',
+            type: 'PERSON',
+            description: 'A soldier',
+            _st_synced: true,
+        });
+        data.graph.nodes[tavernKey] = buildMockGraphNode({
+            name: 'The Tavern',
+            type: 'PLACE',
+            description: 'A pub',
+        });
+        data.graph.edges[`${oldKey}__${tavernKey}`] = {
+            source: oldKey,
+            target: tavernKey,
+            description: 'frequents the tavern',
+            _st_synced: true,
+        };
+
+        const result = await updateEntity(oldKey, { name: 'Marcus the Brave' });
+
+        expect(result.stChanges.toDelete).toEqual([
+            { hash: cyrb53(`[OV_ID:${oldKey}] A soldier`) },
+            { hash: cyrb53(`[OV_ID:edge_${oldKey}_${tavernKey}] frequents the tavern`) },
+        ]);
+        expect(result.stChanges.toSync.map((change) => change.text)).toEqual([
+            `[OV_ID:edge_${newKey}_${tavernKey}] frequents the tavern`,
+            `[OV_ID:${newKey}] A soldier`,
+        ]);
+        expect(data.graph.edges[`${newKey}__${tavernKey}`]._st_synced).toBeUndefined();
     });
 
     it('should update existing redirects that point to oldKey on rename', async () => {

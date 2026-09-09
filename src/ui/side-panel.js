@@ -325,7 +325,9 @@ function bindSidePanelEvents() {
             return;
         }
         const result = await updateCommunity(id, { title, summary });
-        if (result) {
+        if (result.success) {
+            const { applySyncChanges } = await import('../extraction/extract.js');
+            await applySyncChanges(result.stChanges);
             const community = getOpenVaultData()?.communities?.[id];
             $edit.replaceWith(renderSideCommunityAccordion(id, community));
             showToast('success', 'Community updated');
@@ -338,7 +340,9 @@ function bindSidePanelEvents() {
         if (!community) return;
         if (!confirm(`Delete community "${community.title || id}"?`)) return;
         const result = await deleteCommunity(id);
-        if (result) {
+        if (result.success) {
+            const { applySyncChanges } = await import('../extraction/extract.js');
+            await applySyncChanges(result.stChanges);
             $panel.find(`.openvault-community-item[data-id="${id}"]`).remove();
             showToast('success', 'Community deleted');
         }

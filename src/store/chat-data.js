@@ -2,6 +2,7 @@
 
 import {
     CHARACTERS_KEY,
+    CHAT_LIFECYCLE,
     CONSOLIDATION,
     EMBEDDING_SOURCES,
     GRAPH_JACCARD_DUPLICATE_THRESHOLD,
@@ -13,10 +14,12 @@ import { getDeps } from '../deps.js';
 import { createEmptyGraph, normalizeKey } from '../graph/graph.js';
 import { record } from '../perf/store.js';
 import { purgeSTCollection } from '../services/st-vector.js';
+import { getSessionSignal } from '../state.js';
 import { showToast } from '../utils/dom.js';
 import { cyrb53, deleteEmbedding } from '../utils/embedding-codec.js';
 import { logDebug, logError, logInfo, logWarn } from '../utils/logging.js';
 import { yieldToMain } from '../utils/st-helpers.js';
+import { getCommunityIndexText, getEdgeIndexText, getMemoryIndexText, getNodeIndexText } from '../utils/st-index.js';
 import { mergeDescriptions } from '../utils/text.js';
 import { countTokens } from '../utils/tokens.js';
 
@@ -39,7 +42,7 @@ export function getOpenVaultData() {
     }
     if (!context.chatMetadata[METADATA_KEY]) {
         context.chatMetadata[METADATA_KEY] = {
-            schema_version: 3,
+            schema_version: 5,
             [MEMORIES_KEY]: [],
             [CHARACTERS_KEY]: {},
             [PROCESSED_MESSAGES_KEY]: [],
@@ -47,6 +50,9 @@ export function getOpenVaultData() {
             graph: createEmptyGraph(),
             communities: {},
             graph_message_count: 0,
+            lifecycle: { status: CHAT_LIFECYCLE.READY },
+            archives: { revision: 0, segments: [], next_sequence: 1, rollups: [] },
+            diagnostics: { archive: {}, volatile: {}, compaction: {}, rebuild: {} },
         };
     }
     const data = context.chatMetadata[METADATA_KEY];
@@ -64,30 +70,45 @@ export function getCurrentChatId() {
 }
 
 /**
+ * Check whether an async mutation still belongs to the chat it started in.
+ * A missing chat ID cannot be guarded, so preserve the legacy behavior for
+ * older/test contexts that do not expose one.
+ * @param {string|null} expectedChatId - Chat ID captured before awaiting
+ * @returns {boolean}
+ */
+function isExpectedChat(expectedChatId) {
+    return expectedChatId === null || getCurrentChatId() === expectedChatId;
+}
+
+/**
  * Save OpenVault data to chat metadata.
  * @param {string} [expectedChatId] - If provided, verify chat hasn't changed before saving
  * @returns {Promise<boolean>} True if save succeeded, false otherwise
  */
 export async function saveOpenVaultData(expectedChatId = null) {
     const t0 = performance.now();
-    if (expectedChatId !== null) {
-        const currentId = getCurrentChatId();
-        if (currentId !== expectedChatId) {
-            logWarn(
-                `Chat changed during operation (expected: ${expectedChatId}, current: ${currentId}), aborting save`
-            );
-            return false;
-        }
-    }
+    // Capture the session signal together with the chat ID. A chat can switch
+    // away and back to the same ID before this async save resumes; the old
+    // signal still identifies that this operation belongs to the old session.
+    const signal = getSessionSignal();
+    const isCurrent = () => !signal.aborted && isExpectedChat(expectedChatId);
+
+    if (!isCurrent()) return false;
 
     try {
         await yieldToMain(); // Yield before ST's heavy synchronous save
+        if (!isCurrent()) return false;
         await getDeps().saveChatConditional();
+        if (!isCurrent()) return false;
         await yieldToMain(); // Yield after the thread-blocking operation
+        if (!isCurrent()) return false;
         record('chat_save', performance.now() - t0);
         logDebug('Data saved to chat metadata');
         return true;
     } catch (error) {
+        // Abort and stale-session failures are expected during chat changes.
+        // Do not report them as errors or record a save against the new chat.
+        if (error?.name === 'AbortError' || !isCurrent()) return false;
         record('chat_save', performance.now() - t0);
         logError('Failed to save data', error);
         showToast('error', `Failed to save data: ${error.message}`);
@@ -115,6 +136,7 @@ export async function updateMemory(id, updates) {
         showToast('warning', 'No chat loaded');
         return { success: false };
     }
+    const expectedChatId = getCurrentChatId();
 
     const memory = data[MEMORIES_KEY]?.find((/** @type {Memory} */ m) => m.id === id);
     if (!memory) {
@@ -124,6 +146,8 @@ export async function updateMemory(id, updates) {
 
     // Track if summary changed (requires re-embedding)
     const summaryChanged = updates.summary !== undefined && updates.summary !== memory.summary;
+    const oldText = getMemoryIndexText(memory);
+    const wasSynced = memory._st_synced === true;
 
     // Apply allowed updates
     const allowedFields = ['summary', 'importance', 'tags', 'is_secret', 'temporal_anchor', 'is_transient'];
@@ -137,12 +161,17 @@ export async function updateMemory(id, updates) {
 
     // If summary changed, invalidate embedding and queue for re-sync
     if (summaryChanged) {
+        if (wasSynced) {
+            stChanges.toDelete = [{ hash: cyrb53(oldText) }];
+        }
         deleteEmbedding(memory);
-        const text = memory.summary || '';
+        const text = getMemoryIndexText(memory);
         stChanges.toSync = [{ hash: cyrb53(text), text, item: memory }];
     }
 
-    await getDeps().saveChatConditional();
+    if (!(await saveOpenVaultData(expectedChatId))) {
+        return { success: false };
+    }
     logDebug(`Updated memory ${id}${summaryChanged ? ' (embedding invalidated)' : ''}`);
     return {
         success: true,
@@ -161,6 +190,7 @@ export async function deleteMemory(id) {
         showToast('warning', 'No chat loaded');
         return { success: false };
     }
+    const expectedChatId = getCurrentChatId();
 
     const idx = data[MEMORIES_KEY]?.findIndex((/** @type {Memory} */ m) => m.id === id);
     if (idx === -1) {
@@ -173,12 +203,14 @@ export async function deleteMemory(id) {
 
     // Queue for ST Vector deletion if previously synced
     if (memory._st_synced) {
-        const text = memory.summary || '';
+        const text = getMemoryIndexText(memory);
         stChanges.toDelete = [{ hash: cyrb53(text) }];
     }
 
     data[MEMORIES_KEY].splice(idx, 1);
-    await getDeps().saveChatConditional();
+    if (!(await saveOpenVaultData(expectedChatId))) {
+        return { success: false };
+    }
     logDebug(`Deleted memory ${id}`);
     return {
         success: true,
@@ -193,8 +225,10 @@ export async function deleteMemory(id) {
  * @returns {Promise<{key: string, stChanges?: {toDelete?: {hash: number}[], toSync?: {hash: number, text: string, item: any}[]}}|null>} Result with new key and optional ST Vector changes, null on failure
  */
 export async function updateEntity(key, updates) {
-    const { saveChatConditional } = getDeps();
-    const graph = getOpenVaultData().graph;
+    const data = getOpenVaultData();
+    if (!data) return null;
+    const expectedChatId = getCurrentChatId();
+    const graph = data.graph;
     const node = graph.nodes[key];
 
     if (!node) {
@@ -217,11 +251,10 @@ export async function updateEntity(key, updates) {
     if (newKey !== key) {
         // Track old hash for ST Vector deletion if synced
         const toDelete = [];
-        if (node._st_synced) {
-            // Calculate hash using same format as insertion in graph.js:486:
-            // [OV_ID:key] description (no fallback to name)
-            const text = `[OV_ID:${key}] ${node.description}`;
-            toDelete.push({ hash: cyrb53(text) });
+        const toSync = [];
+        const wasSynced = node._st_synced === true;
+        if (wasSynced) {
+            toDelete.push({ hash: cyrb53(getNodeIndexText(key, node)) });
         }
 
         // Create new node with updated fields
@@ -254,9 +287,10 @@ export async function updateEntity(key, updates) {
             if (needsRewrite) {
                 const newEdgeKey = `${newSource}__${newTarget}`;
 
+                const edgeWasSynced = edge._st_synced === true;
                 // Queue old edge for ST Vector deletion if synced
-                if (edge._st_synced) {
-                    toDelete.push({ hash: cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`) });
+                if (edgeWasSynced) {
+                    toDelete.push({ hash: cyrb53(getEdgeIndexText(edge)) });
                 }
 
                 delete graph.edges[edgeKey];
@@ -267,6 +301,10 @@ export async function updateEntity(key, updates) {
                 };
                 deleteEmbedding(newEdge);
                 graph.edges[newEdgeKey] = newEdge;
+                if (edgeWasSynced) {
+                    const text = getEdgeIndexText(newEdge);
+                    toSync.push({ hash: cyrb53(text), text, item: newEdge });
+                }
             }
         }
 
@@ -286,13 +324,21 @@ export async function updateEntity(key, updates) {
         // Invalidate embedding on new node
         deleteEmbedding(graph.nodes[newKey]);
 
-        await saveChatConditional();
+        const nodeText = getNodeIndexText(newKey, graph.nodes[newKey]);
+        toSync.push({ hash: cyrb53(nodeText), text: nodeText, item: graph.nodes[newKey] });
+
+        if (!(await saveOpenVaultData(expectedChatId))) {
+            return null;
+        }
         return {
             key: newKey,
-            stChanges: toDelete.length > 0 ? { toDelete } : undefined,
+            stChanges: toDelete.length > 0 || toSync.length > 0 ? { toDelete, toSync } : undefined,
         };
     } else {
         // Simple field update, no rename
+        const descriptionChanged = updates.description !== undefined && updates.description !== node.description;
+        const wasSynced = node._st_synced === true;
+        const oldText = getNodeIndexText(key, node);
         Object.assign(node, {
             type: updates.type ?? node.type,
             description: updates.description ?? node.description,
@@ -300,20 +346,21 @@ export async function updateEntity(key, updates) {
         });
 
         // Invalidate embedding on description change
-        if (updates.description !== undefined) {
+        if (descriptionChanged) {
+            const toDelete = wasSynced ? [{ hash: cyrb53(oldText) }] : [];
             deleteEmbedding(node);
+            const text = getNodeIndexText(key, node);
+            const toSync = [{ hash: cyrb53(text), text, item: node }];
+            if (!(await saveOpenVaultData(expectedChatId))) {
+                return null;
+            }
+            return { key, stChanges: { toDelete, toSync } };
         }
 
-        await saveChatConditional();
-
-        // Return stChanges for ST Vector sync if description changed
-        const toSync = [];
-        if (updates.description !== undefined) {
-            const text = `[OV_ID:${key}] ${node.description}`;
-            toSync.push({ hash: cyrb53(text), text, item: node });
+        if (!(await saveOpenVaultData(expectedChatId))) {
+            return null;
         }
-
-        return { key, stChanges: toSync.length > 0 ? { toSync } : undefined };
+        return { key, stChanges: undefined };
     }
 }
 
@@ -324,8 +371,10 @@ export async function updateEntity(key, updates) {
  * @returns {Promise<{success: boolean, stChanges?: {toDelete: {hash: number}[]}}>}
  */
 export async function deleteEntity(key) {
-    const { saveChatConditional } = getDeps();
-    const graph = getOpenVaultData().graph;
+    const data = getOpenVaultData();
+    if (!data) return { success: false };
+    const expectedChatId = getCurrentChatId();
+    const graph = data.graph;
 
     const node = graph.nodes[key];
     if (!node) {
@@ -336,10 +385,7 @@ export async function deleteEntity(key) {
     // Track ST Vector items to delete (prevent orphan embeddings)
     const toDelete = [];
     if (node._st_synced) {
-        // Calculate hash using same format as insertion in graph.js:486:
-        // [OV_ID:key] description (no fallback to name)
-        const text = `[OV_ID:${key}] ${node.description}`;
-        toDelete.push({ hash: cyrb53(text) });
+        toDelete.push({ hash: cyrb53(getNodeIndexText(key, node)) });
     }
 
     // Delete the node
@@ -348,6 +394,9 @@ export async function deleteEntity(key) {
     // Remove all edges connected to this entity
     for (const [edgeKey, edge] of Object.entries(graph.edges)) {
         if (edge.source === key || edge.target === key) {
+            if (edge._st_synced) {
+                toDelete.push({ hash: cyrb53(getEdgeIndexText(edge)) });
+            }
             delete graph.edges[edgeKey];
         }
     }
@@ -361,7 +410,9 @@ export async function deleteEntity(key) {
         }
     }
 
-    await saveChatConditional();
+    if (!(await saveOpenVaultData(expectedChatId))) {
+        return { success: false };
+    }
 
     return {
         success: true,
@@ -375,8 +426,10 @@ export async function deleteEntity(key) {
  */
 export async function deleteCurrentChatData() {
     const context = getDeps().getContext();
+    const expectedChatId = getCurrentChatId();
+    const signal = getSessionSignal();
 
-    if (!context.chatMetadata) {
+    if (!context?.chatMetadata) {
         logDebug('No chat metadata found');
         return false;
     }
@@ -400,7 +453,7 @@ export async function deleteCurrentChatData() {
     // Purge ST Vector Storage if using st_vector
     const settings = getDeps().getExtensionSettings()?.openvault;
     if (settings?.embeddingSource === EMBEDDING_SOURCES.ST_VECTOR) {
-        const chatId = getCurrentChatId();
+        const chatId = expectedChatId;
         if (chatId) {
             try {
                 const purged = await purgeSTCollection(chatId);
@@ -416,8 +469,16 @@ export async function deleteCurrentChatData() {
         }
     }
 
+    if (signal.aborted || !isExpectedChat(expectedChatId)) return false;
+
     delete context.chatMetadata[METADATA_KEY];
-    await getDeps().saveChatConditional();
+    if (!(await saveOpenVaultData(expectedChatId))) {
+        return false;
+    }
+    // saveOpenVaultData records timing through the store, whose diagnostics
+    // lookup lazily creates a new in-memory object after deletion. Keep the
+    // cleared key absent in the originating chat as promised by this API.
+    delete context.chatMetadata[METADATA_KEY];
     logDebug('Deleted all chat data');
     return true;
 }
@@ -426,22 +487,26 @@ export async function deleteCurrentChatData() {
  * Update a community by ID.
  * @param {string} id - Community ID (e.g. "C0")
  * @param {Object} updates - Fields to update (title, summary, findings)
- * @returns {Promise<boolean>} True if updated, false otherwise
+ * @returns {Promise<Object>} Structured result and ST vector changes
  */
 export async function updateCommunity(id, updates) {
     const data = getOpenVaultData();
     if (!data) {
         showToast('warning', 'No chat loaded');
-        return false;
+        return { success: false };
     }
+    const expectedChatId = getCurrentChatId();
 
     const community = data.communities?.[id];
     if (!community) {
         logDebug(`Community ${id} not found`);
-        return false;
+        return { success: false };
     }
 
-    const summaryChanged = updates.summary !== undefined && updates.summary !== community.summary;
+    const oldText = getCommunityIndexText(id, community);
+    const contentChanged = ['title', 'summary', 'findings'].some(
+        (field) => updates[field] !== undefined && updates[field] !== community[field]
+    );
 
     const allowedFields = ['title', 'summary', 'findings'];
     for (const field of allowedFields) {
@@ -450,36 +515,53 @@ export async function updateCommunity(id, updates) {
         }
     }
 
-    if (summaryChanged) {
+    const stChanges = { toDelete: [], toSync: [] };
+    if (contentChanged) {
+        if (community._st_synced) stChanges.toDelete.push({ hash: cyrb53(oldText) });
         deleteEmbedding(community);
+        community.retrievalText = getCommunityIndexText(id, community, { useStored: false });
+        stChanges.toSync.push({
+            hash: cyrb53(community.retrievalText),
+            text: community.retrievalText,
+            item: community,
+        });
     }
 
-    await getDeps().saveChatConditional();
-    logDebug(`Updated community ${id}${summaryChanged ? ' (embedding invalidated)' : ''}`);
-    return true;
+    if (!(await saveOpenVaultData(expectedChatId))) {
+        return { success: false };
+    }
+    logDebug(`Updated community ${id}${contentChanged ? ' (embedding invalidated)' : ''}`);
+    return { success: true, stChanges };
 }
 
 /**
  * Delete a community by ID.
  * @param {string} id - Community ID (e.g. "C0")
- * @returns {Promise<boolean>} True if deleted, false otherwise
+ * @returns {Promise<Object>} Structured result and ST vector changes
  */
 export async function deleteCommunity(id) {
     const data = getOpenVaultData();
     if (!data) {
         showToast('warning', 'No chat loaded');
-        return false;
+        return { success: false };
     }
+    const expectedChatId = getCurrentChatId();
 
     if (!data.communities?.[id]) {
         logDebug(`Community ${id} not found`);
-        return false;
+        return { success: false };
     }
 
+    const community = data.communities[id];
+    const text = getCommunityIndexText(id, community);
+    const stChanges = community._st_synced ? { toDelete: [{ hash: cyrb53(text) }] } : undefined;
     delete data.communities[id];
-    await getDeps().saveChatConditional();
+    delete data.global_world_state;
+    if (!(await saveOpenVaultData(expectedChatId))) {
+        return { success: false };
+    }
     logDebug(`Deleted community ${id}`);
-    return true;
+    return { success: true, stChanges };
 }
 
 /**
@@ -496,6 +578,7 @@ export async function renameCharacter(oldName, newName) {
         showToast('warning', 'No chat loaded');
         return { success: false };
     }
+    const expectedChatId = getCurrentChatId();
 
     if (!oldName || !newName || oldName === newName) {
         return { success: false };
@@ -533,15 +616,22 @@ export async function renameCharacter(oldName, newName) {
 
     // 4. Update matching graph PERSON entity if one exists
     let entityResult = null;
+    let entityUpdateAttempted = false;
     const graph = data.graph;
     if (graph?.nodes) {
         const oldKey = normalizeKey(oldName);
         if (graph.nodes[oldKey] && graph.nodes[oldKey].type === 'PERSON') {
+            entityUpdateAttempted = true;
             entityResult = await updateEntity(oldKey, { name: newName });
         }
     }
 
-    await getDeps().saveChatConditional();
+    if (entityUpdateAttempted && !entityResult) {
+        return { success: false };
+    }
+    if (!(await saveOpenVaultData(expectedChatId))) {
+        return { success: false };
+    }
     logInfo(`Renamed character "${oldName}" → "${newName}"`);
 
     return {
@@ -593,9 +683,9 @@ export function incrementGraphMessageCount(count) {
  * @returns {Promise<{ success: boolean, stChanges?: { toDelete: { hash: number }[], toSync?: { hash: number, text: string, item: any }[] } }>}
  */
 export async function mergeEntities(sourceKey, targetKey, graph = null) {
-    const { saveChatConditional } = getDeps();
     const ctx = getDeps().getContext();
-    const g = graph || ctx.chatMetadata?.openvault?.graph;
+    const expectedChatId = getCurrentChatId();
+    const g = graph || ctx?.chatMetadata?.openvault?.graph;
 
     if (!g) {
         return { success: false };
@@ -615,6 +705,9 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
 
     const toDelete = [];
     const toSync = [];
+    const sourceWasSynced = sourceNode._st_synced === true;
+    const targetWasSynced = targetNode._st_synced === true;
+    const oldTargetDescription = targetNode.description;
 
     // 1. Combine node data onto target
     targetNode.mentions += sourceNode.mentions;
@@ -652,11 +745,12 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
         const newSource = edge.source === sourceKey ? targetKey : edge.source;
         const newTarget = edge.target === sourceKey ? targetKey : edge.target;
         const newKey = `${newSource}__${newTarget}`;
+        const edgeWasSynced = edge._st_synced === true;
 
         // Self-loop check: delete if would be target->target
         if (newSource === newTarget) {
-            if (edge._st_synced) {
-                toDelete.push({ hash: cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`) });
+            if (edgeWasSynced) {
+                toDelete.push({ hash: cyrb53(getEdgeIndexText(edge)) });
             }
             delete g.edges[oldKey];
             continue;
@@ -665,6 +759,9 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
         // Collision check: target edge already exists
         if (g.edges[newKey] && newKey !== oldKey) {
             const existingEdge = g.edges[newKey];
+            const existingEdgeWasSynced = existingEdge._st_synced === true;
+            const oldExistingEdgeText = getEdgeIndexText(existingEdge);
+            const oldDescription = existingEdge.description;
             existingEdge.weight += edge.weight;
 
             // Merge descriptions
@@ -689,24 +786,30 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
                 }
             }
 
-            // Invalidate embedding since description changed
-            deleteEmbedding(existingEdge);
-
             // Collect hash for old edge deletion
-            if (edge._st_synced) {
-                toDelete.push({ hash: cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`) });
+            if (edgeWasSynced) {
+                toDelete.push({ hash: cyrb53(getEdgeIndexText(edge)) });
             }
 
-            // Queue merged edge for re-sync
-            const mergedEdgeId = `edge_${newSource}_${newTarget}`;
-            const mergedEdgeText = `[OV_ID:${mergedEdgeId}] ${existingEdge.description}`;
-            toSync.push({ hash: cyrb53(mergedEdgeText), text: mergedEdgeText, item: existingEdge });
+            const edgeDescriptionChanged = existingEdge.description !== oldDescription;
+            if (edgeDescriptionChanged) {
+                // The surviving edge has a different indexed payload. Capture its
+                // old hash before clearing sync state, then queue the replacement.
+                if (existingEdgeWasSynced) {
+                    toDelete.push({ hash: cyrb53(oldExistingEdgeText) });
+                }
+                deleteEmbedding(existingEdge);
+                if (existingEdgeWasSynced || edgeWasSynced) {
+                    const mergedEdgeText = getEdgeIndexText(existingEdge);
+                    toSync.push({ hash: cyrb53(mergedEdgeText), text: mergedEdgeText, item: existingEdge });
+                }
+            }
 
             delete g.edges[oldKey];
         } else if (newKey !== oldKey) {
             // No collision: rewrite edge
-            if (edge._st_synced) {
-                toDelete.push({ hash: cyrb53(`[OV_ID:edge_${edge.source}_${edge.target}] ${edge.description}`) });
+            if (edgeWasSynced) {
+                toDelete.push({ hash: cyrb53(getEdgeIndexText(edge)) });
             }
             edge.source = newSource;
             edge.target = newTarget;
@@ -715,32 +818,41 @@ export async function mergeEntities(sourceKey, targetKey, graph = null) {
             delete g.edges[oldKey];
 
             // Queue rewritten edge for re-sync
-            const rewrittenEdgeId = `edge_${newSource}_${newTarget}`;
-            const rewrittenEdgeText = `[OV_ID:${rewrittenEdgeId}] ${edge.description}`;
-            toSync.push({ hash: cyrb53(rewrittenEdgeText), text: rewrittenEdgeText, item: edge });
+            if (edgeWasSynced) {
+                const rewrittenEdgeText = getEdgeIndexText(edge);
+                toSync.push({ hash: cyrb53(rewrittenEdgeText), text: rewrittenEdgeText, item: edge });
+            }
         }
     }
 
     // 4. Cleanup
     // Collect hash for source node deletion
-    if (sourceNode._st_synced) {
-        toDelete.push({ hash: cyrb53(`[OV_ID:${sourceKey}] ${sourceNode.description}`) });
+    if (sourceWasSynced) {
+        toDelete.push({ hash: cyrb53(getNodeIndexText(sourceKey, sourceNode)) });
     }
 
     delete g.nodes[sourceKey];
 
-    // Invalidate target embedding since description changed
-    deleteEmbedding(targetNode);
+    const targetDescriptionChanged = targetNode.description !== oldTargetDescription;
+    if (targetDescriptionChanged) {
+        if (targetWasSynced) {
+            toDelete.push({ hash: cyrb53(getNodeIndexText(targetKey, { description: oldTargetDescription })) });
+        }
+        deleteEmbedding(targetNode);
+    }
 
-    // If source or target was synced, queue target for sync
-    // (absorbing a synced entity or updating an already-synced one)
-    if (sourceNode._st_synced || targetNode._st_synced) {
-        const text = `[OV_ID:${targetKey}] ${targetNode.description}`;
+    // If source was synced, its content must be represented by the surviving
+    // target even when description deduplication leaves the target text intact.
+    // If only the target was synced, replace its vector only when its text changed.
+    if (sourceWasSynced || (targetWasSynced && targetDescriptionChanged)) {
+        const text = getNodeIndexText(targetKey, targetNode);
         toSync.push({ hash: cyrb53(text), text, item: targetNode });
     }
 
     // 5. Save
-    await saveChatConditional();
+    if (!(await saveOpenVaultData(expectedChatId))) {
+        return { success: false };
+    }
 
     return {
         success: true,

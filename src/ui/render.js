@@ -19,6 +19,7 @@ import {
 } from '../store/chat-data.js';
 import { escapeCSSAttr, escapeHtml, showToast } from '../utils/dom.js';
 import { hasEmbedding, setEmbedding } from '../utils/embedding-codec.js';
+import { logError } from '../utils/logging.js';
 import {
     buildCharacterStateData,
     extractCharactersSet,
@@ -418,7 +419,9 @@ async function handleCharacterRename($container, oldName) {
         renderMemoryList();
         populateCharacterFilter();
         refreshStats();
-        import('./side-panel.js').then(({ refreshSidePanel }) => refreshSidePanel());
+        void import('./side-panel.js')
+            .then(({ refreshSidePanel }) => refreshSidePanel())
+            .catch((error) => logError('Failed to refresh side panel after character rename', error));
         showToast('success', `Renamed "${oldName}" → "${newName}"`);
     }
     $btn.prop('disabled', false);
@@ -575,6 +578,8 @@ function initEntityEventBindings() {
     // Escape key to cancel
     $container.on('keydown', '.openvault-entity-merge-panel', (e) => {
         if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
             const key = $(e.currentTarget).data('source-key');
             cancelEntityMerge(key);
         }
@@ -924,6 +929,22 @@ export function initBrowser() {
 }
 
 export function refreshAllUI() {
+    const data = getOpenVaultData();
+    const lifecycleStatus = data?.lifecycle?.status || 'ready';
+    const needsRebuild = lifecycleStatus !== 'ready';
+    $('#openvault_rebuild_notice').toggle(needsRebuild);
+    if (needsRebuild) {
+        import('../rebuild/rebuild.js')
+            .then(({ getRebuildNotice }) => {
+                $('#openvault_rebuild_notice_text').text(getRebuildNotice(data));
+                $('#openvault_rebuild_btn')
+                    .prop('disabled', lifecycleStatus === 'rebuilding')
+                    .text(
+                        lifecycleStatus === 'rebuild_failed' ? 'Resume Full Rebuild' : 'Rebuild OpenVault from Start'
+                    );
+            })
+            .catch(() => {});
+    }
     refreshStats();
     renderMemoryList();
     renderCharacterStates();
@@ -932,7 +953,9 @@ export function refreshAllUI() {
     updateBudgetIndicators();
     renderPerfTab();
 
-    import('./side-panel.js').then(({ refreshSidePanel }) => refreshSidePanel());
+    void import('./side-panel.js')
+        .then(({ refreshSidePanel }) => refreshSidePanel())
+        .catch((error) => logError('Failed to refresh side panel', error));
 }
 
 // =============================================================================

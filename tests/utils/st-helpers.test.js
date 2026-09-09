@@ -92,7 +92,7 @@ describe('st-helpers', () => {
             });
 
             expect(safeSetExtensionPrompt('test content')).toBe(true);
-            expect(mockSetPrompt).toHaveBeenCalledWith(extensionName, 'test content', 0, 0);
+            expect(mockSetPrompt).toHaveBeenCalledWith(extensionName, 'test content', 2, 0);
         });
 
         it('returns false on error', () => {
@@ -116,7 +116,7 @@ describe('st-helpers', () => {
             });
 
             safeSetExtensionPrompt('test content', 'openvault_world');
-            expect(mockSetPrompt).toHaveBeenCalledWith('openvault_world', 'test content', 0, 0);
+            expect(mockSetPrompt).toHaveBeenCalledWith('openvault_world', 'test content', 2, 0);
         });
 
         it('defaults to extensionName when no name provided', () => {
@@ -128,10 +128,10 @@ describe('st-helpers', () => {
             });
 
             safeSetExtensionPrompt('test content');
-            expect(mockSetPrompt).toHaveBeenCalledWith('openvault', 'test content', 0, 0);
+            expect(mockSetPrompt).toHaveBeenCalledWith('openvault', 'test content', 2, 0);
         });
 
-        it('passes position and depth parameters', () => {
+        it('maps legacy position codes and preserves depth', () => {
             const mockSetPrompt = vi.fn();
             setDeps({
                 console: { log: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -140,7 +140,7 @@ describe('st-helpers', () => {
             });
 
             safeSetExtensionPrompt('test content', 'openvault', 2, 4);
-            expect(mockSetPrompt).toHaveBeenCalledWith('openvault', 'test content', 2, 4);
+            expect(mockSetPrompt).toHaveBeenCalledWith('openvault', 'test content', 0, 4);
         });
 
         it('skips injection when position is CUSTOM (-1)', () => {

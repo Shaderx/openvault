@@ -5,6 +5,13 @@ import { getSessionSignal } from './state.js';
 import { cdnImport } from './utils/cdn.js';
 import { hasEmbedding, setEmbedding } from './utils/embedding-codec.js';
 import { logDebug, logError, logInfo } from './utils/logging.js';
+import {
+    getCommunityIndexText,
+    getEdgeEmbeddingText,
+    getEdgeIndexText,
+    getMemoryIndexText,
+    getNodeIndexText,
+} from './utils/st-index.js';
 
 // =============================================================================
 // Strategy Classes (from src/embeddings/strategies.js)
@@ -666,31 +673,43 @@ class StVectorStrategy extends EmbeddingStrategy {
         return true;
     }
 
-    async insertItems(items, _options = {}) {
+    async insertItems(items, options = {}) {
+        const signal = options.signal ?? getSessionSignal();
+        const expectedChatId = options.expectedChatId ?? getBackfillChatId();
+        throwIfBackfillCancelled(signal, expectedChatId);
         const { syncItemsToST } = await import('./services/st-vector.js');
-        const { getCurrentChatId } = await import('./store/chat-data.js');
-        const chatId = getCurrentChatId() || 'default';
+        throwIfBackfillCancelled(signal, expectedChatId);
+        const chatId = expectedChatId || 'default';
         return syncItemsToST(items, chatId);
     }
 
-    async searchItems(query, topK, threshold, _options = {}) {
+    async searchItems(query, topK, threshold, options = {}) {
+        const signal = options.signal ?? getSessionSignal();
+        const expectedChatId = options.expectedChatId ?? getBackfillChatId();
+        throwIfBackfillCancelled(signal, expectedChatId);
         const { querySTVector } = await import('./services/st-vector.js');
-        const { getCurrentChatId } = await import('./store/chat-data.js');
-        const chatId = getCurrentChatId() || 'default';
+        throwIfBackfillCancelled(signal, expectedChatId);
+        const chatId = expectedChatId || 'default';
         return querySTVector(query, topK, threshold, chatId);
     }
 
-    async deleteItems(hashes, _options = {}) {
+    async deleteItems(hashes, options = {}) {
+        const signal = options.signal ?? getSessionSignal();
+        const expectedChatId = options.expectedChatId ?? getBackfillChatId();
+        throwIfBackfillCancelled(signal, expectedChatId);
         const { deleteItemsFromST } = await import('./services/st-vector.js');
-        const { getCurrentChatId } = await import('./store/chat-data.js');
-        const chatId = getCurrentChatId() || 'default';
+        throwIfBackfillCancelled(signal, expectedChatId);
+        const chatId = expectedChatId || 'default';
         return deleteItemsFromST(hashes, chatId);
     }
 
-    async purgeCollection(_options = {}) {
+    async purgeCollection(options = {}) {
+        const signal = options.signal ?? getSessionSignal();
+        const expectedChatId = options.expectedChatId ?? getBackfillChatId();
+        throwIfBackfillCancelled(signal, expectedChatId);
         const { purgeSTCollection } = await import('./services/st-vector.js');
-        const { getCurrentChatId } = await import('./store/chat-data.js');
-        const chatId = getCurrentChatId() || 'default';
+        throwIfBackfillCancelled(signal, expectedChatId);
+        const chatId = expectedChatId || 'default';
         return purgeSTCollection(chatId);
     }
 }
@@ -805,6 +824,29 @@ export function isEmbeddingsEnabled() {
 const MAX_CACHE_SIZE = 500;
 const embeddingCache = new Map();
 let matchingUnavailableReported = false;
+
+/**
+ * Read the current chat ID through the dependency boundary without importing
+ * the store (the store imports this module for graph entity embeddings).
+ * @returns {string|null}
+ */
+function getBackfillChatId() {
+    const context = getDeps().getContext?.();
+    return context?.chatId || context?.chat_metadata?.chat_id || null;
+}
+
+/**
+ * Throw cancellation when a backfill no longer belongs to its originating
+ * chat or its session was aborted.
+ * @param {AbortSignal} signal - Backfill cancellation signal
+ * @param {string|null} expectedChatId - Chat ID captured before awaiting
+ * @returns {void}
+ */
+function throwIfBackfillCancelled(signal, expectedChatId) {
+    if (signal.aborted || (expectedChatId !== null && getBackfillChatId() !== expectedChatId)) {
+        throw new DOMException('Aborted', 'AbortError');
+    }
+}
 
 /**
  * Build the model identity portion of an embedding cache key.
@@ -1067,31 +1109,33 @@ export async function enrichEventsWithEmbeddings(events, { signal } = {}) {
 // =============================================================================
 
 /**
- * Backfill ALL embedding types: memories, graph nodes, and communities.
+ * Backfill ALL embedding types: memories, graph nodes, edges, and communities.
  * Used by the UI button and auto-triggered after embedding model invalidation.
  * @param {Object} options - Options
  * @param {AbortSignal} options.signal - AbortSignal
  * @param {boolean} options.silent - If true, suppress toasts (for auto-trigger)
- * @returns {Promise<{memories: number, nodes: number, communities: number, total: number, skipped: boolean}>}
+ * @returns {Promise<{memories: number, nodes: number, edges: number, communities: number, total: number, skipped: boolean}>}
  */
 export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
     signal ??= getSessionSignal();
-    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    const expectedChatId = getBackfillChatId();
+    throwIfBackfillCancelled(signal, expectedChatId);
 
     const { MEMORIES_KEY } = await import('./constants.js');
     const { getOpenVaultData, saveOpenVaultData } = await import('./store/chat-data.js');
     const { setStatus } = await import('./ui/status.js');
     const { showToast } = await import('./utils/dom.js');
+    throwIfBackfillCancelled(signal, expectedChatId);
 
     if (!isEmbeddingsEnabled()) {
         if (!silent) showToast('warning', 'Configure embedding source first');
-        return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: false };
+        return { memories: 0, nodes: 0, edges: 0, communities: 0, total: 0, skipped: false };
     }
 
     const data = getOpenVaultData();
     if (!data) {
         if (!silent) showToast('warning', 'No chat data available');
-        return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: false };
+        return { memories: 0, nodes: 0, edges: 0, communities: 0, total: 0, skipped: false };
     }
 
     const settings = getDeps().getExtensionSettings()[extensionName];
@@ -1104,70 +1148,94 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
         const BATCH_SIZE = 100;
 
         const allItems = [];
+        const counts = { memories: 0, nodes: 0, edges: 0, communities: 0 };
 
-        // Collect unsynced memories
-        for (const m of data[MEMORIES_KEY] || []) {
-            if (m.summary && !isStSynced(m)) {
-                allItems.push({ item: m, text: `[OV_ID:${m.id}] ${m.summary}` });
+        // Collect eligible unsynced memories.
+        const storedMemories = data[MEMORIES_KEY]?.length > 0 ? data[MEMORIES_KEY] : [];
+        for (const m of storedMemories) {
+            if (m.summary && !m.archived && !m.coverage_fallback && !isStSynced(m)) {
+                allItems.push({ kind: 'memories', item: m, text: getMemoryIndexText(m) });
             }
         }
 
-        // Collect unsynced graph nodes
+        // Collect eligible unsynced graph nodes.
         for (const [name, node] of Object.entries(data.graph?.nodes || {})) {
-            if (!isStSynced(node)) {
-                allItems.push({ item: node, text: `[OV_ID:${name}] ${node.description}` });
+            if (node.description && !isStSynced(node)) {
+                allItems.push({ kind: 'nodes', item: node, text: getNodeIndexText(name, node) });
             }
         }
 
-        // Collect unsynced communities
+        // Collect eligible unsynced graph edges. Resolved/superseded edges are
+        // excluded because graph retrieval excludes them as inactive.
+        for (const edge of Object.values(data.graph?.edges || {})) {
+            if (edge.description && edge.status !== 'resolved' && edge.status !== 'superseded' && !isStSynced(edge)) {
+                allItems.push({ kind: 'edges', item: edge, text: getEdgeIndexText(edge) });
+            }
+        }
+
+        // Collect eligible unsynced communities.
         for (const [id, community] of Object.entries(data.communities || {})) {
-            if (community.summary && !isStSynced(community)) {
-                allItems.push({ item: community, text: `[OV_ID:${id}] ${community.summary}` });
+            if (community.summary && community.status !== 'stale' && !isStSynced(community)) {
+                allItems.push({ kind: 'communities', item: community, text: getCommunityIndexText(id, community) });
             }
         }
 
         if (allItems.length === 0) {
-            return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: true };
+            return { ...counts, total: 0, skipped: true };
         }
 
         if (!silent) showToast('info', `Syncing ${allItems.length} items to ST Vector Storage...`);
 
         let synced = 0;
         for (let i = 0; i < allItems.length; i += BATCH_SIZE) {
+            throwIfBackfillCancelled(signal, expectedChatId);
             const batch = allItems.slice(i, i + BATCH_SIZE);
             const stItems = batch.map(({ text }) => ({
                 hash: cyrb53(text),
                 text,
                 index: 0,
             }));
-            const success = await strategy.insertItems(stItems);
+            const success = await strategy.insertItems(stItems, { signal, expectedChatId });
+            throwIfBackfillCancelled(signal, expectedChatId);
             if (success) {
-                for (const { item } of batch) {
+                for (const { kind, item } of batch) {
                     markStSynced(item);
+                    counts[kind]++;
                     synced++;
                 }
             }
         }
 
         if (synced > 0) {
+            throwIfBackfillCancelled(signal, expectedChatId);
             // Stamp ST fingerprint so mismatch detection works on next load
             const { stampStVectorFingerprint } = await import('./embeddings/migration.js');
             stampStVectorFingerprint(data);
 
-            await saveOpenVaultData();
+            if (!(await saveOpenVaultData(expectedChatId))) {
+                throw new DOMException('Aborted', 'AbortError');
+            }
         }
 
-        return { memories: synced, nodes: 0, communities: 0, total: synced, skipped: false };
+        return { ...counts, total: synced, skipped: false };
     }
 
     // Count what needs embedding
-    const memories = (data[MEMORIES_KEY] || []).filter((m) => m.summary && !hasEmbedding(m));
-    const nodes = Object.values(data.graph?.nodes || {}).filter((n) => !hasEmbedding(n));
-    const communities = Object.values(data.communities || {}).filter((c) => c.summary && !hasEmbedding(c));
-    const totalNeeded = memories.length + nodes.length + communities.length;
+    const storedMemories = data[MEMORIES_KEY]?.length > 0 ? data[MEMORIES_KEY] : [];
+    const memories = storedMemories.filter((m) => m.summary && !m.archived && !m.coverage_fallback && !hasEmbedding(m));
+    const nodes = Object.entries(data.graph?.nodes || {})
+        .filter(([, n]) => n.description && !hasEmbedding(n))
+        .map(([, n]) => n);
+    const edges = Object.values(data.graph?.edges || {}).filter(
+        (edge) => edge.description && edge.status !== 'resolved' && edge.status !== 'superseded' && !hasEmbedding(edge)
+    );
+    const communities = Object.values(data.communities || {}).filter(
+        (c) => c.summary && c.status !== 'stale' && !hasEmbedding(c)
+    );
+    const totalNeeded = memories.length + nodes.length + edges.length + communities.length;
 
     if (totalNeeded === 0) {
-        return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: true };
+        return { memories: 0, nodes: 0, edges: 0, communities: 0, total: 0, skipped: true };
     }
 
     if (!silent) showToast('info', `Generating ${totalNeeded} embeddings...`);
@@ -1176,6 +1244,7 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
     try {
         // 1. Memory embeddings
         const memoryCount = await generateEmbeddingsForMemories(memories, { signal });
+        throwIfBackfillCancelled(signal, expectedChatId);
 
         // 2. Graph node embeddings
         let nodeCount = 0;
@@ -1202,12 +1271,42 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
                 }
             }
         }
+        throwIfBackfillCancelled(signal, expectedChatId);
 
-        // 3. Community embeddings
+        // 3. Graph edge embeddings
+        let edgeCount = 0;
+        if (edges.length > 0) {
+            const settings = getDeps().getExtensionSettings()[extensionName];
+            const source = settings.embeddingSource;
+            const strategy = getStrategy(source);
+            const edgeEmbeddings = await processInBatches(edges, 5, async (edge) => {
+                return strategy.getDocumentEmbedding(getEdgeEmbeddingText(edge), {
+                    signal,
+                    prefix: settings.embeddingDocPrefix,
+                    url: settings.ollamaUrl,
+                    model: settings.embeddingModel,
+                    apiUrl: settings.embeddingApiUrl,
+                    apiKey: settings.embeddingApiKey,
+                    apiModel: settings.embeddingApiModel,
+                });
+            });
+            throwIfBackfillCancelled(signal, expectedChatId);
+            for (let i = 0; i < edges.length; i++) {
+                if (edgeEmbeddings[i]) {
+                    setEmbedding(edges[i], edgeEmbeddings[i]);
+                    edgeCount++;
+                }
+            }
+        }
+
+        // 4. Community embeddings
         let communityCount = 0;
         if (communities.length > 0) {
             const communityEmbeddings = await processInBatches(communities, 5, async (c) => {
-                return getQueryEmbedding(c.summary, { signal });
+                return getQueryEmbedding(
+                    c.retrievalText || `${c.title || ''}\n${c.summary}\n${(c.findings || []).join('\n')}`,
+                    { signal }
+                );
             });
             for (let i = 0; i < communities.length; i++) {
                 if (communityEmbeddings[i]) {
@@ -1216,19 +1315,31 @@ export async function backfillAllEmbeddings({ signal, silent = false } = {}) {
                 }
             }
         }
+        throwIfBackfillCancelled(signal, expectedChatId);
 
-        const total = memoryCount + nodeCount + communityCount;
+        const total = memoryCount + nodeCount + edgeCount + communityCount;
         if (total > 0) {
-            await saveOpenVaultData();
-            logInfo(`Backfill complete: ${memoryCount} memories, ${nodeCount} nodes, ${communityCount} communities`);
+            if (!(await saveOpenVaultData(expectedChatId))) {
+                throw new DOMException('Aborted', 'AbortError');
+            }
+            logInfo(
+                `Backfill complete: ${memoryCount} memories, ${nodeCount} nodes, ${edgeCount} edges, ${communityCount} communities`
+            );
         }
 
-        return { memories: memoryCount, nodes: nodeCount, communities: communityCount, total, skipped: false };
+        return {
+            memories: memoryCount,
+            nodes: nodeCount,
+            edges: edgeCount,
+            communities: communityCount,
+            total,
+            skipped: false,
+        };
     } catch (error) {
         if (error.name === 'AbortError') throw error;
         logError('Backfill embeddings error', error);
         if (!silent) showToast('error', `Embedding generation failed: ${error.message}`);
-        return { memories: 0, nodes: 0, communities: 0, total: 0, skipped: false };
+        return { memories: 0, nodes: 0, edges: 0, communities: 0, total: 0, skipped: false };
     } finally {
         setStatus('ready');
     }

@@ -157,6 +157,7 @@ describe('retrieveAndInjectContext with injection toggle', () => {
                     summary: 'Alice is a brave warrior',
                     message_fingerprints: [],
                     importance: 5,
+                    witnesses: ['TestChar'],
                 },
                 {
                     id: 'e1',
@@ -164,6 +165,7 @@ describe('retrieveAndInjectContext with injection toggle', () => {
                     summary: 'Alice fought a dragon',
                     message_fingerprints: [fp],
                     importance: 5,
+                    characters_involved: ['TestChar'],
                 },
             ],
             graph: { nodes: {}, edges: {} },
@@ -219,6 +221,7 @@ describe('retrieveAndInjectContext with injection toggle', () => {
                     summary: 'Alice is a brave warrior',
                     message_fingerprints: [],
                     importance: 5,
+                    witnesses: ['TestChar'],
                 },
                 {
                     id: 'e1',
@@ -226,6 +229,7 @@ describe('retrieveAndInjectContext with injection toggle', () => {
                     summary: 'Alice fought a dragon',
                     message_fingerprints: [fp],
                     importance: 5,
+                    characters_involved: ['TestChar'],
                 },
             ],
             graph: { nodes: {}, edges: {} },

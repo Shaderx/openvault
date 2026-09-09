@@ -35,8 +35,9 @@ import {
 } from '../prompts/index.js';
 import { cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { generateId } from '../store/chat-data.js';
-import { cyrb53, getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
+import { cyrb53, deleteEmbedding, getEmbedding, hasEmbedding } from '../utils/embedding-codec.js';
 import { logDebug } from '../utils/logging.js';
+import { getReflectionIndexText } from '../utils/st-index.js';
 import { sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 
 /**
@@ -91,7 +92,9 @@ export function filterDuplicateReflections(
     rejectThreshold = 0.9,
     replaceThreshold = 0.8
 ) {
-    const existingReflections = existingMemories.filter((m) => m.type === 'reflection' && hasEmbedding(m));
+    const existingReflections = existingMemories.filter(
+        (m) => !m.coverage_fallback && !m.archived && m.type === 'reflection' && hasEmbedding(m)
+    );
     const toAdd = [];
     const toArchiveIds = new Set();
 
@@ -136,6 +139,23 @@ export function filterDuplicateReflections(
     }
 
     return { toAdd, toArchiveIds: Array.from(toArchiveIds) };
+}
+
+/**
+ * Archive a reflection and remove its local/ST embedding state.
+ * The old ST hash is captured before deleteEmbedding clears _st_synced.
+ * @param {Object} reflection - Reflection memory to archive
+ * @param {{toDelete: {hash: number}[]}} stChanges - Changeset to append to
+ * @returns {boolean} True when the reflection transitioned to archived
+ */
+function archiveReflection(reflection, stChanges) {
+    if (!reflection || reflection.archived) return false;
+    if (reflection._st_synced === true) {
+        stChanges.toDelete.push({ hash: cyrb53(getReflectionIndexText(reflection)) });
+    }
+    reflection.archived = true;
+    deleteEmbedding(reflection);
+    return true;
 }
 
 /**
@@ -213,22 +233,29 @@ export async function generateReflections(characterName, allMemories, characterS
     const maxReflections = settings.maxReflectionsPerCharacter;
     const contextBudget = settings.reflectionContextTokens || defaultSettings.reflectionContextTokens;
 
-    // Archive old reflections if cap is reached
-    const characterReflections = allMemories.filter(
+    // Coverage-only fallbacks are archival bookkeeping, not semantic input to
+    // reflection synthesis. Filter them before POV, budgeting, and dedup so a
+    // full rebuild cannot accidentally promote them into insight context.
+    const semanticMemories = allMemories.filter((memory) => !memory.coverage_fallback);
+    const stChanges = { toSync: [], toDelete: [] };
+
+    // Select cap victims now, but defer archive/embedding mutations until the
+    // generation pipeline succeeds. Otherwise an LLM/embedding failure can
+    // clear _st_synced before there is a returned changeset to delete its ST
+    // vector.
+    const characterReflections = semanticMemories.filter(
         (m) => m.type === 'reflection' && m.character === characterName && !m.archived
     );
+    let capacityArchiveCandidates = [];
     if (characterReflections.length >= maxReflections) {
         const toArchive = characterReflections.length - maxReflections + 1; // +1 to make room for new ones
         const sortedBySequence = [...characterReflections].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
-        for (let i = 0; i < toArchive && i < sortedBySequence.length; i++) {
-            sortedBySequence[i].archived = true;
-        }
-        logDebug(`Reflection: Archived ${toArchive} old reflections for ${characterName} (cap: ${maxReflections})`);
+        capacityArchiveCandidates = sortedBySequence.slice(0, toArchive);
     }
 
     // Filter memories to what this character knows
     const data = { character_states: characterStates };
-    const accessibleMemories = filterMemoriesByPOV(allMemories, [characterName], data);
+    const accessibleMemories = filterMemoriesByPOV(semanticMemories, [characterName], data);
 
     // Token-budgeted candidate selection (replaces fixed REFLECTION_CANDIDATE_LIMIT)
     // 80% budget for recent events, 20% for existing reflections
@@ -251,14 +278,16 @@ export async function generateReflections(characterName, allMemories, characterS
     );
 
     // Include old reflections for potential synthesis in candidate set
-    const oldReflections = accessibleMemories.filter((m) => m.type === 'reflection' && (m.level || 1) >= 1);
+    const oldReflections = accessibleMemories.filter(
+        (m) => m.type === 'reflection' && !m.archived && (m.level || 1) >= 1
+    );
 
     // Combine and deduplicate by id (recent memories take precedence if duplicate)
     const candidateSet = Array.from(new Map([...recentMemories, ...oldReflections].map((m) => [m.id, m])).values());
 
     if (recentMemories.length < 3) {
         logDebug(`Reflection: ${characterName} has too few accessible memories (${recentMemories.length}), skipping`);
-        return { reflections: [], stChanges: { toSync: [] } };
+        return { reflections: [], stChanges };
     }
 
     // Pre-flight similarity gate (skipped in force mode for manual generation)
@@ -272,7 +301,7 @@ export async function generateReflections(characterName, allMemories, characterS
 
         if (shouldSkip) {
             logDebug(`Reflection: ${skipReason} for ${characterName}`);
-            return { reflections: [], stChanges: { toSync: [] } };
+            return { reflections: [], stChanges };
         }
     }
 
@@ -348,16 +377,26 @@ export async function generateReflections(characterName, allMemories, characterS
     const replaceThreshold = REFLECTION_DEDUP_REPLACE_THRESHOLD;
     const { toAdd, toArchiveIds } = filterDuplicateReflections(
         newReflections,
-        allMemories,
+        semanticMemories,
         reflectionDedupThreshold,
         replaceThreshold
     );
 
+    // Archive cap victims only after all fallible generation and embedding
+    // work has completed, so a failed pipeline leaves durable sync state
+    // untouched and can be retried safely.
+    if (capacityArchiveCandidates.length > 0) {
+        for (const reflection of capacityArchiveCandidates) archiveReflection(reflection, stChanges);
+        logDebug(
+            `Reflection: Archived ${capacityArchiveCandidates.length} old reflections for ${characterName} (cap: ${maxReflections})`
+        );
+    }
+
     // Archive replaced reflections
     if (toArchiveIds.length > 0) {
-        for (const memory of allMemories) {
+        for (const memory of semanticMemories) {
             if (toArchiveIds.includes(memory.id)) {
-                memory.archived = true;
+                archiveReflection(memory, stChanges);
             }
         }
         logDebug(`Reflection: Archived ${toArchiveIds.length} replaced reflections for ${characterName}`);
@@ -367,9 +406,8 @@ export async function generateReflections(characterName, allMemories, characterS
         `Reflection: Generated ${toAdd.length} reflections for ${characterName} (${newReflections.length - toAdd.length} filtered)`
     );
 
-    const stChanges = { toSync: [] };
     for (const r of toAdd) {
-        const text = `[OV_ID:${r.id}] ${r.summary}`;
+        const text = getReflectionIndexText(r);
         stChanges.toSync.push({ hash: cyrb53(text), text, item: r });
     }
 

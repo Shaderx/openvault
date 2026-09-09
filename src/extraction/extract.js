@@ -23,6 +23,7 @@ import {
     CHARACTERS_KEY,
     COMMUNITY_STALENESS_THRESHOLD,
     CONSOLIDATION,
+    defaultSettings,
     EDGE_DESCRIPTION_CAP,
     EMBEDDING_SOURCES,
     ENTITY_DESCRIPTION_CAP,
@@ -32,7 +33,12 @@ import {
 } from '../constants.js';
 import { getDeps } from '../deps.js';
 import { enrichEventsWithEmbeddings } from '../embeddings.js';
-import { buildCommunityGroups, detectCommunities, updateCommunitySummaries } from '../graph/communities.js';
+import {
+    buildCommunityGroups,
+    detectCommunities,
+    getCommunityRetrievalText,
+    updateCommunitySummaries,
+} from '../graph/communities.js';
 import {
     consolidateEdges,
     expandMainCharacterKeys,
@@ -43,6 +49,7 @@ import {
 } from '../graph/graph.js';
 import { callLLM, LLM_CONFIGS } from '../llm.js';
 import { record } from '../perf/store.js';
+import { buildFallbackExtractionPrompt } from '../prompts/events/fallback.js';
 import {
     buildEventExtractionPrompt,
     buildGraphExtractionPrompt,
@@ -54,7 +61,17 @@ import { accumulateImportance, generateReflections, shouldReflect } from '../ref
 import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { deleteItemsFromST, isStVectorSource, syncItemsToST } from '../services/st-vector.js';
 import { getSettings } from '../settings.js';
-import { clearAllLocks, getLastApiCallTime, isWorkerRunning, operationState, setLastApiCallTime } from '../state.js';
+import {
+    clearAllLocks,
+    clearReflectionRetry,
+    getLastApiCallTime,
+    getSessionSignal,
+    isReflectionRetrySuppressed,
+    isWorkerRunning,
+    operationState,
+    recordReflectionRetryFailure,
+    setLastApiCallTime,
+} from '../state.js';
 import {
     addMemories,
     getCurrentChatId,
@@ -69,6 +86,7 @@ import { logDebug, logError, logInfo } from '../utils/logging.js';
 import { sanitizeMessageContent } from '../utils/message-sanitizer.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
+import { getMemoryIndexText } from '../utils/st-index.js';
 import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 import { countTokens } from '../utils/tokens.js';
 import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
@@ -76,10 +94,15 @@ import {
     getBackfillMessageIds,
     getBackfillStats,
     getFingerprint,
+    getMessageRevision,
     getNextBatch,
     getProcessedFingerprints,
 } from './scheduler.js';
-import { parseEventExtractionResponse, parseGraphExtractionResponse } from './structured.js';
+import {
+    parseEventExtractionResponse,
+    parseFallbackExtractionResponse,
+    parseGraphExtractionResponse,
+} from './structured.js';
 
 /**
  * Backoff schedule in seconds for failed extraction batches.
@@ -102,6 +125,153 @@ const _emptyExtractionAttempts = new Map();
 
 const MAX_EMPTY_RETRIES = 2;
 
+/** Return Unicode word segments, using locale-aware segmentation when present. */
+function getUnicodeWordSegments(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return [];
+    if (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function') {
+        const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+        return [...segmenter.segment(text)].filter((part) => part.isWordLike).map((part) => part.segment);
+    }
+    return text.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || [];
+}
+
+/** Count words without splitting Unicode text into bytes or treating CJK as one giant word. */
+export function countUnicodeWords(value) {
+    return getUnicodeWordSegments(value).length;
+}
+
+/** Keep fallback summaries to one sentence and at most fifteen Unicode words. */
+export function normalizeFallbackSummary(value, sourceText = 'Source message retained for coverage.') {
+    let text = String(value ?? '')
+        .replace(/\s+/gu, ' ')
+        .trim();
+    // LLMs occasionally emit multiple sentences despite the constrained schema.
+    // Split at the first terminator even when malformed output omits a space.
+    const boundary = text.search(/[.!?。！？]/u);
+    if (boundary >= 0) text = text.slice(0, boundary).trim();
+    if (!text)
+        text = String(sourceText ?? '')
+            .replace(/\s+/gu, ' ')
+            .trim();
+    const words = getUnicodeWordSegments(text);
+    const limited = words.slice(0, 15).join(' ');
+    return `${limited || 'Source message retained for coverage.'}.`;
+}
+
+export function validateFallbackSummary(value) {
+    const text = String(value ?? '').trim();
+    const terminators = text.match(/[.!?。！？]/gu) || [];
+    return text.length > 0 && countUnicodeWords(text) <= 15 && terminators.length <= 1;
+}
+
+function escapeExtractionXml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&apos;');
+}
+
+/**
+ * One batched LLM pass for uncovered sources. The full ordered batch remains
+ * available as temporal context, while only required messages receive
+ * fallbacks. A single constrained retry is allowed; output is then normalized
+ * deterministically and validated against the requested source ids.
+ */
+async function fetchFallbackMemories(requiredMessages, contextMessages, contextParams, batchId, abortSignal) {
+    if (!requiredMessages.length) return [];
+    const sourceLines = contextMessages
+        .map((message) => {
+            const speaker = message.is_user ? contextParams.names.user : message.name || contextParams.names.char;
+            return `<source source_message_id="${escapeExtractionXml(message.id)}" fingerprint="${escapeExtractionXml(getMessageRevision(message))}" role="${message.is_user ? 'user' : 'assistant'}">[${escapeExtractionXml(speaker)}]: ${escapeExtractionXml(sanitizeMessageContent(message.mes, !!message.is_user))}</source>`;
+        })
+        .join('\n');
+    const prompt = buildFallbackExtractionPrompt({
+        messages: sourceLines,
+        requiredSourceIds: requiredMessages.map((message) => message.id),
+        preamble: contextParams.preamble,
+        prefill: contextParams.prefill,
+        outputLanguage: contextParams.outputLanguage,
+    });
+    let parsed;
+    let lastError;
+    let validated = false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const t0 = performance.now();
+            const requestPrompt =
+                attempt === 0
+                    ? prompt
+                    : prompt.map((message, index) =>
+                          index === prompt.length - 1
+                              ? {
+                                    ...message,
+                                    content: `${message.content}\n\nRETRY: Return the same complete source-id set. Enforce exactly one sentence and at most 15 Unicode words per summary.`,
+                                }
+                              : message
+                      );
+            const response = await callLLM(requestPrompt, LLM_CONFIGS.extraction_fallback, {
+                structured: true,
+                signal: abortSignal,
+            });
+            record('llm_events', performance.now() - t0);
+            const candidate = parseFallbackExtractionResponse(response);
+            const requested = new Set(requiredMessages.map((message) => message.id));
+            const seen = new Set();
+            for (const item of candidate.fallbacks) {
+                if (!requested.has(item.source_message_id) || seen.has(item.source_message_id)) {
+                    throw new Error('Fallback response has unknown or duplicate source ids');
+                }
+                seen.add(item.source_message_id);
+            }
+            if (seen.size !== requested.size) throw new Error('Fallback response omitted a source id');
+            const summariesValid = candidate.fallbacks.every((item) => validateFallbackSummary(item.summary));
+            if (!summariesValid && attempt === 0) {
+                throw new Error('Fallback response violated one-sentence or fifteen-word constraint');
+            }
+            parsed = candidate;
+            validated = true;
+            break;
+        } catch (error) {
+            if (error.name === 'AbortError') throw error;
+            lastError = error;
+            if (attempt === 0) logDebug(`Fallback extraction validation failed; retrying once: ${error.message}`);
+        }
+    }
+    if (!validated || !parsed) throw lastError || new Error('Fallback extraction failed');
+
+    const byId = new Map(requiredMessages.map((message) => [message.id, message]));
+    return parsed.fallbacks.map((raw, index) => {
+        const message = byId.get(raw.source_message_id);
+        const fingerprint = getMessageRevision(message);
+        const summary = normalizeFallbackSummary(raw.summary, message.mes);
+        if (!validateFallbackSummary(summary)) throw new Error('Fallback summary failed normalized constraints');
+        return {
+            id: `fallback_${Date.now()}_${index}`,
+            type: 'event',
+            summary,
+            importance: 1,
+            temporal_anchor: raw.temporal_anchor,
+            is_transient: false,
+            characters_involved: [],
+            witnesses: [],
+            location: null,
+            is_secret: false,
+            emotional_impact: {},
+            relationship_impact: {},
+            tokens: tokenize(summary),
+            message_ids: [message.id],
+            message_fingerprints: [fingerprint],
+            sequence: message.id * 1000 + index,
+            created_at: Date.now(),
+            batch_id: batchId,
+            coverage_fallback: true,
+        };
+    });
+}
+
 /**
  * Build a stable key for a batch of messages.
  * @param {Array} messages - Message objects with send_date, name, mes
@@ -109,7 +279,7 @@ const MAX_EMPTY_RETRIES = 2;
  */
 function _getBatchKey(messages) {
     const fps = messages
-        .map((m) => getFingerprint(m))
+        .map((m) => getMessageRevision(m))
         .sort()
         .join('|');
     return String(cyrb53(fps));
@@ -185,7 +355,7 @@ export async function hideExtractedMessages() {
     let hiddenCount = 0;
     for (let i = 0; i < chat.length; i++) {
         const msg = chat[i];
-        if (processedFps.has(getFingerprint(msg)) && !msg.is_system) {
+        if ((processedFps.has(getMessageRevision(msg)) || processedFps.has(getFingerprint(msg))) && !msg.is_system) {
             msg.is_system = true;
             msg.openvault_hidden = true;
             hiddenCount++;
@@ -229,7 +399,9 @@ export async function executeEmergencyCut(options = {}) {
 
     if (stats.unextractedCount === 0) {
         const processedFps = getProcessedFingerprints(data);
-        const hideableCount = chat.filter((m) => !m.is_system && processedFps.has(getFingerprint(m))).length;
+        const hideableCount = chat.filter(
+            (m) => !m.is_system && (processedFps.has(getMessageRevision(m)) || processedFps.has(getFingerprint(m)))
+        ).length;
 
         if (hideableCount === 0) {
             onWarning?.('No messages to hide');
@@ -630,9 +802,38 @@ export async function filterSimilarEvents(
 // =============================================================================
 
 /**
+ * Resolve the bounded reflection retry policy from the central defaults.
+ * Invalid runtime values fail closed to the configured default policy.
+ * @param {Object} settings
+ * @returns {{cooldownMs: number, maxFailures: number}}
+ */
+function getReflectionRetryPolicy(settings) {
+    const configuredCooldown = Number(settings?.reflectionRetryCooldownMs);
+    const configuredMaxFailures = Number(settings?.reflectionRetryMaxFailures);
+    const defaultCooldown = Number(defaultSettings.reflectionRetryCooldownMs);
+    const defaultMaxFailures = Number(defaultSettings.reflectionRetryMaxFailures);
+    return {
+        cooldownMs:
+            Number.isFinite(configuredCooldown) && configuredCooldown >= 0 ? configuredCooldown : defaultCooldown,
+        maxFailures:
+            Number.isFinite(configuredMaxFailures) && configuredMaxFailures >= 1
+                ? Math.floor(configuredMaxFailures)
+                : defaultMaxFailures,
+    };
+}
+
+/**
+ * Throw the standard cancellation error when a phase was aborted.
+ * @param {AbortSignal|null|undefined} abortSignal
+ */
+function throwIfReflectionAborted(abortSignal) {
+    if (abortSignal?.aborted) throw new DOMException('Aborted', 'AbortError');
+}
+
+/**
  * Run reflection synthesis for a list of characters.
  * Checks each character against the reflection threshold, generates reflections via LLM,
- * pushes results to data.memories, and resets the importance accumulator.
+ * pushes results to data.memories, and consumes the triggering accumulator.
  *
  * @param {Object} data - OpenVault data object (mutated in-place)
  * @param {string[]} characterNames - Characters to check for reflection trigger
@@ -642,46 +843,104 @@ export async function filterSimilarEvents(
  */
 export async function synthesizeReflections(data, characterNames, settings, options = {}) {
     const { abortSignal = null } = options;
+    const originSessionSignal = getSessionSignal();
+    const phaseSignal = abortSignal || originSessionSignal;
 
     // Check if reflection generation is enabled (prefer passed settings to avoid stale getSettings race)
     const generationEnabled = settings?.reflectionGenerationEnabled ?? getSettings('reflectionGenerationEnabled', true);
     if (!generationEnabled) {
         logDebug('[Extraction] Reflection generation disabled, skipping');
-        return { stChanges: { toUpsert: [], toDelete: [] } };
+        return { stChanges: { toSync: [], toDelete: [] } };
     }
 
-    const reflectionThreshold = settings.reflectionThreshold;
-    const ladderQueue = await createLadderQueue(settings.maxConcurrency);
+    const effectiveSettings = { ...defaultSettings, ...(getSettings() || {}), ...(settings || {}) };
+    const reflectionThreshold = effectiveSettings.reflectionThreshold;
+    const retryPolicy = getReflectionRetryPolicy(effectiveSettings);
+    const originChatId = getCurrentChatId();
+    const originData = data;
+    const originStoreData = getOpenVaultData();
+    // Unit callers may pass an unbound data object. In that legacy shape the
+    // chat ID is still the available guard; production data is store-bound and
+    // receives the stronger object-identity check below.
+    const dataIsStoreBound = originStoreData === originData;
+    const isOriginChatAndData = () =>
+        (originChatId === null || getCurrentChatId() === originChatId) &&
+        (!dataIsStoreBound || getOpenVaultData() === originData);
+    const isOriginSession = () => getSessionSignal() === originSessionSignal && !originSessionSignal.aborted;
+    const isOriginContext = () => isOriginSession() && isOriginChatAndData();
+    // An explicit operation signal may be cancelled while the session remains
+    // current; restore in that case. A reset session must never touch old data.
+    const canRestoreOrigin = () => isOriginSession() && isOriginChatAndData();
+    const ladderQueue = await createLadderQueue(effectiveSettings.maxConcurrency);
     const reflectionPromises = [];
 
     for (const characterName of characterNames) {
-        if (abortSignal?.aborted) {
-            throw new DOMException('Aborted', 'AbortError');
-        }
+        throwIfReflectionAborted(phaseSignal);
 
-        if (shouldReflect(data.reflection_state, characterName, reflectionThreshold)) {
+        if (
+            shouldReflect(data.reflection_state, characterName, reflectionThreshold) &&
+            !isReflectionRetrySuppressed(characterName)
+        ) {
             reflectionPromises.push(
-                ladderQueue
-                    .add(async () => {
-                        // Reset accumulator BEFORE LLM call to prevent infinite retry loop on failure
-                        // The accumulated importance is "consumed" here - even if the LLM call fails,
-                        // we don't want to retry immediately (to avoid token burning)
-                        data.reflection_state[characterName].importance_sum = 0;
+                ladderQueue.add(async () => {
+                    throwIfReflectionAborted(phaseSignal);
+                    if (!isOriginContext() || isReflectionRetrySuppressed(characterName)) return;
 
+                    const characterState = data.reflection_state?.[characterName];
+                    const consumedImportance = Number(characterState?.importance_sum);
+                    if (
+                        !characterState ||
+                        !Number.isFinite(consumedImportance) ||
+                        consumedImportance < reflectionThreshold
+                    ) {
+                        return;
+                    }
+
+                    // Consume before the await. On failure, restore only this
+                    // originating chat and add the snapshot to any importance
+                    // that arrived concurrently while generation was running.
+                    characterState.importance_sum = 0;
+                    try {
                         const { reflections, stChanges } = await generateReflections(
                             characterName,
                             data[MEMORIES_KEY] || [],
                             data[CHARACTERS_KEY] || {}
                         );
-                        if (reflections.length > 0) {
+                        throwIfReflectionAborted(phaseSignal);
+                        if (!isOriginContext()) return;
+                        if (reflections?.length > 0) {
                             addMemories(reflections);
                         }
-                        await applySyncChanges(stChanges);
-                    })
-                    .catch((error) => {
-                        if (error.name === 'AbortError') throw error;
-                        logError(`Reflection error for ${characterName}`, error);
-                    })
+                        throwIfReflectionAborted(phaseSignal);
+                        if (!isOriginContext()) return;
+                        await applySyncChanges(stChanges || { toSync: [], toDelete: [] });
+                        throwIfReflectionAborted(phaseSignal);
+                        if (!isOriginContext()) return;
+                        clearReflectionRetry(characterName);
+                    } catch (error) {
+                        const isAbort = error?.name === 'AbortError';
+                        const sameOrigin = canRestoreOrigin();
+                        if (sameOrigin) {
+                            const currentState = data.reflection_state[characterName] || { importance_sum: 0 };
+                            const concurrentImportance = Number(currentState.importance_sum);
+                            currentState.importance_sum =
+                                (Number.isFinite(concurrentImportance) ? concurrentImportance : 0) + consumedImportance;
+                            data.reflection_state[characterName] = currentState;
+                            if (!isAbort) {
+                                const marker = recordReflectionRetryFailure(
+                                    characterName,
+                                    retryPolicy.cooldownMs,
+                                    retryPolicy.maxFailures
+                                );
+                                logError(`Reflection error for ${characterName}`, error, {
+                                    failures: marker.failures,
+                                    nextRetryAt: marker.nextRetryAt,
+                                });
+                            }
+                        }
+                        if (isAbort) throw error;
+                    }
+                })
             );
         }
     }
@@ -698,7 +957,7 @@ export async function synthesizeReflections(data, characterNames, settings, opti
  * @param {string} characterName - Main character name (for main character key derivation)
  * @param {string} userName - User name (for main character key derivation)
  */
-async function synthesizeCommunities(data, settings, characterName, userName) {
+export async function synthesizeCommunities(data, settings, characterName, userName) {
     try {
         const baseKeys = [normalizeKey(characterName), normalizeKey(userName)];
         const mainCharacterKeys = expandMainCharacterKeys(baseKeys, data.graph.nodes || {});
@@ -727,11 +986,27 @@ async function synthesizeCommunities(data, settings, characterName, userName) {
                 isSingleCommunity
             );
             data.communities = communityUpdateResult.communities;
+            data.community_state_revision = (data.community_state_revision || 0) + 1;
             if (communityUpdateResult.global_world_state) {
-                data.global_world_state = communityUpdateResult.global_world_state;
-            }
+                data.global_world_state = {
+                    ...communityUpdateResult.global_world_state,
+                    community_revision: data.community_state_revision,
+                };
+            } else delete data.global_world_state;
             await applySyncChanges(communityUpdateResult.stChanges);
             logDebug(`Community detection: ${communityResult.count} communities found`);
+        } else {
+            const oldCommunities = data.communities || {};
+            const stChanges = { toSync: [], toDelete: [] };
+            for (const [id, community] of Object.entries(oldCommunities)) {
+                if (!community._st_synced) continue;
+                const text = community.retrievalText || getCommunityRetrievalText(id, community);
+                stChanges.toDelete.push({ hash: cyrb53(text) });
+            }
+            data.communities = {};
+            delete data.global_world_state;
+            data.community_state_revision = (data.community_state_revision || 0) + 1;
+            await applySyncChanges(stChanges);
         }
     } catch (error) {
         logError('Community detection error', error);
@@ -750,9 +1025,10 @@ async function synthesizeCommunities(data, settings, characterName, userName) {
  * @param {'auto'|'en'|'ru'} contextParams.outputLanguage
  * @param {Array} existingMemories - Curated memory subset for prompt context
  * @param {AbortSignal} [abortSignal] - Abort signal for mid-request cancellation
+ * @param {boolean} [requireSourceAttribution=false] - Require exact source ids in v5 extraction
  * @returns {Promise<{events: ExtractedEvent[]}>}
  */
-async function fetchEventsFromLLM(contextParams, existingMemories, abortSignal) {
+async function fetchEventsFromLLM(contextParams, existingMemories, abortSignal, requireSourceAttribution = false) {
     const prompt = buildEventExtractionPrompt({
         messages: contextParams.messagesText,
         names: contextParams.names,
@@ -772,7 +1048,7 @@ async function fetchEventsFromLLM(contextParams, existingMemories, abortSignal) 
         signal: abortSignal,
     });
     record('llm_events', performance.now() - t0);
-    return parseEventExtractionResponse(eventJson);
+    return parseEventExtractionResponse(eventJson, { requireSourceAttribution });
 }
 
 /**
@@ -828,6 +1104,7 @@ async function fetchGraphFromLLM(contextParams, formattedEvents, abortSignal) {
  * @param {string} batchId - Unique batch identifier
  * @param {Array} existingMemories - All existing memories (for dedup comparison)
  * @param {Object} settings - Extension settings
+ * @param {boolean} [allowLegacyBatchAttribution=false] - Compatibility for pre-v5 data only
  * @returns {Promise<{events: Array}>}
  */
 async function enrichAndDedupEvents(
@@ -836,28 +1113,57 @@ async function enrichAndDedupEvents(
     messageFingerprintsArray,
     batchId,
     existingMemories,
-    settings
+    settings,
+    allowLegacyBatchAttribution = false
 ) {
     const minMessageId = Math.min(...messageIdsArray);
+    const sourceById = new Map(
+        messageIdsArray.map((id, index) => [id, { id, fingerprint: messageFingerprintsArray[index] }])
+    );
+    const legacyBatchAttribution = allowLegacyBatchAttribution;
 
-    let events = rawEvents.map((event, index) => ({
-        id: `event_${Date.now()}_${index}`,
-        type: 'event',
-        ...event,
-        tokens: tokenize(event.summary || ''),
-        message_ids: messageIdsArray,
-        message_fingerprints: messageFingerprintsArray,
-        sequence: minMessageId * 1000 + index,
-        created_at: Date.now(),
-        batch_id: batchId,
-        characters_involved: event.characters_involved || [],
-        witnesses: (event.witnesses?.length > 0 ? event.witnesses : event.characters_involved) || [],
-        location: event.location || null,
-        is_secret: event.is_secret || false,
-        importance: event.importance || 3,
-        emotional_impact: event.emotional_impact || {},
-        relationship_impact: event.relationship_impact || {},
-    }));
+    let events = rawEvents
+        .map((event, index) => {
+            const requestedIds =
+                legacyBatchAttribution && !('source_message_ids' in event)
+                    ? messageIdsArray
+                    : event.source_message_ids || [];
+            const uniqueIds = new Set(requestedIds);
+            // Source attribution is a contract, not a best-effort hint.  An
+            // event that names an unknown or duplicate source is discarded so
+            // the affected messages are covered by the fallback pass instead.
+            if (
+                !legacyBatchAttribution &&
+                (requestedIds.length === 0 ||
+                    uniqueIds.size !== requestedIds.length ||
+                    requestedIds.some((id) => !sourceById.has(id)))
+            ) {
+                return null;
+            }
+            const sources = requestedIds.map((id) => sourceById.get(id));
+            return {
+                id: `event_${Date.now()}_${index}`,
+                type: 'event',
+                ...event,
+                tokens: tokenize(event.summary || ''),
+                message_ids: sources.map((source) => source.id),
+                message_fingerprints: sources.map((source) => source.fingerprint),
+                sequence: minMessageId * 1000 + index,
+                created_at: Date.now(),
+                batch_id: batchId,
+                characters_involved: event.characters_involved || [],
+                witnesses: (event.witnesses?.length > 0 ? event.witnesses : event.characters_involved) || [],
+                location: event.location || null,
+                is_secret: event.is_secret || false,
+                importance: event.importance || 3,
+                emotional_impact: event.emotional_impact || {},
+                relationship_impact: event.relationship_impact || {},
+                source_message_ids: undefined,
+            };
+        })
+        .filter(Boolean);
+
+    events = events.filter((event) => event.message_fingerprints.length > 0);
 
     if (events.length > 0) {
         await enrichEventsWithEmbeddings(events);
@@ -910,7 +1216,20 @@ async function processGraphUpdates(graphData, entities, relationships, settings)
         const edgeCap = EDGE_DESCRIPTION_CAP;
         for (const rel of relationships) {
             if (rel.source === 'Unknown' || rel.target === 'Unknown') continue;
-            upsertRelationship(graphData, rel.source, rel.target, rel.description, edgeCap);
+            const edgeChanges = upsertRelationship(
+                graphData,
+                rel.source,
+                rel.target,
+                rel.description,
+                edgeCap,
+                settings,
+                {
+                    status: rel.status,
+                    messageCount: getOpenVaultData()?.graph_message_count || 0,
+                }
+            );
+            graphSyncChanges.toSync.push(...edgeChanges.toSync);
+            graphSyncChanges.toDelete.push(...edgeChanges.toDelete);
         }
     }
 
@@ -964,9 +1283,9 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             logDebug('No messages to extract (scheduler returned empty batch)');
             return { status: 'skipped', reason: 'no_new_messages' };
         }
-        messagesToExtract = batch.map((id) => ({ id, ...chat[id] }));
+        messagesToExtract = batch.map((id) => ({ ...chat[id], id }));
     } else {
-        messagesToExtract = messageIds.map((id) => ({ id, ...chat[id] })).filter((m) => m != null);
+        messagesToExtract = messageIds.map((id) => ({ ...chat[id], id })).filter((m) => m != null);
     }
 
     if (messagesToExtract.length === 0) {
@@ -987,7 +1306,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         const messagesText = messages
             .map((m) => {
                 const speaker = m.is_user ? userName : m.name || characterName;
-                return `[${speaker}]: ${sanitizeMessageContent(m.mes, !!m.is_user)}`;
+                return `<source source_message_id="${escapeExtractionXml(m.id)}" fingerprint="${escapeExtractionXml(getMessageRevision(m))}" role="${m.is_user ? 'user' : 'assistant'}">[${escapeExtractionXml(speaker)}]: ${escapeExtractionXml(sanitizeMessageContent(m.mes, !!m.is_user))}</source>`;
             })
             .join('\n\n');
 
@@ -1007,17 +1326,34 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
         // Stage 1: Event extraction (LLM call)
         const existingMemories = selectMemoriesForExtraction(data, settings);
-        const { events: rawEvents } = await fetchEventsFromLLM(contextParams, existingMemories, abortSignal);
+        const { events: rawEvents } = await fetchEventsFromLLM(
+            contextParams,
+            existingMemories,
+            abortSignal,
+            data.schema_version >= 5
+        );
+
+        // Do not let malformed/unknown source attribution influence graph
+        // extraction. Those events are intentionally discarded by the event
+        // enrichment stage and their sources are handled by coverage fallback.
+        const sourceIds = new Set(messages.map((message) => message.id));
+        const graphEvents =
+            data.schema_version >= 5
+                ? rawEvents.filter((event) => {
+                      const ids = event.source_message_ids || [];
+                      return ids.length > 0 && new Set(ids).size === ids.length && ids.every((id) => sourceIds.has(id));
+                  })
+                : rawEvents;
 
         // Stage 2: Graph extraction (LLM call)
         let graphResult = { entities: [], relationships: [] };
         await rpmDelay(settings, 'Inter-call rate limit');
-        const formattedEvents = rawEvents.map((e, i) => `${i + 1}. [${e.importance}★] ${e.summary}`);
+        const formattedEvents = graphEvents.map((e, i) => `${i + 1}. [${e.importance}★] ${e.summary}`);
         graphResult = await fetchGraphFromLLM(contextParams, formattedEvents, abortSignal);
 
         // Stage 3: Enrich & dedup events
         const messageIdsArray = messages.map((m) => m.id);
-        const messageFingerprintsArray = messages.map((m) => getFingerprint(m));
+        const messageFingerprintsArray = messages.map((m) => getMessageRevision(m));
         logDebug(`LLM returned ${rawEvents.length} events from ${messages.length} messages`);
         const { events } = await enrichAndDedupEvents(
             rawEvents,
@@ -1025,8 +1361,32 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             messageFingerprintsArray,
             batchId,
             data.memories || [],
-            settings
+            settings,
+            data.schema_version < 5
         );
+
+        // New event responses carry explicit source ids.  Any source not
+        // covered by a surviving normal event gets exactly one low-priority
+        // fallback in a single batched request.  The legacy compatibility
+        // branch is only for old providers that omit the new field entirely;
+        // current prompts always include it.
+        const exactAttributionMode = data.schema_version >= 5;
+        let allEvents = events;
+        if (exactAttributionMode) {
+            const covered = new Set(events.flatMap((event) => event.message_fingerprints || []));
+            const uncovered = messages.filter((message) => !covered.has(getMessageRevision(message)));
+            if (uncovered.length > 0) {
+                await rpmDelay(settings, 'Coverage fallback rate limit');
+                const fallbackEvents = await fetchFallbackMemories(
+                    uncovered,
+                    messages,
+                    { ...contextParams, names: { char: characterName, user: userName } },
+                    batchId,
+                    abortSignal
+                );
+                allEvents = [...events, ...fallbackEvents];
+            }
+        }
 
         // Empty extraction retry: if the LLM returned 0 raw events, allow
         // retrying the same batch before permanently marking messages as processed.
@@ -1034,7 +1394,8 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Only triggers on rawEvents === 0 (LLM found nothing); post-dedup empty
         // (rawEvents > 0 but all dupes) is legitimate processing.
         const batchKey = _getBatchKey(messages);
-        if (rawEvents.length === 0) {
+        const hasGraphUpdates = graphResult.entities.length > 0 || graphResult.relationships.length > 0;
+        if (rawEvents.length === 0 && allEvents.length === 0 && !hasGraphUpdates) {
             const attempts = (_emptyExtractionAttempts.get(batchKey) || 0) + 1;
             _emptyExtractionAttempts.set(batchKey, attempts);
 
@@ -1057,7 +1418,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         }
 
         // Stamp embedding model ID on first successful embedding generation
-        if (events.length > 0 && !data.embedding_model_id && events.some((e) => hasEmbedding(e))) {
+        if (allEvents.length > 0 && !data.embedding_model_id && allEvents.some((e) => hasEmbedding(e))) {
             data.embedding_model_id = settings.embeddingSource;
             if (settings.embeddingSource === EMBEDDING_SOURCES.ST_VECTOR) {
                 const { stampStVectorFingerprint } = await import('../embeddings/migration.js');
@@ -1065,27 +1426,31 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             }
         }
 
-        // Stage 4: Graph updates
-        const { graphSyncChanges } = await processGraphUpdates(
-            data.graph,
-            graphResult.entities,
-            graphResult.relationships,
-            settings
-        );
-        incrementGraphMessageCount(messages.length);
+        // Stage 4: Graph updates. Coverage-only memories are deliberately
+        // excluded from every graph mutation and graph progress counter.
+        const semanticEvents = allEvents.filter((event) => !event.coverage_fallback);
+        const graphEligible = semanticEvents.length > 0 || data.schema_version < 5;
+        const semanticMessageCount =
+            data.schema_version < 5
+                ? messages.length
+                : new Set(semanticEvents.flatMap((event) => event.message_fingerprints || [])).size;
+        const { graphSyncChanges } = graphEligible
+            ? await processGraphUpdates(data.graph, graphResult.entities, graphResult.relationships, settings)
+            : { graphSyncChanges: { toSync: [], toDelete: [] } };
+        if (graphEligible && semanticMessageCount > 0) incrementGraphMessageCount(semanticMessageCount);
 
         // ===== PHASE 1 COMMIT: Events + Graph are done =====
-        if (events.length > 0) {
+        if (allEvents.length > 0) {
             // Canonicalize cross-script character names before downstream consumption
-            canonicalizeEventCharNames(events, [characterName, userName], data.graph?.nodes);
-            addMemories(events);
-            updateCharacterStatesFromEvents(events, data, [characterName, userName]);
+            canonicalizeEventCharNames(allEvents, [characterName, userName], data.graph?.nodes);
+            addMemories(allEvents);
+            updateCharacterStatesFromEvents(allEvents, data, [characterName, userName]);
         }
 
         // Mark processed AFTER events are committed to memories
-        const processedFps = messages.map((m) => getFingerprint(m));
+        const processedFps = messages.map((m) => getMessageRevision(m));
         markMessagesProcessed(processedFps);
-        logDebug(`Phase 1 complete: ${events.length} events, ${processedFps.length} messages processed`);
+        logDebug(`Phase 1 complete: ${allEvents.length} events, ${processedFps.length} messages processed`);
 
         // Update IDF cache after Phase 1 commit — corpus has changed
         updateIDFCache(data, data.graph?.nodes);
@@ -1098,34 +1463,37 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
         // Sync events + graph to ST Vector Storage (single applySyncChanges call)
         const eventSyncChanges = { toSync: [], toDelete: [] };
-        for (const e of events.filter((e) => !isStSynced(e))) {
-            const text = `[OV_ID:${e.id}] ${e.summary}`;
+        for (const e of allEvents.filter((e) => !e.coverage_fallback && !isStSynced(e))) {
+            const text = getMemoryIndexText(e);
             eventSyncChanges.toSync.push({ hash: cyrb53(text), text, item: e });
         }
-        await applySyncChanges({
+        const combinedSyncChanges = {
             toSync: [...eventSyncChanges.toSync, ...graphSyncChanges.toSync],
             toDelete: [...graphSyncChanges.toDelete],
-        });
+        };
+        if (combinedSyncChanges.toSync.length > 0 || combinedSyncChanges.toDelete.length > 0) {
+            await applySyncChanges(combinedSyncChanges);
+        }
 
         // ===== PHASE 2: Enrichment (non-critical) =====
         try {
             // Stage 5: Reflection check (per character in new events)
-            if (events.length > 0) {
+            if (semanticEvents.length > 0) {
                 // Only accumulate importance if reflection generation is enabled
                 if (settings.reflectionGenerationEnabled !== false) {
-                    accumulateImportance(data.reflection_state, events);
+                    accumulateImportance(data.reflection_state, semanticEvents);
                 }
 
                 // ===== Backfill guard: skip Phase 2 LLM synthesis =====
                 if (options.isBackfill) {
                     logDebug('Backfill mode: skipping Phase 2 LLM synthesis for this batch');
-                    return { status: 'success', events_created: events.length, messages_processed: messages.length };
+                    return { status: 'success', events_created: allEvents.length, messages_processed: messages.length };
                 }
                 // ===== END BACKFILL GUARD =====
 
                 // Collect unique characters from new events
                 const characters = new Set();
-                for (const event of events) {
+                for (const event of semanticEvents) {
                     for (const c of event.characters_involved || []) characters.add(c);
                     for (const w of event.witnesses || []) characters.add(w);
                 }
@@ -1136,9 +1504,12 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 
             // Stage 6: Community detection (interval check)
             const communityInterval = settings.communityDetectionInterval;
-            const prevCount = (data.graph_message_count || 0) - messages.length;
+            const prevCount = (data.graph_message_count || 0) - semanticMessageCount;
             const currCount = data.graph_message_count || 0;
-            if (Math.floor(currCount / communityInterval) > Math.floor(prevCount / communityInterval)) {
+            if (
+                semanticEvents.length > 0 &&
+                Math.floor(currCount / communityInterval) > Math.floor(prevCount / communityInterval)
+            ) {
                 await rpmDelay(settings, 'Phase 2 community rate limit');
                 await synthesizeCommunities(data, settings, characterName, userName);
             }
@@ -1156,15 +1527,15 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
             // Do NOT re-throw. Phase 1 data is already saved.
         }
 
-        if (events.length > 0) {
-            logInfo(`Extracted ${events.length} events`);
+        if (allEvents.length > 0) {
+            logInfo(`Extracted ${allEvents.length} events`);
         } else {
             logDebug('No significant events found in messages');
         }
 
         return {
             status: 'success',
-            events_created: events.length,
+            events_created: allEvents.length,
             messages_processed: messages.length,
         };
     } catch (error) {
@@ -1175,10 +1546,19 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 }
 
 export async function runPhase2Enrichment(data, settings, targetChatId, options = {}) {
-    const { abortSignal = null } = options;
+    const sessionSignal = getSessionSignal();
+    const { abortSignal = sessionSignal } = options;
+    const expectedChatId = targetChatId ?? getCurrentChatId();
+    const context = getDeps().getContext();
+    const assertCurrent = () => {
+        if (abortSignal?.aborted || sessionSignal !== getSessionSignal() || expectedChatId !== getCurrentChatId()) {
+            throw new DOMException('Phase 2 session changed', 'AbortError');
+        }
+    };
+    const semanticMemories = (data[MEMORIES_KEY] || []).filter((memory) => !memory.coverage_fallback);
 
     // Guard: No memories to enrich
-    if (!data[MEMORIES_KEY]?.length) {
+    if (!semanticMemories.length) {
         logDebug('runPhase2Enrichment: No memories to enrich');
         return;
     }
@@ -1187,19 +1567,25 @@ export async function runPhase2Enrichment(data, settings, targetChatId, options 
 
     try {
         // Enforce RPM spacing from the last Phase 1 API call to avoid 502s
+        assertCurrent();
         await rpmDelay(settings, 'Phase 2 rate limit');
+        assertCurrent();
 
         const characterNames = Object.keys(data.reflection_state || {});
         await synthesizeReflections(data, characterNames, settings, { abortSignal });
 
+        assertCurrent();
         await rpmDelay(settings, 'Phase 2 inter-step rate limit');
+        assertCurrent();
 
-        const context = getDeps().getContext();
         await synthesizeCommunities(data, settings, context.name2, context.name1);
 
+        assertCurrent();
         // Update IDF cache before save — reflections may have been added
         updateIDFCache(data, data.graph?.nodes);
-        await saveOpenVaultData(targetChatId);
+        const saved = await saveOpenVaultData(expectedChatId);
+        assertCurrent();
+        if (!saved) throw new Error('Phase 2 save failed');
         logInfo('runPhase2Enrichment: Complete');
     } catch (error) {
         if (error.name === 'AbortError') throw error;

@@ -7,7 +7,8 @@ let _store = {};
 
 /**
  * Record a performance metric (last-value-wins).
- * Also persists to chatMetadata.openvault.perf.
+ * Mirrors the value to the live chatMetadata.openvault.perf object. A caller's
+ * normal chat-save cycle is responsible for durable persistence.
  * @param {string} metricId - Key from PERF_METRICS
  * @param {number} durationMs - performance.now() delta
  * @param {string|null} [size=null] - Human-readable scale context
