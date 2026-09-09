@@ -4,6 +4,7 @@ import { compactIfNeeded } from '../archive/archive.js';
 import {
     CHARACTERS_KEY,
     CHAT_LIFECYCLE,
+    defaultSettings,
     EMBEDDING_SOURCES,
     MEMORIES_KEY,
     PROCESSED_MESSAGES_KEY,
@@ -13,6 +14,7 @@ import { extractMemories, runPhase2Enrichment } from '../extraction/extract.js';
 import { getMessageRevision, getProcessedFingerprints } from '../extraction/scheduler.js';
 import { createEmptyGraph } from '../graph/graph.js';
 import { purgeSTCollection } from '../services/st-vector.js';
+import { getSettings } from '../settings.js';
 import { getSessionSignal, operationState } from '../state.js';
 import { getCurrentChatId, getOpenVaultData, saveOpenVaultData } from '../store/chat-data.js';
 import { logInfo } from '../utils/logging.js';
@@ -69,6 +71,19 @@ function assertSameChat(expectedChatId, signal) {
     }
 }
 
+/** Persist a rebuild checkpoint while retaining the originating chat guard. */
+async function saveRebuildCheckpoint(expectedChatId, signal, reason) {
+    assertSameChat(expectedChatId, signal);
+    const saved = await saveOpenVaultData(expectedChatId);
+    if (!saved) {
+        // saveOpenVaultData returns false for both a chat switch and a failed
+        // dependency save. Preserve cancellation semantics for the former.
+        assertSameChat(expectedChatId, signal);
+        throw new Error(reason);
+    }
+    assertSameChat(expectedChatId, signal);
+}
+
 /**
  * Start or resume the mandatory full-chat rebuild. Partial state is never made
  * retrievable; progress and the fixed source boundary remain persisted.
@@ -78,7 +93,9 @@ export async function startFullRebuild(options = {}) {
     const context = deps.getContext();
     const data = getOpenVaultData();
     const chat = context?.chat || [];
-    const settings = deps.getExtensionSettings()?.openvault || {};
+    // Capture a settings snapshot through the facade so a rebuild does not
+    // depend on raw SillyTavern extension-settings shape or local fallbacks.
+    const settings = { ...defaultSettings, ...(getSettings() || {}) };
     const expectedChatId = getCurrentChatId();
     const signal = options.abortSignal || getSessionSignal();
     if (!data || !expectedChatId) throw new Error('No chat loaded');
@@ -89,6 +106,7 @@ export async function startFullRebuild(options = {}) {
         data.recovery_backup = backupLegacyData(data);
         if (settings.embeddingSource === EMBEDDING_SOURCES.ST_VECTOR) {
             const purged = await purgeSTCollection(expectedChatId);
+            assertSameChat(expectedChatId, signal);
             if (!purged) {
                 throw new Error('Could not purge legacy ST vectors; rebuild did not start');
             }
@@ -116,22 +134,18 @@ export async function startFullRebuild(options = {}) {
         };
         data.diagnostics.rebuild = { status: 'rebuilding', boundary: chat.length, processed: 0 };
 
-        if (!(await saveOpenVaultData(expectedChatId))) throw new Error('Could not persist rebuild preparation');
+        await saveRebuildCheckpoint(expectedChatId, signal, 'Could not persist rebuild preparation');
     } else {
+        assertSameChat(expectedChatId, signal);
         data.lifecycle.status = CHAT_LIFECYCLE.REBUILDING;
         delete data.lifecycle.error;
-        await saveOpenVaultData(expectedChatId);
+        await saveRebuildCheckpoint(expectedChatId, signal, 'Could not persist rebuild resume state');
     }
 
     operationState.extractionInProgress = true;
     try {
         const boundary = data.lifecycle.boundary;
-        const batches = createBatches(
-            chat,
-            boundary,
-            settings.extractionTokenBudget || 6000,
-            settings.extractionMaxTurns || 20
-        );
+        const batches = createBatches(chat, boundary, settings.extractionTokenBudget, settings.extractionMaxTurns);
         for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
             assertSameChat(expectedChatId, signal);
             const processedFingerprints = getProcessedFingerprints(data);
@@ -146,7 +160,9 @@ export async function startFullRebuild(options = {}) {
                     silent: true,
                     abortSignal: signal,
                 });
+                assertSameChat(expectedChatId, signal);
             } while (result?.status === 'no_events_retry');
+            assertSameChat(expectedChatId, signal);
             data.lifecycle.processed = Math.min(boundary, data.lifecycle.processed + unprocessed.length);
             data.diagnostics.rebuild = {
                 status: 'rebuilding',
@@ -156,7 +172,7 @@ export async function startFullRebuild(options = {}) {
                 batches_total: batches.length,
             };
             options.onProgress?.(data.diagnostics.rebuild);
-            await saveOpenVaultData(expectedChatId);
+            await saveRebuildCheckpoint(expectedChatId, signal, 'Could not persist rebuild progress');
         }
 
         assertSameChat(expectedChatId, signal);
@@ -165,12 +181,19 @@ export async function startFullRebuild(options = {}) {
         const processed = data.lifecycle.processed || boundary;
         data.lifecycle = { status: CHAT_LIFECYCLE.READY, rebuilt_at: deps.Date.now() };
         data.diagnostics.rebuild = { status: 'ready', boundary, processed };
-        if (!(await saveOpenVaultData(expectedChatId))) throw new Error('Could not activate rebuilt OpenVault data');
+        await saveRebuildCheckpoint(expectedChatId, signal, 'Could not activate rebuilt OpenVault data');
         operationState.extractionInProgress = false;
+        assertSameChat(expectedChatId, signal);
         await compactIfNeeded(settings);
         logInfo(`OpenVault rebuild completed through message ${boundary}`);
         return { success: true, boundary };
     } catch (error) {
+        // A chat switch or cancellation invalidates every in-memory mutation
+        // still in flight. Do not stamp the old snapshot as failed or attempt
+        // a guarded save against the newly selected chat.
+        if (error.name === 'AbortError' || signal?.aborted || getCurrentChatId() !== expectedChatId) {
+            throw error;
+        }
         // Source messages remain visible unless a fully durable archive segment
         // was sealed after activation. Partial derived data stays gated.
         data.lifecycle.status = CHAT_LIFECYCLE.REBUILD_FAILED;

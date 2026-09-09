@@ -26,6 +26,12 @@ For event dedup thresholds (cross-batch/intra-batch Jaccard) see `include/DATA_S
 - **Filter archived memories before IDF calculation.** `updateIDFCache` must use `memories.filter(m => !m.archived)` — the raw array includes archived items, producing stale IDF values and causing BM25 score mismatches.
 - **Apply `.max(5)` to Graph Zod schemas.** Force the LLM to extract deltas (new entities/changes) rather than re-evaluating the whole world.
 
+## SOURCE COVERAGE AND FALLBACKS
+- **Attribute every event to its source messages.** Preserve the exact source message IDs or fingerprints accepted by the batch; never invent attribution or silently widen the covered boundary.
+- **Close every coverage gap after event deduplication.** For each uncovered source message, emit one deterministic fallback record with one sentence of at most 15 Unicode words: `Conversation context was unavailable for this source message.`
+- **Keep coverage fallbacks archival only.** Give them importance `1`; exclude them from graph, character, reflection, community, embedding, and other semantic enrichment.
+- **Gate downstream use on lifecycle readiness.** Rebuild and compaction must complete coverage, enrichment, and persistence before `ready`; `needs_rebuild`, `rebuilding`, and `rebuild_failed` remain unavailable to retrieval.
+
 ## SWIPE PROTECTION
 - **Trim tail turns from extraction batches.** `trimTailTurns(chat, ids, N)` removes N complete User+Bot turns from the tail using the same Bot→User boundary logic as `snapToTurnBoundary()`.
 - **Emergency Cut bypasses trimming.** Pass `isEmergencyCut=true` to skip swipe protection — emergency extractions need all available data.

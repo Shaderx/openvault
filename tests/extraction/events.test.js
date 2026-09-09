@@ -457,6 +457,49 @@ describe('onChatChanged migration', () => {
         vi.clearAllMocks();
     });
 
+    it('does not roll back or disable a new chat after an old migration save fails', async () => {
+        const { getDeps, setDeps } = await import('../../src/deps.js');
+        const { isSessionDisabled } = await import('../../src/state.js');
+        const { onChatChanged } = await import('../../src/events.js');
+        const oldData = { schema_version: 1, memories: [] };
+        mockContext.chatMetadata.openvault = oldData;
+        let finishSave;
+        let saveStarted;
+        const started = new Promise((resolve) => {
+            saveStarted = resolve;
+        });
+        setDeps({
+            ...getDeps(),
+            saveChatConditional: () => {
+                saveStarted();
+                return new Promise((_, reject) => {
+                    finishSave = reject;
+                });
+            },
+        });
+        const pending = onChatChanged();
+        await started;
+        const newData = { schema_version: 5, memories: [] };
+        mockToast.mockClear();
+        mockContext.chatId = 'new-chat';
+        mockContext.chatMetadata = { openvault: newData };
+        finishSave(new Error('Save failed'));
+        await pending;
+        expect(mockContext.chatMetadata.openvault).toBe(newData);
+        expect(isSessionDisabled()).toBe(false);
+        expect(mockToast.mock.calls.some((call) => /full rebuild/i.test(call[1]))).toBe(false);
+    });
+    it('restores the originating snapshot and disables its session when migration cannot persist', async () => {
+        const { getDeps, setDeps } = await import('../../src/deps.js');
+        const { isSessionDisabled } = await import('../../src/state.js');
+        const { onChatChanged } = await import('../../src/events.js');
+        const original = { schema_version: 1, memories: [], graph: { nodes: {}, edges: {} } };
+        mockContext.chatMetadata.openvault = structuredClone(original);
+        setDeps({ ...getDeps(), saveChatConditional: vi.fn().mockRejectedValue(new Error('disk failure')) });
+        await onChatChanged();
+        expect(mockContext.chatMetadata.openvault).toEqual(original);
+        expect(isSessionDisabled()).toBe(true);
+    });
     it('gates v1 data for a mandatory full rebuild', async () => {
         const { MEMORIES_KEY, METADATA_KEY, PROCESSED_MESSAGES_KEY } = await import('../../src/constants.js');
 

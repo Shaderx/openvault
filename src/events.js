@@ -10,6 +10,7 @@ import './settings.js'; // Side-effect import to initialize settings with lodash
 import { loadFromChat as loadPerfFromChat, record } from './perf/store.js';
 import {
     clearGenerationLock,
+    getSessionSignal,
     isChatLoadingCooldown,
     isSessionDisabled,
     operationState,
@@ -19,7 +20,7 @@ import {
     setGenerationLock,
     setSessionDisabled,
 } from './state.js';
-import { getOpenVaultData } from './store/chat-data.js';
+import { getCurrentChatId, getOpenVaultData } from './store/chat-data.js';
 import { CURRENT_SCHEMA_VERSION, runSchemaMigrations } from './store/migrations/index.js';
 import { refreshAllUI, resetMemoryBrowserPage } from './ui/render.js';
 import { setStatus } from './ui/status.js';
@@ -168,103 +169,126 @@ export async function onChatChanged() {
 
     if (!isExtensionEnabled()) return;
 
-    const { clearEmbeddingCache } = await import('./embeddings.js');
-    const { cleanupCharacterStates } = await import('./extraction/extract.js');
-    const { clearRetrievalDebug } = await import('./retrieval/debug-cache.js');
-    const { clearTokenCache } = await import('./utils/tokens.js');
-    const { clearSanitizedTokenCache } = await import('./utils/message-sanitizer.js');
+    const expectedChatId = getCurrentChatId();
+    const signal = getSessionSignal();
+    const isCurrent = () => !signal.aborted && getCurrentChatId() === expectedChatId;
 
-    logDebug('Chat changed, clearing injection, cache and setting load cooldown');
+    try {
+        const { clearEmbeddingCache } = await import('./embeddings.js');
+        const { cleanupCharacterStates } = await import('./extraction/extract.js');
+        const { clearRetrievalDebug } = await import('./retrieval/debug-cache.js');
+        const { clearTokenCache } = await import('./utils/tokens.js');
+        const { clearSanitizedTokenCache } = await import('./utils/message-sanitizer.js');
 
-    const data = getOpenVaultData();
-    const context = getDeps().getContext();
+        if (!isCurrent()) return;
 
-    // Check session kill-switch
-    if (isSessionDisabled()) {
-        logDebug('OpenVault disabled for this session due to migration failure');
-        return;
-    }
+        logDebug('Chat changed, clearing injection, cache and setting load cooldown');
 
-    // Cleanup corrupted character states
-    if (data && context) {
-        const validCharNames = [context.name1, context.name2].filter(Boolean);
-        cleanupCharacterStates(data, validCharNames);
-    }
+        const data = getOpenVaultData();
+        const context = getDeps().getContext();
 
-    // Run schema migration if needed
-    if (data && (!data.schema_version || data.schema_version < CURRENT_SCHEMA_VERSION)) {
-        const backup = structuredClone(data);
-
-        try {
-            const chat = context.chat || [];
-            if (runSchemaMigrations(data, chat)) {
-                showToast('warning', 'This older chat requires a full OpenVault rebuild.', 'OpenVault Rebuild');
-                const { saveOpenVaultData } = await import('./store/chat-data.js');
-                await saveOpenVaultData();
-            }
-        } catch (error) {
-            // Rollback
-            logError('Schema migration failed! Rolling back.', error);
-            context.chatMetadata[METADATA_KEY] = backup;
-
-            // Session kill-switch
-            setSessionDisabled(true);
-            showToast('error', 'Data migration failed. OpenVault disabled for this chat session.');
+        // Check session kill-switch
+        if (isSessionDisabled()) {
+            logDebug('OpenVault disabled for this session due to migration failure');
             return;
         }
-    }
 
-    if (!data?.lifecycle?.status || data.lifecycle.status === CHAT_LIFECYCLE.READY) {
-        const { persistArchiveDeactivations, recoverPreparedArchive } = await import('./archive/archive.js');
-        await recoverPreparedArchive();
-        await persistArchiveDeactivations();
-    } else if (data) {
-        const { getRebuildNotice } = await import('./rebuild/rebuild.js');
-        showToast('warning', getRebuildNotice(data), 'OpenVault Rebuild', { timeOut: 0, extendedTimeOut: 0 });
-    }
-
-    // Check for embedding model mismatch and wipe stale vectors
-    const { invalidateStaleEmbeddings } = await import('./embeddings/migration.js');
-    const { saveOpenVaultData } = await import('./store/chat-data.js');
-    const settings = getDeps().getExtensionSettings()[extensionName];
-    if ((!data?.lifecycle?.status || data.lifecycle.status === CHAT_LIFECYCLE.READY) && settings?.embeddingSource) {
-        const wiped = await invalidateStaleEmbeddings(data, settings.embeddingSource);
-        if (wiped > 0) {
-            await saveOpenVaultData();
-            // Auto-trigger comprehensive re-embedding in background (fire-and-forget)
-            import('./embeddings.js')
-                .then(({ backfillAllEmbeddings }) => {
-                    backfillAllEmbeddings({ silent: true }).catch(() => {});
-                })
-                .catch(() => {});
+        // Cleanup corrupted character states
+        if (data && context) {
+            const validCharNames = [context.name1, context.name2].filter(Boolean);
+            cleanupCharacterStates(data, validCharNames);
         }
+
+        // Run schema migration if needed
+        if (data && (!data.schema_version || data.schema_version < CURRENT_SCHEMA_VERSION)) {
+            const backup = structuredClone(data);
+
+            try {
+                const chat = context.chat || [];
+                if (runSchemaMigrations(data, chat)) {
+                    showToast('warning', 'This older chat requires a full OpenVault rebuild.', 'OpenVault Rebuild');
+                    const { saveOpenVaultData } = await import('./store/chat-data.js');
+                    if (!isCurrent()) return;
+                    const saved = await saveOpenVaultData(expectedChatId);
+                    if (!isCurrent()) return;
+                    if (!saved) throw new Error('Migration could not be saved');
+                }
+            } catch (error) {
+                if (!isCurrent() || error.name === 'AbortError') return;
+                // Rollback
+                logError('Schema migration failed! Rolling back.', error);
+                context.chatMetadata[METADATA_KEY] = backup;
+
+                // Session kill-switch
+                setSessionDisabled(true);
+                showToast('error', 'Data migration failed. OpenVault disabled for this chat session.');
+                return;
+            }
+        }
+
+        if (!data?.lifecycle?.status || data.lifecycle.status === CHAT_LIFECYCLE.READY) {
+            const { persistArchiveDeactivations, recoverPreparedArchive } = await import('./archive/archive.js');
+            if (!isCurrent()) return;
+            await recoverPreparedArchive();
+            if (!isCurrent()) return;
+            await persistArchiveDeactivations();
+            if (!isCurrent()) return;
+        } else if (data) {
+            const { getRebuildNotice } = await import('./rebuild/rebuild.js');
+            if (!isCurrent()) return;
+            showToast('warning', getRebuildNotice(data), 'OpenVault Rebuild', { timeOut: 0, extendedTimeOut: 0 });
+        }
+
+        // Check for embedding model mismatch and wipe stale vectors
+        const { invalidateStaleEmbeddings } = await import('./embeddings/migration.js');
+        const { saveOpenVaultData } = await import('./store/chat-data.js');
+        if (!isCurrent()) return;
+        const settings = getDeps().getExtensionSettings()[extensionName];
+        if ((!data?.lifecycle?.status || data.lifecycle.status === CHAT_LIFECYCLE.READY) && settings?.embeddingSource) {
+            const wiped = await invalidateStaleEmbeddings(data, settings.embeddingSource);
+            if (!isCurrent()) return;
+            if (wiped > 0) {
+                const saved = await saveOpenVaultData(expectedChatId);
+                if (!saved || !isCurrent()) return;
+                // Auto-trigger comprehensive re-embedding in background (fire-and-forget)
+                import('./embeddings.js')
+                    .then(({ backfillAllEmbeddings }) => {
+                        if (isCurrent()) backfillAllEmbeddings({ silent: true }).catch(() => {});
+                    })
+                    .catch(() => {});
+            }
+        }
+
+        // Clear token caches when switching chats
+        clearTokenCache();
+        clearSanitizedTokenCache();
+
+        // Clear embedding cache to free memory when switching chats
+        clearEmbeddingCache();
+        clearRetrievalDebug();
+
+        // Reset memoryBrowserPage to prevent showing wrong page after chat switch
+        resetMemoryBrowserPage();
+
+        // Set cooldown to prevent MESSAGE_RECEIVED from triggering extraction during chat load
+        setChatLoadingCooldown(2000, logDebug);
+
+        // Clear operation states on chat change to prevent stale locks
+        resetOperationStatesIfSafe();
+
+        // Clear every named slot and macro cache; ready chats re-establish Tier A.
+        const { injectContext } = await import('./retrieval/retrieve.js');
+        if (!isCurrent()) return;
+        injectContext('', '', '');
+
+        // Load perf data BEFORE refreshing UI so perf tab has data to render
+        loadPerfFromChat();
+        refreshAllUI();
+        setStatus('ready');
+    } catch (error) {
+        if (!isCurrent() || error.name === 'AbortError') return;
+        throw error;
     }
-
-    // Clear token caches when switching chats
-    clearTokenCache();
-    clearSanitizedTokenCache();
-
-    // Clear embedding cache to free memory when switching chats
-    clearEmbeddingCache();
-    clearRetrievalDebug();
-
-    // Reset memoryBrowserPage to prevent showing wrong page after chat switch
-    resetMemoryBrowserPage();
-
-    // Set cooldown to prevent MESSAGE_RECEIVED from triggering extraction during chat load
-    setChatLoadingCooldown(2000, logDebug);
-
-    // Clear operation states on chat change to prevent stale locks
-    resetOperationStatesIfSafe();
-
-    // Clear every named slot and macro cache; ready chats re-establish Tier A.
-    const { injectContext } = await import('./retrieval/retrieve.js');
-    injectContext('', '', '');
-
-    // Load perf data BEFORE refreshing UI so perf tab has data to render
-    loadPerfFromChat();
-    refreshAllUI();
-    setStatus('ready');
 }
 
 /**

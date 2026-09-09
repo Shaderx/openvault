@@ -23,7 +23,7 @@ IMPORTANT: Capture durable character preferences as relationships (e.g., Charact
 IMPORTANT: Extract entities and relationships even when no events are extracted. Entity data builds world knowledge over time and is always valuable. Limit output to the most significant updates per batch.
 
 <draft_process>
-Think step by step, but only keep a minimal draft for each step, with 8 words at most per step. Use symbols: -> for causation/actions, + for conjunction, != for contrast. Write your work inside<think> tags BEFORE outputting the JSON:
+Think step by step, but only keep a minimal draft for each step, with 8 words at most per step. Use symbols: -> for causation/actions, + for conjunction, != for contrast. Write your work inside <think> tags BEFORE outputting the JSON:
 
 Step 1: Scan -> list Entity(type) mentioned or implied.
 Step 2: Validate types (${Object.values(ENTITY_TYPES).join(', ')}); skip mundane.

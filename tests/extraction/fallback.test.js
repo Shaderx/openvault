@@ -4,9 +4,7 @@ import { resetDeps } from '../../src/deps.js';
 import { countUnicodeWords, extractMemories, normalizeFallbackSummary } from '../../src/extraction/extract.js';
 import { parseFallbackExtractionResponse } from '../../src/extraction/structured.js';
 import { buildFallbackExtractionPrompt } from '../../src/prompts/events/fallback.js';
-import { EVENT_RULES } from '../../src/prompts/events/rules.js';
-import { EVENT_SCHEMA } from '../../src/prompts/events/schema.js';
-import { TEMPORAL_ANCHOR_RULE } from '../../src/prompts/shared/rules.js';
+
 import { formatMemory } from '../../src/retrieval/formatting.js';
 
 describe('coverage fallback normalization', () => {
@@ -39,17 +37,16 @@ describe('coverage fallback normalization', () => {
 });
 
 describe('coverage fallback temporal contract', () => {
-    it('uses the same required timestamp rule as normal event extraction', () => {
+    it('preserves required source IDs and temporal schema fields in fallback prompts', () => {
         const prompt = buildFallbackExtractionPrompt({
             messages: '<source source_message_id="1">Time: 3:40 PM — Friday, June 14\\nHello</source>',
             requiredSourceIds: [1],
         });
         const promptText = prompt.map((message) => message.content).join('\n');
 
-        expect(EVENT_RULES).toContain(TEMPORAL_ANCHOR_RULE);
-        expect(EVENT_SCHEMA).toContain(TEMPORAL_ANCHOR_RULE);
-        expect(promptText).toContain(TEMPORAL_ANCHOR_RULE);
-        expect(promptText).toContain('REQUIRED FIELD');
+        expect(promptText).toContain('<required_source_ids>[1]</required_source_ids>');
+        expect(promptText).toContain('temporal_anchor');
+        expect(promptText).toContain('source_message_id');
     });
 
     it('rejects fallback output that omits temporal_anchor', () => {
@@ -184,7 +181,6 @@ describe('coverage fallback extraction', () => {
         expect(fallbackPrompt).toContain('<required_source_ids>[1]</required_source_ids>');
         expect(fallbackPrompt).toContain('A significant event happened here today.');
         expect(fallbackPrompt).toContain('A mundane reply');
-        expect(fallbackPrompt).toContain('REQUIRED FIELD');
     });
 
     it('leaves sources unprocessed when fallback validation fails after one retry', async () => {

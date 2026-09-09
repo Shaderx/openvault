@@ -25,12 +25,18 @@ export function migrateToV2(data, chat) {
 
 ## TRANSACTIONAL ROLLBACK PATTERN
 ```javascript
+const expectedChatId = getCurrentChatId();
+const signal = getSessionSignal();
+const context = getDeps().getContext();
 const backup = structuredClone(data);
 try {
-    if (runSchemaMigrations(data, chat)) { await saveOpenVaultData(); }
+    if (runSchemaMigrations(data, context.chat)) {
+        if (!(await saveOpenVaultData(expectedChatId))) throw new Error('Migration save failed');
+    }
 } catch (error) {
-    context.chatMetadata[METADATA_KEY] = backup;  // Restore
-    setSessionDisabled(true);  // Per-session, NOT global settings
+    if (signal.aborted || getCurrentChatId() !== expectedChatId || error.name === 'AbortError') return;
+    context.chatMetadata[METADATA_KEY] = backup;
+    setSessionDisabled(true);
 }
 ```
 
@@ -47,3 +53,7 @@ try {
 - **No Defensive Checks**: Domain code assumes schema shape — migrations must backfill all fields.
 - **Chat Context**: Pass `chat` array to migrations that need message data (e.g., fingerprint conversion).
 - **Test Coverage**: Every migration needs test cases for: fresh data, already-migrated data, partial migration recovery.
+
+## CURRENT GATE
+
+Current schema is v5. v2/v3 translate safe legacy fields; v4/v5 invalidate older retrieval/archive representations and require a full rebuild. Do not bypass the gate by merely stamping a version. New chats start ready at v5. Read `src/rebuild/AGENTS.md` before changing activation or recovery.

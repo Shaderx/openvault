@@ -39,3 +39,10 @@
 - **Manage Phase 2 parallelism.** Use `createLadderQueue()` for LLM tasks.
 - **Decrease multiplicatively.** On 429 or Timeout, halve concurrency and pause for 4 seconds.
 - **Increase additively.** On success, slowly add 0.5 to the concurrency ceiling.
+
+## CDN IMPORTS (`cdn.js`)
+- **Resolve package roots correctly.** Unscoped roots use the first path component; scoped roots use `@scope/name`, and any remaining subpath follows the pinned version.
+- **Keep browser pinning centralized.** Add or update a CDN package version in `CDN_VERSIONS` together with its package metadata. Packages that intentionally run only in the browser may omit a local package when the exception is documented at the call site.
+- **Test through overrides.** Browser modules call `cdnImport()`; Vitest setup registers local modules with `_setTestOverride`. After `vi.resetModules()`, call `global.registerCdnOverrides()` before importing source modules again. URL aliases in `vitest.config.js` are not the active override mechanism.
+
+CDN bootstrap warnings use the cycle-free `_setCdnWarningLogger()` sink when a host or test provides one. Otherwise `cdn.js` may call `globalThis.console.warn` as its narrow startup exception; do not import `deps.js` or `logging.js` from that bootstrap module.

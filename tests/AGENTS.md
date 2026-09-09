@@ -1,36 +1,26 @@
-# Testing Subsystem (Vitest)
+# Testing subsystem (Vitest)
 
-## THE TEST PYRAMID
-- **Unit Tests:** Test pure math, data transforms, and text utilities by passing objects directly. **Zero `vi.mock()` allowed.** No `setupTestContext()`.
-- **UI Structure Tests:** Parse `templates/settings_panel.html` via regex/string-matching to verify progressive disclosure layout. No JSDOM setup required.
-- **Integration Tests:** Test pipeline wiring using `setupTestContext()`. 
+## Boundaries
 
-## THE INTEGRATION BOUNCER RULE
-- **Lock orchestrator tests.** Files like `extract.test.js`, `retrieve.test.js`, and `communities.test.js` are locked. 
-- **Do not add permutations here.** If you add a new JSON schema field or formatting bucket, test the logic in `structured.test.js` or `formatting.test.js`. 
-- **Limit orchestrator tests.** Keep to 3-5 maximum (Happy Path, Graceful Degradation, Fast-Fail).
+Test pure transforms with direct inputs and outputs. Test orchestration at injected host/network boundaries using `setupTestContext()` and `getDeps()`; exercise the actual composed path whose behavior matters.
 
-## MOCKING BOUNDARIES
-- **Never mock internal modules.** (Exceptions allowed only for isolated `embeddings.js` edge cases).
-- **Control ST boundaries via `setupTestContext`.** Use `getDeps()` injection in `tests/setup.js` to fake `getContext`, `saveChatConditional`, and `fetch`.
-- **Use `global.registerCdnOverrides()`.** Map CDN imports to local `node_modules` during tests. Re-invoke this after any `vi.resetModules()` call.
+Each integration test should cover a distinct invariant or failure boundary. There is no arbitrary file lock or test-count cap: migration shapes, archive/rebuild persistence, cancellation races and retrieval wiring need their own regressions. Keep permutations of pure logic in the corresponding unit suite.
 
-## TEST DATA
-- **Use Factory Builders.** Import `buildMockMemory()` and `buildMockGraphNode()` from `tests/factories.js`. Do not use messy inline objects for structural tests.
-- **Use inline objects for math tests.** When testing scoring logic, inline objects are preferred so the specific numbers being tested are overtly visible.
-- **Use `vi.useFakeTimers()`.** Never wait for real `setTimeout` delays in test suites.
-- **Fake timers + promise rejection = flaky.** Vitest flags unhandled rejections when a promise rejects before `.rejects` can attach a handler under fake timers. Use `vi.useRealTimers()` for tests that don't need timer mocking, or defer rejection via a `rejectFn` callback.
+Prefer injected external dependencies. Narrow internal spies/mocks are justified for otherwise inaccessible asynchronous failures, lazy-import rejection, or expensive model setup; keep the behavior being asserted real and name the seam. Broad mocking of orchestration under test is not evidence of production composition.
 
-## FILE ORGANIZATION
-- **Tests mirror `src/` structure.** No orphan root-level test files — all consolidated into `tests/{module}/`.
-- **No prompt-content tests.** Don't assert literal prompt strings — they break on every edit and test nothing behavioral.
+## Fixtures and timing
 
-## PARAMETERIZATION
-- **`it.each()` for same-pattern-different-input tests.** Proven in `text.test.js`, `ui-helpers.test.js`, `prompts.test.js`, `graph.test.js`.
-- **Group by behavior, not variant.** Use `[desc, input, expected]` tuples so `$desc` reads naturally.
+- Use `tests/factories.js` for ordinary memory/graph fixtures. Use explicit partial objects for legacy migration shapes and merge/collision field combinations where factory defaults hide the condition.
+- Production graph nodes and edges are keyed objects. Boundary tests should reflect persisted shapes, including absent/partially migrated fields.
+- Use fake timers or controlled deferred promises. Attach rejection assertions before advancing timers. Avoid wall-clock sleeps.
+- Tests mirror source directories. Group same-behavior variants with `it.each`.
 
-## STORE TESTS (chat-data)
-- **Always provide `saveChatConditional` in deps.** `setupTestContext({ deps: { saveChatConditional: vi.fn() } })` — updateEntity/deleteEntity call this.
-- **Reset graph data per test.** Set `data.graph = { nodes: {}, edges: {}, _mergeRedirects: {} }` in `beforeEach` to avoid cross-test leakage.
-- **Use `buildMockGraphNode()` for entity nodes.** Prefer the factory for consistency. Exception: merge/collision tests where inline objects make the specific field combinations under test more visible.
-- **Verify ST sync shapes.** When testing `stChanges`, assert on property types: `expect(result.stChanges.toDelete[0]).toHaveProperty('hash')` and `expect(typeof result.stChanges.toDelete[0].hash).toBe('number')`
+## Protocol assertions
+
+Assert source IDs, coverage, length limits, structure and required protocol tokens. Avoid exact arbitrary prompt prose or prose snapshots. UI interaction changes need event-level checks; static layout checks can read templates directly.
+
+## Host and CDN setup
+
+Provide `saveChatConditional` for store mutations, and reset graph/data per test. Inspect ST changesets and numeric hash types at real synchronization boundaries.
+
+`tests/setup.js` registers local packages through `_setTestOverride`; call `registerCdnOverrides()` after `vi.resetModules()` when required. Test-only bare package imports are valid. Keep browser network/model loading out of unit tests and report live-host/WebGPU validation separately.

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { MEMORIES_KEY, PROCESSED_MESSAGES_KEY } from '../../src/constants.js';
 import { getFingerprint } from '../../src/extraction/scheduler.js';
 import { CURRENT_SCHEMA_VERSION, runSchemaMigrations } from '../../src/store/migrations/index.js';
+import { migrateToV2 } from '../../src/store/migrations/v2.js';
 
 describe('migration orchestrator', () => {
     describe('runSchemaMigrations', () => {
@@ -58,7 +59,8 @@ describe('v2 migration', () => {
                 { id: 'm2', embedding_b64: 'existing' }, // already converted
             ],
             graph: {
-                nodes: [{ name: 'Alice', embedding: [0.5, 0.6] }],
+                nodes: { alice: { name: 'Alice', embedding: [0.5, 0.6] } },
+                edges: { alice_bob: { embedding: [0.2, 0.4] } },
             },
             communities: {},
         };
@@ -68,10 +70,29 @@ describe('v2 migration', () => {
         expect(data[MEMORIES_KEY][0].embedding).toBeUndefined();
         expect(data[MEMORIES_KEY][0].embedding_b64).toBeTypeOf('string');
         expect(data[MEMORIES_KEY][1].embedding_b64).toBe('existing'); // unchanged
-        expect(data.graph.nodes[0].embedding).toBeUndefined();
-        expect(data.graph.nodes[0].embedding_b64).toBeTypeOf('string');
+        expect(data.graph.nodes.alice.embedding).toBeUndefined();
+        expect(data.graph.nodes.alice.embedding_b64).toBeTypeOf('string');
+        expect(data.graph.edges.alice_bob.embedding).toBeUndefined();
+        expect(data.graph.edges.alice_bob.embedding_b64).toBeTypeOf('string');
     });
 
+    it('preserves partial conversions and converts both historical community fields once', () => {
+        const data = {
+            memories: [{ embedding: [1], embedding_b64: 'AACAPw==' }],
+            graph: { nodes: {}, edges: {} },
+            communities: {
+                current: { embedding: [1, 2] },
+                legacy: { summary_embedding: [3, 4] },
+            },
+        };
+        expect(migrateToV2(data, [])).toBe(true);
+        expect(data.memories[0]).toEqual({ embedding_b64: 'AACAPw==' });
+        expect(data.communities.current.embedding_b64).toBeTypeOf('string');
+        expect(data.communities.legacy.summary_embedding_b64).toBeTypeOf('string');
+        const snapshot = structuredClone(data);
+        expect(migrateToV2(data, [])).toBe(false);
+        expect(data).toEqual(snapshot);
+    });
     it('initializes missing graph/communities/graph_message_count/reflection_state', () => {
         const data = {};
 

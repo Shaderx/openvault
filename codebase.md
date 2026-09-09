@@ -14,7 +14,7 @@ The repository uses `AGENTS.md` files for Codex guidance. The root file and the 
 | ST boundary and DI | `src/deps.js` | Access to `getContext`, extension settings, event bus, prompt injection, connection manager, CSRF headers, timers/fetch |
 | Runtime state | `src/state.js`, `src/events.js` | Abort/session lifecycle, operation locks, generation lock, chat-switch cleanup, event handlers |
 | Persistence | `src/store/chat-data.js`, `src/store/schemas.js` | `context.chatMetadata.openvault` repository and CRUD operations |
-| Migrations | `src/store/migrations/index.js`, `v2.js`, `v3.js` | Sequential chat metadata migrations to schema version 3 |
+| Migrations | `src/store/migrations/index.js`, `v2.js`, `v3.js` | Sequential metadata migrations to schema v5 with mandatory full rebuild gating |
 | Extraction | `src/extraction/extract.js`, `scheduler.js`, `worker.js`, `structured.js` | Batch selection, LLM extraction, event/graph mutation, reflections/communities, backfill |
 | Graph | `src/graph/graph.js`, `communities.js` | Entity normalization/merge, relationship storage/consolidation, Louvain communities |
 | Retrieval | `src/retrieval/retrieve.js`, `scoring.js`, `math.js`, `query-context.js` | Query context, hybrid BM25/vector scoring, soft budget selection, prompt formatting/injection |
@@ -45,7 +45,7 @@ Slash commands in `index.js`:
 
 ## Storage and data lifecycle
 
-`src/store/chat-data.js` is the repository around `getDeps().getContext().chatMetadata.openvault`. `getOpenVaultData()` creates a fresh object when absent with schema version 3, `memories`, `character_states`, `processed_message_ids`, `reflection_state`, `graph`, `communities`, and `graph_message_count`. The helper also supports legacy `context.chat_metadata.chat_id` when obtaining the current chat id.
+`src/store/chat-data.js` is the repository around `getDeps().getContext().chatMetadata.openvault`. `getOpenVaultData()` creates a fresh object when absent with schema version 5 and ready lifecycle, `memories`, `character_states`, `processed_message_ids`, `reflection_state`, `graph`, `communities`, and `graph_message_count`. The helper also supports legacy `context.chat_metadata.chat_id` when obtaining the current chat id.
 
 Core repository operations include adding memories, recording processed message fingerprints, incrementing graph message count, updating/deleting memories, updating/deleting entities and communities, renaming characters, merging entities, saving with an expected chat id, and deleting all current-chat data. `saveOpenVaultData(expectedChatId)` rechecks the current chat id before/after the ST save call to avoid committing a result into a different chat. Domain code also returns `stChanges` (`toSync` and `toDelete`) for external vector synchronization, although not every mutation currently does so consistently.
 
@@ -59,7 +59,7 @@ Stored data conceptually contains:
 
 Message fingerprints are generated in `src/extraction/scheduler.js`: `send_date` is preferred; otherwise a positive `cyrb53(name + mes)` hash is used. Processed fingerprints are the durable extraction boundary; system messages are excluded from extraction. `src/events.js` auto-hide marks already-processed source messages with `is_system=true` plus `openvault_hidden`, preserving the flag so deletion/reset can unhide only OpenVault-hidden messages.
 
-`src/store/migrations/index.js` applies v1→v2→v3 sequentially. v2 converts old positional message ids to fingerprints, converts legacy embedding arrays and initializes newer collections; v3 backfills `message_fingerprints` from old `message_ids`. Migration is transaction-like: `onChatChanged` snapshots metadata, rolls back on failure and kills the session so extraction cannot continue against uncertain data. Embedding migration is separate from schema migration and is handled by `src/embeddings/migration.js`.
+`src/store/migrations/index.js` applies v1→v2→v3→v4→v5 sequentially. v4/v5 invalidate legacy retrieval/archive representations until a complete rebuild. v2 converts old positional message ids to fingerprints, converts legacy embedding arrays and initializes newer collections; v3 backfills `message_fingerprints` from old `message_ids`. Migration is transaction-like: `onChatChanged` snapshots metadata, rolls back on failure and kills the session so extraction cannot continue against uncertain data. Embedding migration is separate from schema migration and is handled by `src/embeddings/migration.js`.
 
 ## Extraction pipeline
 
@@ -152,9 +152,9 @@ npm run sync-version   copy package version to manifest
 
 `scripts/generate-types.js` imports the Zod schemas with a local Zod override and writes `src/types.d.ts`; `scripts/check-css.js` scans JS/templates for tracked class usage; `scripts/check-jsdoc.mjs` checks multi-line JSDoc placement. Do not use `npm test` merely as a read-only check without reviewing generated-file diffs: its version/type steps can modify `manifest.json` and `src/types.d.ts`.
 
-## Verified baseline and notable risks/quirks
+## Historical survey findings (before September 9 remediation)
 
-The following are evidence-based observations from the current tree, not assumptions:
+These observations describe the earlier survey snapshot, not current acceptance evidence. Consult GitHub issues #4–#23 and current implementation before relying on a historical finding.
 
 - Documentation drift: `include/DATA_SCHEMA.md` still states schema version 2, while `src/store/migrations/index.js` and new data in `src/store/chat-data.js` use version 3. `src/store/schemas.js` also names several roots `characters`, `processed_messages`, `reflection`, and `global`, while runtime code uses `character_states`, `processed_message_ids`, `reflection_state`, and `global_world_state`. Treat runtime/store code and migrations as authoritative until schemas/docs are reconciled.
 - Migration edge case: `src/store/migrations/v2.js` iterates `data.graph?.nodes || []` as if it were an array, but runtime graph nodes are an object keyed by normalized entity key. Legacy graph-node embedding conversion may therefore be skipped.
@@ -167,9 +167,9 @@ The following are evidence-based observations from the current tree, not assumpt
 - Initial/default shape is partial: `getOpenVaultData()` initializes only a subset of all fields documented in `include/DATA_SCHEMA.md`, and `createEmptyGraph()` initially returns only `nodes` and `edges`; callers must continue to tolerate absent queues/caches/world/perf fields.
 - Community fallback: `detectCommunities()` returns early for fewer than three nodes, making the documented tiny-graph fallback code unreachable in those cases.
 
-## What was verified and remaining unknowns
+## Historical survey verification and runtime unknowns
 
-Verified during this survey:
+Verified during that earlier survey; these counts are not current test results:
 
 - Read the repository guidance files and all source-domain guidance files listed above.
 - Inspected the complete source tree, templates, CSS split, package/config files, scripts, schema reference, fork-change history, tests and test setup.
@@ -189,3 +189,17 @@ Not fully verified:
 - `docs/designs` and `docs/plans` contain historical design/change material. They were inventoried and relevant guidance was compared with implementation, but not every historical design document was treated as current specification.
 
 Future agents should begin with this report, then consult the nearest domain `AGENTS.md`, `src/constants.js`, `src/store/chat-data.js`, and the relevant tests before changing behavior. Keep `include/DATA_SCHEMA.md`, `src/store/schemas.js`, migrations and runtime key names synchronized when modifying persistence.
+
+## Current architecture: schema v5
+
+The fork prioritizes immutable world/story archives, evolving world state and dynamic POV-aware recall. Durable records live in chat metadata; preferences live in extension settings, with disposable runtime caches and optional derived ST Vector indexes.
+
+`src/archive/archive.js` owns segments, source validation, bounded projections and transactional seal-before-hide. Attribution must be complete: uncovered messages receive one-sentence coverage records of at most 15 Unicode words, not raw source copies. Coverage fallbacks do not enter semantic enrichment. Explicit projection checkpoints protect five-star history; protected overflow keeps new sources visible and reports the rollup requirement. Sealed bytes never change with query or POV. Archives are narrator reference data, not a hard character secrecy filter.
+
+`src/rebuild/rebuild.js` owns legacy reset and resumption. All non-ready states (`needs_rebuild`, `rebuilding`, `rebuild_failed`) suppress production context. A recovery backup and fixed source boundary survive retries; activation follows extraction, final enrichment and successful persistence. Compatibility codecs/locators do not enable legacy production retrieval.
+
+`src/retrieval/retrieve.js` injects independent archive, entities, world and optional recall tiers. Archives remain TOP_OF_CHAT; volatile context uses late IN_CHAT slots and independent budgets. ST community IDs flow from scoring into world retrieval without duplicate local embedding queries. Archive source IDs suppress redundant dynamic recall.
+
+Task-aware embedding identity includes source/model, task, instruction and text. Exact aliases and conservative name signals precede semantic matching; ST mode reports matching capability separately. See `src/embeddings/AGENTS.md`; mocked tests do not establish empirical model calibration.
+
+Current contracts are in `include/DATA_SCHEMA.md` and scoped AGENTS files. Historical findings above are an audit trail, not unresolved current claims. Use the issue remediation record for current verification.

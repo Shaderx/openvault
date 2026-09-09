@@ -29,3 +29,9 @@ For event dedup thresholds see `src/extraction/AGENTS.md`.
 - **Route via multilingual intent.** `detectMacroIntent()` matches "recap", "вкратце", etc.
 - **Macro queries:** Inject pre-computed `global_world_state`.
 - **Local queries:** Execute vector similarity search against specific community summaries.
+
+### Lifecycle, Archive, and POV Boundaries
+- **Lifecycle gate:** `retrieveAndInjectContext()` and `updateInjection()` clear all OpenVault prompts while chat data is not in the `ready` lifecycle state. Do not score or inject partially rebuilt state.
+- **Archive separation:** The sealed archive projection is injected independently at `TOP_OF_CHAT`; dynamic entities, communities, and recall remain late volatile context. Do not rebuild or POV-filter sealed archive bytes during ordinary retrieval.
+- **POV filtering:** Apply `filterMemoriesByPOV()` to dynamic memory candidates before scoring. Community and entity retrieval is world context selected for the current query; stale, dissolved, and child communities are excluded at world-context selection.
+- **ST orchestration:** In ST Vector mode, prefetch the shared collection once, pass matching community IDs to `retrieveWorldContext()`, then reuse the same results for memory reranking. A missing or empty ID set produces no local community injection.

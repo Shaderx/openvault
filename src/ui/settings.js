@@ -43,6 +43,7 @@ import { setStatus, updateEmbeddingStatusDisplay } from './status.js';
 let emergencyCutModalAppended = false;
 let emergencyCutAbortController = null;
 let manualCompactionInProgress = false;
+let emergencyCutReturnFocus = null;
 
 const COMPACTION_BLOCK_MESSAGES = Object.freeze({
     [COMPACTION_BLOCK_REASONS.EXTRACTION_IN_PROGRESS]:
@@ -120,6 +121,7 @@ export function showEmergencyCutModal() {
         $modal.appendTo('body');
         emergencyCutModalAppended = true;
     }
+    emergencyCutReturnFocus = document.activeElement;
     $modal.removeClass('hidden');
 
     // Keyboard trap with modal accessibility
@@ -127,6 +129,7 @@ export function showEmergencyCutModal() {
         // Escape - always check first (handles focus loss on overlay click)
         if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             const $cancelBtn = $('#openvault_emergency_cancel');
             if (!$cancelBtn.prop('disabled')) {
                 $cancelBtn.click();
@@ -161,6 +164,11 @@ export function hideEmergencyCutModal() {
     $('#openvault_emergency_cut_modal').addClass('hidden');
     $(document).off('keydown.emergencyCut');
     $('#openvault_emergency_cancel').off('click');
+    const returnFocus = emergencyCutReturnFocus;
+    emergencyCutReturnFocus = null;
+    if (returnFocus && document.contains(returnFocus) && typeof returnFocus.focus === 'function') {
+        returnFocus.focus();
+    }
 }
 
 /**
@@ -489,6 +497,8 @@ function initPrefillSelector() {
     // Close on Escape
     $(document).on('keydown.prefillSelector', (e) => {
         if (e.key === 'Escape' && $container.hasClass('open')) {
+            e.preventDefault();
+            e.stopPropagation();
             $container.removeClass('open');
             $trigger.trigger('focus');
         }

@@ -1,9 +1,45 @@
 import { EMBEDDING_SOURCES, MEMORIES_KEY } from '../constants.js';
-import { getDeps } from '../deps.js';
 import { getSTVectorRequestBody, getSTVectorSource, purgeSTCollection } from '../services/st-vector.js';
-import { getCurrentChatId, getOpenVaultData } from '../store/chat-data.js';
+import { getSessionSignal } from '../state.js';
+import { getCurrentChatId, getOpenVaultData, saveOpenVaultData } from '../store/chat-data.js';
 import { clearStSynced, deleteEmbedding, hasEmbedding, isStSynced } from '../utils/embedding-codec.js';
 import { logDebug, logInfo, logWarn } from '../utils/logging.js';
+
+/**
+ * Enumerate every record that can own an embedding. Keeping this list in one
+ * place prevents graph edges from being skipped by one migration path.
+ * @param {Object} data - OpenVault chat data
+ * @returns {Object[]}
+ */
+function getEmbeddingItems(data) {
+    const memories = data?.[MEMORIES_KEY]?.length > 0 ? data[MEMORIES_KEY] : [];
+    return [
+        ...memories,
+        ...Object.values(data?.graph?.nodes || {}),
+        ...Object.values(data?.graph?.edges || {}),
+        ...Object.values(data?.communities || {}),
+    ];
+}
+
+/**
+ * Check whether a migration still belongs to the chat it started in.
+ * @param {string|null} expectedChatId - Chat ID captured before awaiting
+ * @returns {boolean}
+ */
+function isExpectedChat(expectedChatId) {
+    return expectedChatId === null || getCurrentChatId() === expectedChatId;
+}
+
+/**
+ * Check both the chat ID and session generation. The signal catches a
+ * chat A → B → A transition where the string ID alone would look current.
+ * @param {string|null} expectedChatId - Chat ID captured before awaiting
+ * @param {AbortSignal} signal - Session signal captured before awaiting
+ * @returns {boolean}
+ */
+function isCurrentSession(expectedChatId, signal) {
+    return !signal.aborted && isExpectedChat(expectedChatId);
+}
 
 /**
  * Get the current ST Vector Storage fingerprint (source + model) from ST settings.
@@ -50,17 +86,8 @@ function _hasStVectorMismatch(data) {
  * @returns {boolean}
  */
 function _hasSyncedItems(data) {
-    for (const m of data[MEMORIES_KEY] || []) {
-        if (isStSynced(m)) return true;
-    }
-    for (const node of Object.values(data.graph?.nodes || {})) {
-        if (isStSynced(node)) return true;
-    }
-    for (const edge of Object.values(data.graph?.edges || {})) {
-        if (isStSynced(edge)) return true;
-    }
-    for (const community of Object.values(data.communities || {})) {
-        if (isStSynced(community)) return true;
+    for (const item of getEmbeddingItems(data)) {
+        if (isStSynced(item)) return true;
     }
     return false;
 }
@@ -72,27 +99,9 @@ function _hasSyncedItems(data) {
  */
 function _clearAllStSyncFlags(data) {
     let count = 0;
-    for (const m of data[MEMORIES_KEY] || []) {
-        if (isStSynced(m)) {
-            clearStSynced(m);
-            count++;
-        }
-    }
-    for (const node of Object.values(data.graph?.nodes || {})) {
-        if (isStSynced(node)) {
-            clearStSynced(node);
-            count++;
-        }
-    }
-    for (const edge of Object.values(data.graph?.edges || {})) {
-        if (isStSynced(edge)) {
-            clearStSynced(edge);
-            count++;
-        }
-    }
-    for (const community of Object.values(data.communities || {})) {
-        if (isStSynced(community)) {
-            clearStSynced(community);
+    for (const item of getEmbeddingItems(data)) {
+        if (isStSynced(item)) {
+            clearStSynced(item);
             count++;
         }
     }
@@ -108,17 +117,8 @@ function _clearAllStSyncFlags(data) {
  */
 function _countEmbeddings(data) {
     let count = 0;
-    for (const m of data[MEMORIES_KEY] || []) {
-        if (hasEmbedding(m)) count++;
-    }
-    for (const node of Object.values(data.graph?.nodes || {})) {
-        if (hasEmbedding(node)) count++;
-    }
-    for (const edge of Object.values(data.graph?.edges || {})) {
-        if (hasEmbedding(edge)) count++;
-    }
-    for (const community of Object.values(data.communities || {})) {
-        if (hasEmbedding(community)) count++;
+    for (const item of getEmbeddingItems(data)) {
+        if (hasEmbedding(item)) count++;
     }
     return count;
 }
@@ -134,6 +134,9 @@ function _countEmbeddings(data) {
  */
 export async function invalidateStaleEmbeddings(data, currentModelId) {
     if (!data || !currentModelId) return 0;
+    const expectedChatId = getCurrentChatId();
+    const signal = getSessionSignal();
+    if (!isCurrentSession(expectedChatId, signal)) return 0;
 
     const hasAnyEmbedding = _countEmbeddings(data) > 0;
 
@@ -153,19 +156,21 @@ export async function invalidateStaleEmbeddings(data, currentModelId) {
     // Same OV source — but if ST Vector, also check ST-side fingerprint
     if (data.embedding_model_id === currentModelId) {
         if (currentModelId === EMBEDDING_SOURCES.ST_VECTOR && _hasStVectorMismatch(data)) {
-            // ST source/model changed — purge old collection, clear sync flags, re-sync
+            // ST source/model changed — purge the originating collection before
+            // mutating the record, then re-check the chat before stamping it.
             const oldSource = data.st_vector_source || 'unknown';
             const oldModel = data.st_vector_model || 'unknown';
             const fp = getStVectorFingerprint();
 
-            const cleared = _clearAllStSyncFlags(data);
-
             // Purge old ST collection (best-effort, don't block on failure)
             try {
-                await purgeSTCollection(getCurrentChatId() || 'default');
+                await purgeSTCollection(expectedChatId || 'default');
             } catch (e) {
                 logWarn(`Failed to purge old ST collection: ${e.message}`);
             }
+            if (!isCurrentSession(expectedChatId, signal)) return 0;
+
+            const cleared = _clearAllStSyncFlags(data);
 
             // Stamp new fingerprint
             stampStVectorFingerprint(data);
@@ -182,30 +187,21 @@ export async function invalidateStaleEmbeddings(data, currentModelId) {
     const oldModel = data.embedding_model_id || 'unknown';
     let count = 0;
 
-    for (const m of data[MEMORIES_KEY] || []) {
-        if (hasEmbedding(m)) {
-            deleteEmbedding(m);
-            count++;
+    // Purge the old external collection before clearing the originating chat's
+    // state. If the chat changes while the request is in flight, leave the old
+    // record untouched and let the new chat continue its own migration.
+    if (oldModel === EMBEDDING_SOURCES.ST_VECTOR) {
+        try {
+            await purgeSTCollection(expectedChatId || 'default');
+        } catch (e) {
+            logWarn(`Failed to purge old ST collection: ${e.message}`);
         }
+        if (!isCurrentSession(expectedChatId, signal)) return 0;
     }
 
-    for (const node of Object.values(data.graph?.nodes || {})) {
-        if (hasEmbedding(node)) {
-            deleteEmbedding(node);
-            count++;
-        }
-    }
-
-    for (const edge of Object.values(data.graph?.edges || {})) {
-        if (hasEmbedding(edge)) {
-            deleteEmbedding(edge);
-            count++;
-        }
-    }
-
-    for (const community of Object.values(data.communities || {})) {
-        if (hasEmbedding(community)) {
-            deleteEmbedding(community);
+    for (const item of getEmbeddingItems(data)) {
+        if (hasEmbedding(item)) {
+            deleteEmbedding(item);
             count++;
         }
     }
@@ -213,15 +209,6 @@ export async function invalidateStaleEmbeddings(data, currentModelId) {
     // Also clear ST sync flags
     const syncCleared = _clearAllStSyncFlags(data);
     count += syncCleared;
-
-    // Purge old ST collection if switching away from st_vector
-    if (oldModel === EMBEDDING_SOURCES.ST_VECTOR) {
-        try {
-            await purgeSTCollection(getCurrentChatId() || 'default');
-        } catch (e) {
-            logWarn(`Failed to purge old ST collection: ${e.message}`);
-        }
-    }
 
     data.embedding_model_id = currentModelId;
     if (currentModelId === EMBEDDING_SOURCES.ST_VECTOR) {
@@ -241,9 +228,13 @@ export async function deleteCurrentChatEmbeddings() {
     if (!data || !data[MEMORIES_KEY]) {
         return 0;
     }
+    const expectedChatId = getCurrentChatId();
+    const signal = getSessionSignal();
+    if (!isCurrentSession(expectedChatId, signal)) return 0;
 
     let count = 0;
     for (const memory of data[MEMORIES_KEY]) {
+        if (!isCurrentSession(expectedChatId, signal)) return 0;
         if (hasEmbedding(memory)) {
             deleteEmbedding(memory);
             count++;
@@ -251,7 +242,9 @@ export async function deleteCurrentChatEmbeddings() {
     }
 
     if (count > 0) {
-        await getDeps().saveChatConditional();
+        if (!(await saveOpenVaultData(expectedChatId))) {
+            return 0;
+        }
         logDebug(`Deleted ${count} embeddings`);
     }
 

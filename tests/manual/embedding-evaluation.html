@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>OpenVault embedding acceptance</title>
+<h1>Embedding acceptance</h1>
+<p>Synthetic identity pairs only. Each run downloads the selected model and uses WebGPU.</p>
+<button id="qwen">Run Qwen3</button>
+<button id="gemma">Run EmbeddingGemma</button>
+<pre id="output">Checking WebGPU…</pre>
+<script type="module">
+import { ENTITY_MATCH_THRESHOLDS } from '../../src/constants.js';
+import { cdnImport } from '../../src/utils/cdn.js';
+
+const out = document.querySelector('#output');
+const pairs = [
+ ['Red', 'Reddington "Red" Steele', true],
+ ['Mina', 'Мина', true],
+ ['Captain Voss', 'Alexander Voss', true],
+ ['The Iron Duke', 'Duke Harlan, known as The Iron Duke', true],
+ ['John Smith', 'James Smith', false],
+ ['Captain Voss', 'Captain Ross', false],
+ ['Alice the healer', 'Maria the healer', false],
+ ['Red Dragon', 'Red', false],
+ ['Mina', 'Nina', false],
+];
+const models = {
+ qwen: {key:'qwen3-embedding-0.6b', name:'onnx-community/Qwen3-Embedding-0.6B-ONNX',dtype:'q8',pooling:'last_token',dimensions:1024},
+ gemma: {key:'embeddinggemma-300m', name:'onnx-community/embeddinggemma-300m-ONNX',dtype:'q4',pooling:'mean',dimensions:768},
+};
+const adapter = await navigator.gpu?.requestAdapter();
+out.textContent = adapter ? 'WebGPU adapter available. Choose a model.' : 'BLOCKED: No WebGPU adapter is available in this browser.';
+async function run(kind) {
+ const config = models[kind];
+ if (!adapter) return;
+ document.querySelectorAll('button').forEach(button => {button.disabled=true;});
+ try {
+  out.textContent='Loading centrally pinned Transformers.js…';
+  const {pipeline}=await cdnImport('@huggingface/transformers');
+  const extractor=await pipeline('feature-extraction',config.name,{device:'webgpu',dtype:config.dtype,progress_callback:progress=>{out.textContent=JSON.stringify(progress,null,2);}});
+  const prefix = kind === 'qwen' ? 'Instruct: Determine whether a newly extracted fictional entity refers to the same entity as an existing record, including aliases, nicknames, titles, spelling variants, and cross-language forms.\nQuery: ' : 'task: sentence similarity | query: ';
+  const rows=[];
+  for(const [left,right,positive] of pairs){
+   out.textContent=`Evaluating ${rows.length+1}/${pairs.length}: ${left} / ${right}`;
+   const output=await extractor([prefix+'PERSON: '+left+' - A resident involved in the current story.',prefix+'PERSON: '+right+' - A resident involved in the current story.'],{pooling:config.pooling,normalize:true});
+   const vectors=output.tolist();
+   if(vectors.some(vector=>vector.length!==config.dimensions))throw new Error('Unexpected vector dimensions');
+   const norms=vectors.map(vector=>Math.sqrt(vector.reduce((sum,v)=>sum+v*v,0)));
+   if(norms.some(norm=>Math.abs(norm-1)>0.01))throw new Error('Output is not normalized');
+   const cosine=vectors[0].reduce((sum,value,index)=>sum+value*vectors[1][index],0);
+   rows.push({left,right,positive,cosine,norms});
+  }
+  const threshold=ENTITY_MATCH_THRESHOLDS[config.key];
+  const positives=rows.filter(row=>row.positive), negatives=rows.filter(row=>!row.positive);
+  const report={inputShape:'PERSON: name - A resident involved in the current story.',model:config,threshold,positiveRecall:positives.filter(row=>row.cosine>=threshold).length/positives.length,falsePositiveRate:negatives.filter(row=>row.cosine>=threshold).length/negatives.length,suggestedZeroFalsePositiveThreshold:Math.max(...negatives.map(row=>row.cosine))+0.0001,rows,note:'Synthetic cosine evaluation; final resolver also uses deterministic aliases and name signals. These pairs alone do not establish general calibration.'};
+  out.textContent=JSON.stringify(report,null,2);
+  await extractor.dispose();
+ }catch(error){out.textContent='FAILED: '+error.stack;}
+ finally{document.querySelectorAll('button').forEach(button=>{button.disabled=false;});}
+}
+document.querySelector('#qwen').addEventListener('click',()=>run('qwen'));
+document.querySelector('#gemma').addEventListener('click',()=>run('gemma'));
+</script>
+

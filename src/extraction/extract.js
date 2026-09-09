@@ -23,6 +23,7 @@ import {
     CHARACTERS_KEY,
     COMMUNITY_STALENESS_THRESHOLD,
     CONSOLIDATION,
+    defaultSettings,
     EDGE_DESCRIPTION_CAP,
     EMBEDDING_SOURCES,
     ENTITY_DESCRIPTION_CAP,
@@ -60,7 +61,17 @@ import { accumulateImportance, generateReflections, shouldReflect } from '../ref
 import { calculateIDF, cosineSimilarity, tokenize } from '../retrieval/math.js';
 import { deleteItemsFromST, isStVectorSource, syncItemsToST } from '../services/st-vector.js';
 import { getSettings } from '../settings.js';
-import { clearAllLocks, getLastApiCallTime, isWorkerRunning, operationState, setLastApiCallTime } from '../state.js';
+import {
+    clearAllLocks,
+    clearReflectionRetry,
+    getLastApiCallTime,
+    getSessionSignal,
+    isReflectionRetrySuppressed,
+    isWorkerRunning,
+    operationState,
+    recordReflectionRetryFailure,
+    setLastApiCallTime,
+} from '../state.js';
 import {
     addMemories,
     getCurrentChatId,
@@ -75,6 +86,7 @@ import { logDebug, logError, logInfo } from '../utils/logging.js';
 import { sanitizeMessageContent } from '../utils/message-sanitizer.js';
 import { createLadderQueue } from '../utils/queue.js';
 import { isExtensionEnabled, safeSetExtensionPrompt, yieldToMain } from '../utils/st-helpers.js';
+import { getMemoryIndexText } from '../utils/st-index.js';
 import { jaccardSimilarity, sliceToTokenBudget, sortMemoriesBySequence } from '../utils/text.js';
 import { countTokens } from '../utils/tokens.js';
 import { resolveCharacterName, transliterateCyrToLat } from '../utils/transliterate.js';
@@ -790,9 +802,38 @@ export async function filterSimilarEvents(
 // =============================================================================
 
 /**
+ * Resolve the bounded reflection retry policy from the central defaults.
+ * Invalid runtime values fail closed to the configured default policy.
+ * @param {Object} settings
+ * @returns {{cooldownMs: number, maxFailures: number}}
+ */
+function getReflectionRetryPolicy(settings) {
+    const configuredCooldown = Number(settings?.reflectionRetryCooldownMs);
+    const configuredMaxFailures = Number(settings?.reflectionRetryMaxFailures);
+    const defaultCooldown = Number(defaultSettings.reflectionRetryCooldownMs);
+    const defaultMaxFailures = Number(defaultSettings.reflectionRetryMaxFailures);
+    return {
+        cooldownMs:
+            Number.isFinite(configuredCooldown) && configuredCooldown >= 0 ? configuredCooldown : defaultCooldown,
+        maxFailures:
+            Number.isFinite(configuredMaxFailures) && configuredMaxFailures >= 1
+                ? Math.floor(configuredMaxFailures)
+                : defaultMaxFailures,
+    };
+}
+
+/**
+ * Throw the standard cancellation error when a phase was aborted.
+ * @param {AbortSignal|null|undefined} abortSignal
+ */
+function throwIfReflectionAborted(abortSignal) {
+    if (abortSignal?.aborted) throw new DOMException('Aborted', 'AbortError');
+}
+
+/**
  * Run reflection synthesis for a list of characters.
  * Checks each character against the reflection threshold, generates reflections via LLM,
- * pushes results to data.memories, and resets the importance accumulator.
+ * pushes results to data.memories, and consumes the triggering accumulator.
  *
  * @param {Object} data - OpenVault data object (mutated in-place)
  * @param {string[]} characterNames - Characters to check for reflection trigger
@@ -802,46 +843,104 @@ export async function filterSimilarEvents(
  */
 export async function synthesizeReflections(data, characterNames, settings, options = {}) {
     const { abortSignal = null } = options;
+    const originSessionSignal = getSessionSignal();
+    const phaseSignal = abortSignal || originSessionSignal;
 
     // Check if reflection generation is enabled (prefer passed settings to avoid stale getSettings race)
     const generationEnabled = settings?.reflectionGenerationEnabled ?? getSettings('reflectionGenerationEnabled', true);
     if (!generationEnabled) {
         logDebug('[Extraction] Reflection generation disabled, skipping');
-        return { stChanges: { toUpsert: [], toDelete: [] } };
+        return { stChanges: { toSync: [], toDelete: [] } };
     }
 
-    const reflectionThreshold = settings.reflectionThreshold;
-    const ladderQueue = await createLadderQueue(settings.maxConcurrency);
+    const effectiveSettings = { ...defaultSettings, ...(getSettings() || {}), ...(settings || {}) };
+    const reflectionThreshold = effectiveSettings.reflectionThreshold;
+    const retryPolicy = getReflectionRetryPolicy(effectiveSettings);
+    const originChatId = getCurrentChatId();
+    const originData = data;
+    const originStoreData = getOpenVaultData();
+    // Unit callers may pass an unbound data object. In that legacy shape the
+    // chat ID is still the available guard; production data is store-bound and
+    // receives the stronger object-identity check below.
+    const dataIsStoreBound = originStoreData === originData;
+    const isOriginChatAndData = () =>
+        (originChatId === null || getCurrentChatId() === originChatId) &&
+        (!dataIsStoreBound || getOpenVaultData() === originData);
+    const isOriginSession = () => getSessionSignal() === originSessionSignal && !originSessionSignal.aborted;
+    const isOriginContext = () => isOriginSession() && isOriginChatAndData();
+    // An explicit operation signal may be cancelled while the session remains
+    // current; restore in that case. A reset session must never touch old data.
+    const canRestoreOrigin = () => isOriginSession() && isOriginChatAndData();
+    const ladderQueue = await createLadderQueue(effectiveSettings.maxConcurrency);
     const reflectionPromises = [];
 
     for (const characterName of characterNames) {
-        if (abortSignal?.aborted) {
-            throw new DOMException('Aborted', 'AbortError');
-        }
+        throwIfReflectionAborted(phaseSignal);
 
-        if (shouldReflect(data.reflection_state, characterName, reflectionThreshold)) {
+        if (
+            shouldReflect(data.reflection_state, characterName, reflectionThreshold) &&
+            !isReflectionRetrySuppressed(characterName)
+        ) {
             reflectionPromises.push(
-                ladderQueue
-                    .add(async () => {
-                        // Reset accumulator BEFORE LLM call to prevent infinite retry loop on failure
-                        // The accumulated importance is "consumed" here - even if the LLM call fails,
-                        // we don't want to retry immediately (to avoid token burning)
-                        data.reflection_state[characterName].importance_sum = 0;
+                ladderQueue.add(async () => {
+                    throwIfReflectionAborted(phaseSignal);
+                    if (!isOriginContext() || isReflectionRetrySuppressed(characterName)) return;
 
+                    const characterState = data.reflection_state?.[characterName];
+                    const consumedImportance = Number(characterState?.importance_sum);
+                    if (
+                        !characterState ||
+                        !Number.isFinite(consumedImportance) ||
+                        consumedImportance < reflectionThreshold
+                    ) {
+                        return;
+                    }
+
+                    // Consume before the await. On failure, restore only this
+                    // originating chat and add the snapshot to any importance
+                    // that arrived concurrently while generation was running.
+                    characterState.importance_sum = 0;
+                    try {
                         const { reflections, stChanges } = await generateReflections(
                             characterName,
                             data[MEMORIES_KEY] || [],
                             data[CHARACTERS_KEY] || {}
                         );
-                        if (reflections.length > 0) {
+                        throwIfReflectionAborted(phaseSignal);
+                        if (!isOriginContext()) return;
+                        if (reflections?.length > 0) {
                             addMemories(reflections);
                         }
-                        await applySyncChanges(stChanges);
-                    })
-                    .catch((error) => {
-                        if (error.name === 'AbortError') throw error;
-                        logError(`Reflection error for ${characterName}`, error);
-                    })
+                        throwIfReflectionAborted(phaseSignal);
+                        if (!isOriginContext()) return;
+                        await applySyncChanges(stChanges || { toSync: [], toDelete: [] });
+                        throwIfReflectionAborted(phaseSignal);
+                        if (!isOriginContext()) return;
+                        clearReflectionRetry(characterName);
+                    } catch (error) {
+                        const isAbort = error?.name === 'AbortError';
+                        const sameOrigin = canRestoreOrigin();
+                        if (sameOrigin) {
+                            const currentState = data.reflection_state[characterName] || { importance_sum: 0 };
+                            const concurrentImportance = Number(currentState.importance_sum);
+                            currentState.importance_sum =
+                                (Number.isFinite(concurrentImportance) ? concurrentImportance : 0) + consumedImportance;
+                            data.reflection_state[characterName] = currentState;
+                            if (!isAbort) {
+                                const marker = recordReflectionRetryFailure(
+                                    characterName,
+                                    retryPolicy.cooldownMs,
+                                    retryPolicy.maxFailures
+                                );
+                                logError(`Reflection error for ${characterName}`, error, {
+                                    failures: marker.failures,
+                                    nextRetryAt: marker.nextRetryAt,
+                                });
+                            }
+                        }
+                        if (isAbort) throw error;
+                    }
+                })
             );
         }
     }
@@ -1117,10 +1216,20 @@ async function processGraphUpdates(graphData, entities, relationships, settings)
         const edgeCap = EDGE_DESCRIPTION_CAP;
         for (const rel of relationships) {
             if (rel.source === 'Unknown' || rel.target === 'Unknown') continue;
-            upsertRelationship(graphData, rel.source, rel.target, rel.description, edgeCap, settings, {
-                status: rel.status,
-                messageCount: getOpenVaultData()?.graph_message_count || 0,
-            });
+            const edgeChanges = upsertRelationship(
+                graphData,
+                rel.source,
+                rel.target,
+                rel.description,
+                edgeCap,
+                settings,
+                {
+                    status: rel.status,
+                    messageCount: getOpenVaultData()?.graph_message_count || 0,
+                }
+            );
+            graphSyncChanges.toSync.push(...edgeChanges.toSync);
+            graphSyncChanges.toDelete.push(...edgeChanges.toDelete);
         }
     }
 
@@ -1355,7 +1464,7 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
         // Sync events + graph to ST Vector Storage (single applySyncChanges call)
         const eventSyncChanges = { toSync: [], toDelete: [] };
         for (const e of allEvents.filter((e) => !e.coverage_fallback && !isStSynced(e))) {
-            const text = `[OV_ID:${e.id}] ${e.summary}`;
+            const text = getMemoryIndexText(e);
             eventSyncChanges.toSync.push({ hash: cyrb53(text), text, item: e });
         }
         const combinedSyncChanges = {
@@ -1437,7 +1546,15 @@ export async function extractMemories(messageIds = null, targetChatId = null, op
 }
 
 export async function runPhase2Enrichment(data, settings, targetChatId, options = {}) {
-    const { abortSignal = null } = options;
+    const sessionSignal = getSessionSignal();
+    const { abortSignal = sessionSignal } = options;
+    const expectedChatId = targetChatId ?? getCurrentChatId();
+    const context = getDeps().getContext();
+    const assertCurrent = () => {
+        if (abortSignal?.aborted || sessionSignal !== getSessionSignal() || expectedChatId !== getCurrentChatId()) {
+            throw new DOMException('Phase 2 session changed', 'AbortError');
+        }
+    };
     const semanticMemories = (data[MEMORIES_KEY] || []).filter((memory) => !memory.coverage_fallback);
 
     // Guard: No memories to enrich
@@ -1450,19 +1567,25 @@ export async function runPhase2Enrichment(data, settings, targetChatId, options 
 
     try {
         // Enforce RPM spacing from the last Phase 1 API call to avoid 502s
+        assertCurrent();
         await rpmDelay(settings, 'Phase 2 rate limit');
+        assertCurrent();
 
         const characterNames = Object.keys(data.reflection_state || {});
         await synthesizeReflections(data, characterNames, settings, { abortSignal });
 
+        assertCurrent();
         await rpmDelay(settings, 'Phase 2 inter-step rate limit');
+        assertCurrent();
 
-        const context = getDeps().getContext();
         await synthesizeCommunities(data, settings, context.name2, context.name1);
 
+        assertCurrent();
         // Update IDF cache before save — reflections may have been added
         updateIDFCache(data, data.graph?.nodes);
-        await saveOpenVaultData(targetChatId);
+        const saved = await saveOpenVaultData(expectedChatId);
+        assertCurrent();
+        if (!saved) throw new Error('Phase 2 save failed');
         logInfo('runPhase2Enrichment: Complete');
     } catch (error) {
         if (error.name === 'AbortError') throw error;

@@ -278,6 +278,8 @@ describe('immutable archive representation', () => {
             archivePromptBudget: 1000,
             archiveRollupThreshold: 1000,
             promptHardTokenLimit: 10000,
+            retrievalFinalTokens: 0,
+            visibleChatTarget: 0,
             archiveProjectionSafetyTokens: 1,
         });
         const fullBudget = initial.token_count;

@@ -1,3 +1,5 @@
+Completed 2026-09-09. See [migration completion and validation](migration-remediation-2026-09-09.md).
+
 ## Purpose
 
 Priority index for the 2026-09-08 audit of all 13 converted AGENTS.md files. The 19 follow-ups below each contain evidence, a proposed fix, acceptance criteria, and validation expectations.
@@ -15,31 +17,31 @@ The fork's direction remains **world/story memory first**: an immutable archive,
 
 Recommended code order: #4 → #9 → #5 → #6 → #7. #8 can proceed alongside code work, but must identify outstanding bugs rather than document proposed fixes as already implemented.
 
-- [ ] #4 — Legacy keyed-graph migration and edge conversion.
-- [ ] #9 — Captured-chat persistence and cancellation guards.
-- [ ] #5 — Entity/memory/edge ST Vector replacement and deletion changesets.
-- [ ] #6 — Reflection vector cleanup on replacement and archival.
-- [ ] #7 — Production ST Vector community retrieval wiring.
-- [ ] #8 — Schema v5, archive/rebuild invariants, current vision, and accurate POV scope.
+- [x] #4 — Legacy keyed-graph migration and edge conversion.
+- [x] #9 — Captured-chat persistence and cancellation guards.
+- [x] #5 — Entity/memory/edge ST Vector replacement and deletion changesets.
+- [x] #6 — Reflection vector cleanup on replacement and archival.
+- [x] #7 — Production ST Vector community retrieval wiring.
+- [x] #8 — Schema v5, archive/rebuild invariants, current vision, and accurate POV scope.
 
 ## P2 — reliability and domain guidance
 
-- [ ] #10 — Scoped CDN pinning and current test-override workflow.
-- [ ] #11 — Edge embedding/ST backfill.
-- [ ] #12 — Restore failed reflection importance with bounded retry suppression.
-- [ ] #16 — Typed relationship-impact schema; remove z.any.
-- [ ] #18 — Settings/defaults and logging boundaries.
-- [ ] #19 — UI promise handling, modal Escape, merge metadata, and tab/binding guide.
-- [ ] #20 — Testing policy and meaningful boundary regressions.
-- [ ] #13 — Explicit, reachable tiny-graph community behavior.
-- [ ] #14 — Current graph thresholds, relationship status, and summary validity guidance.
-- [ ] #15 — Reflection candidates, evidence, importance, and toggle guidance.
-- [ ] #17 — Paired reasoning tags, language policy, and coverage-fallback prompt guidance.
+- [x] #10 — Scoped CDN pinning and current test-override workflow.
+- [x] #11 — Edge embedding/ST backfill.
+- [x] #12 — Restore failed reflection importance with bounded retry suppression.
+- [x] #16 — Typed relationship-impact schema; remove z.any.
+- [x] #18 — Settings/defaults and logging boundaries.
+- [x] #19 — UI promise handling, modal Escape, merge metadata, and tab/binding guide.
+- [x] #20 — Testing policy and meaningful boundary regressions.
+- [x] #13 — Explicit, reachable tiny-graph community behavior.
+- [x] #14 — Current graph thresholds, relationship status, and summary validity guidance.
+- [x] #15 — Reflection candidates, evidence, importance, and toggle guidance.
+- [x] #17 — Paired reasoning tags, language policy, and coverage-fallback prompt guidance.
 
 ## P3 — observability and workflow
 
-- [ ] #21 — Global synthesis metric and accurate persistence documentation.
-- [ ] #22 — Real documentation pointers, canonical labels, and safe tracker examples.
+- [x] #21 — Global synthesis metric and accurate persistence documentation.
+- [x] #22 — Real documentation pointers, canonical labels, and safe tracker examples.
 
 ## Dependencies and work coordination
 

@@ -12,6 +12,7 @@
 // @ts-check
 
 import { cdnImport } from './cdn.js';
+import { logDebug, logWarn } from './logging.js';
 
 /** @typedef {{ add: (fn: () => Promise<unknown>) => Promise<unknown>, onIdle: () => Promise<void>, concurrency: number }} LadderQueue */
 
@@ -71,13 +72,13 @@ export async function createLadderQueue(maxConcurrency = 1) {
                     // Multiplicative Decrease: drop the ladder
                     currentLimit = Math.max(1, Math.floor(currentLimit / 2));
                     queue.concurrency = Math.floor(currentLimit);
-                    console.warn(`[LadderQueue] Rate limit hit. Dropping concurrency to ${queue.concurrency}`);
+                    logWarn(`Ladder queue rate limit; concurrency reduced to ${queue.concurrency}`);
 
                     // Pause queue to let the API breathe
                     if (!queue.isPaused) {
                         queue.pause();
                         setTimeout(() => {
-                            console.debug('[LadderQueue] Resuming ladder queue after cooloff');
+                            logDebug('Ladder queue resumed after rate-limit cooloff');
                             queue.start();
                         }, _RATE_LIMIT_COOLOFF_MS);
                     }

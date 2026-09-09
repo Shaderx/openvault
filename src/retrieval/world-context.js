@@ -66,10 +66,14 @@ export function retrieveWorldContext(
     const settings = getSettings();
     const isStVectorMode = settings?.embeddingSource === 'st_vector';
 
-    if (isStVectorMode && stCommunityIds && stCommunityIds.length > 0) {
+    if (isStVectorMode && Array.isArray(stCommunityIds) && stCommunityIds.length > 0) {
         const selected = [];
+        const selectedIds = [];
         let usedTokens = 0;
+        const seenIds = new Set();
         for (const id of stCommunityIds) {
+            if (seenIds.has(id)) continue;
+            seenIds.add(id);
             const community = communities[id];
             if (
                 !community?.summary ||
@@ -82,12 +86,13 @@ export function retrieveWorldContext(
             const tokens = countTokens(entry);
             if (usedTokens + tokens > tokenBudget) break;
             selected.push(entry);
+            selectedIds.push(id);
             usedTokens += tokens;
         }
-        if (selected.length === 0) return { text: '', communityIds: stCommunityIds, isMacroIntent: false };
+        if (selected.length === 0) return { text: '', communityIds: [], isMacroIntent: false };
         return {
             text: '<world_context>\n' + selected.join('\n\n') + '\n</world_context>',
-            communityIds: stCommunityIds,
+            communityIds: selectedIds,
             isMacroIntent: false,
         };
     }

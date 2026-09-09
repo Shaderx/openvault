@@ -78,14 +78,17 @@ export function toGraphology(graphData) {
  * @param {string[]} mainCharacterKeys - Node keys for main characters (User + Char) to prune
  * @returns {{ communities: Object<string, number>, count: number } | null}
  */
-export function detectCommunities(graphData, mainCharacterKeys = []) {
-    if (Object.keys(graphData.nodes || {}).length < 3) return null;
-
+export function detectCommunities(graphData = {}, mainCharacterKeys = []) {
     const t0 = performance.now();
-    const nodeCount = Object.keys(graphData.nodes).length;
+    const nodeCount = Object.keys(graphData.nodes || {}).length;
     const edgeCount = Object.keys(graphData.edges || {}).length;
 
     try {
+        // Communities are meaningful only once at least three entities exist.
+        // Keep this boundary explicit and reachable before graph construction;
+        // extraction clears stale community state when null is returned.
+        if (nodeCount < 3) return null;
+
         const directed = toGraphology(graphData);
         const undirected = toUndirected(directed);
 
@@ -99,23 +102,6 @@ export function detectCommunities(graphData, mainCharacterKeys = []) {
                     undirected.setEdgeAttribute(edge, 'weight', (attrs.weight || 1) * MAIN_CHARACTER_ATTENUATION);
                 }
             });
-        }
-
-        // Fallback safety net for extremely tiny graphs
-        if (undirected.order < 3) {
-            const fallbackDirected = toGraphology(graphData);
-            const fallbackUndirected = toUndirected(fallbackDirected);
-
-            // Logarithmic scaling to reduce black-hole effect of high-weight edges
-            fallbackUndirected.forEachEdge((edge, attrs) => {
-                fallbackUndirected.setEdgeAttribute(edge, 'weight', Math.log((attrs.weight || 1) + 1) + 1);
-            });
-
-            const details = louvain.detailed(fallbackUndirected, {
-                getEdgeWeight: 'weight',
-                resolution: 1.1,
-            });
-            return { communities: details.communities, count: details.count };
         }
 
         const details = louvain.detailed(undirected, {

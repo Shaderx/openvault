@@ -216,11 +216,13 @@ describe('callLLM abort signal', () => {
 
     it('throws AbortError when signal aborts mid-request', async () => {
         const ctrl = new AbortController();
+        let requestStarted;
+        const started = new Promise((resolve) => {
+            requestStarted = resolve;
+        });
         const sendRequest = vi.fn().mockImplementation(() => {
-            return new Promise((resolve) => {
-                // Simulate slow request — abort fires before it resolves
-                setTimeout(() => resolve({ content: 'too late' }), 5000);
-            });
+            requestStarted();
+            return new Promise(() => {});
         });
         setupTestContext({
             settings: { extractionProfile: 'main-id' },
@@ -228,10 +230,10 @@ describe('callLLM abort signal', () => {
         });
 
         const promise = callLLM(testMessages, testConfig, { signal: ctrl.signal });
-        // Abort after a tick
-        setTimeout(() => ctrl.abort(), 10);
-
-        await expect(promise).rejects.toThrow(expect.objectContaining({ name: 'AbortError' }));
+        const rejected = expect(promise).rejects.toThrow(expect.objectContaining({ name: 'AbortError' }));
+        await started;
+        ctrl.abort();
+        await rejected;
     });
 
     it('does not abort when signal is not triggered', async () => {
@@ -248,10 +250,13 @@ describe('callLLM abort signal', () => {
 
     it('skips backup profile attempt on AbortError', async () => {
         const ctrl = new AbortController();
+        let requestStarted;
+        const started = new Promise((resolve) => {
+            requestStarted = resolve;
+        });
         const sendRequest = vi.fn().mockImplementation(() => {
-            return new Promise((resolve) => {
-                setTimeout(() => resolve({ content: 'too late' }), 5000);
-            });
+            requestStarted();
+            return new Promise(() => {});
         });
         setupTestContext({
             settings: { extractionProfile: 'main-id', backupProfile: 'backup-id' },
@@ -259,9 +264,10 @@ describe('callLLM abort signal', () => {
         });
 
         const promise = callLLM(testMessages, testConfig, { signal: ctrl.signal });
-        setTimeout(() => ctrl.abort(), 10);
-
-        await expect(promise).rejects.toThrow(expect.objectContaining({ name: 'AbortError' }));
+        const rejected = expect(promise).rejects.toThrow(expect.objectContaining({ name: 'AbortError' }));
+        await started;
+        ctrl.abort();
+        await rejected;
         // Only main profile was attempted — backup is skipped for abort
         expect(sendRequest).toHaveBeenCalledTimes(1);
     });

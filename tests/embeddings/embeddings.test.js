@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EMBEDDING_TASKS } from '../../src/constants.js';
-import { TRANSFORMERS_MODELS } from '../../src/embeddings.js';
+import { EMBEDDING_TASKS, METADATA_KEY } from '../../src/constants.js';
+import { resetDeps } from '../../src/deps.js';
+import { backfillAllEmbeddings, TRANSFORMERS_MODELS } from '../../src/embeddings.js';
 
 describe('TRANSFORMERS_MODELS config', () => {
     it('multilingual-e5-small has Cyrillic-safe chunk size', () => {
@@ -69,6 +70,7 @@ describe('generateEmbeddingsForMemories', () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
+        resetDeps();
     });
 
     it('generateEmbeddingsForMemories stores embedding as Base64 via setEmbedding', async () => {
@@ -93,6 +95,98 @@ describe('generateEmbeddingsForMemories', () => {
         expect(memories[0].embedding_b64).toBeTypeOf('string');
         const decoded = getEmbedding(memories[0]);
         expect(decoded[0]).toBeCloseTo(0.1, 5);
+    });
+});
+
+describe('backfillAllEmbeddings', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        resetDeps();
+    });
+
+    it('backfills eligible graph edges with the relationship document text', async () => {
+        const edge = {
+            source: 'alice',
+            target: 'bob',
+            description: 'Alice mentors Bob',
+            status: 'active',
+        };
+        const data = {
+            memories: [],
+            graph: {
+                nodes: {},
+                edges: { alice__bob: edge },
+            },
+            communities: {},
+        };
+        setupTestContext({
+            context: { chatMetadata: { [METADATA_KEY]: data } },
+            settings: {
+                embeddingSource: 'ollama',
+                ollamaUrl: 'http://localhost:11434',
+                embeddingModel: 'test-model',
+            },
+            deps: { saveChatConditional: vi.fn().mockResolvedValue(undefined) },
+        });
+
+        const strategy = (await import('../../src/embeddings.js')).getStrategy('ollama');
+        const getDocumentEmbeddingSpy = vi
+            .spyOn(strategy, 'getDocumentEmbedding')
+            .mockResolvedValue(new Float32Array([0.25, 0.75]));
+
+        const result = await backfillAllEmbeddings({ silent: true });
+
+        expect(result).toMatchObject({ memories: 0, nodes: 0, edges: 1, communities: 0, total: 1, skipped: false });
+        expect(getDocumentEmbeddingSpy).toHaveBeenCalledWith(
+            'relationship: alice - bob: Alice mentors Bob',
+            expect.objectContaining({ signal: expect.any(AbortSignal) })
+        );
+        expect(edge.embedding_b64).toBeTypeOf('string');
+    });
+
+    it('syncs all four eligible record types to ST Vector with exact edge payloads', async () => {
+        const edge = {
+            source: 'alice',
+            target: 'bob',
+            description: 'Alice mentors Bob',
+            status: 'active',
+        };
+        const data = {
+            memories: [{ id: 'mem-1', summary: 'A prior scene' }],
+            graph: {
+                nodes: {
+                    alice: { name: 'Alice', description: 'The mentor' },
+                    bob: { name: 'Bob' },
+                },
+                edges: { alice__bob: edge },
+            },
+            communities: { C0: { title: 'Friends', summary: 'A trusted group', findings: [] } },
+        };
+        const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+        const saveSpy = vi.fn().mockResolvedValue(undefined);
+        setupTestContext({
+            context: { chatMetadata: { [METADATA_KEY]: data } },
+            settings: { embeddingSource: 'st_vector' },
+            deps: {
+                fetch: fetchSpy,
+                getRequestHeaders: () => ({ 'X-CSRF-Token': 'test-token' }),
+                saveChatConditional: saveSpy,
+            },
+        });
+
+        const result = await backfillAllEmbeddings({ silent: true });
+
+        expect(result).toMatchObject({ memories: 1, nodes: 1, edges: 1, communities: 1, total: 4, skipped: false });
+        expect(edge._st_synced).toBe(true);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        const request = JSON.parse(fetchSpy.mock.calls[0][1].body);
+        const edgeItem = request.items.find((item) => item.text.includes('edge_alice_bob'));
+        expect(edgeItem).toEqual({
+            hash: expect.any(Number),
+            text: '[OV_ID:edge_alice_bob] Alice mentors Bob',
+            index: 0,
+        });
+        expect(saveSpy).toHaveBeenCalledTimes(1);
     });
 });
 

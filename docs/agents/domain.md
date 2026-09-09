@@ -1,32 +1,5 @@
-# Domain Docs
+# Domain documentation
 
-How the engineering skills should consume this repo's domain documentation when exploring the codebase.
+Read `include/DATA_SCHEMA.md` for persisted structures and retrieval formulas, `codebase.md` for architecture, and the nearest domain `AGENTS.md` for implementation constraints. Historical proposals under `docs/designs/` and `docs/plans/` describe their original context; verify them against current code before treating them as implemented behavior.
 
-## Before exploring, read these
-
-- **`CONTEXT.md`** at the repo root, or
-- **`CONTEXT-MAP.md`** at the repo root if it exists; read each context relevant to the topic.
-- **`docs/adr/`**: read ADRs that concern the area about to be changed.
-
-If these files do not exist, proceed silently. The `/domain-modeling` skill creates them lazily when terminology or decisions are resolved.
-
-## File structure
-
-This repository uses a single-context layout:
-
-```text
-/
-├── CONTEXT.md
-├── docs/adr/
-└── src/
-```
-
-## Use the glossary's vocabulary
-
-When output names a domain concept, use the term defined in `CONTEXT.md`. Avoid synonyms that its glossary explicitly rejects.
-
-If a needed concept is absent, reconsider whether the language belongs to the project or note the gap for `/domain-modeling`.
-
-## Flag ADR conflicts
-
-If output contradicts an existing ADR, surface that conflict explicitly rather than silently overriding the decision.
+A root `CONTEXT.md` (or `CONTEXT-MAP.md`) and `docs/adr/` are optional future documentation, not existing repository requirements. If present, read the relevant glossary and ADRs before changing terminology or architecture, and surface conflicts with recorded decisions. Their absence does not block work or authorize inventing decisions.

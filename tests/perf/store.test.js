@@ -26,6 +26,14 @@ describe('perf store', () => {
         expect(all.memory_scoring.ts).toBeTypeOf('number');
     });
 
+    it('records global synthesis timing in metadata and reports', () => {
+        record('global_synthesis', 1250, '4 communities');
+
+        expect(getAll().global_synthesis).toMatchObject({ ms: 1250, size: '4 communities' });
+        expect(mockData.perf.global_synthesis).toMatchObject({ ms: 1250, size: '4 communities' });
+        expect(formatForClipboard()).toContain('Global synthesis');
+    });
+
     it('formatForClipboard() produces readable text with all recorded metrics', () => {
         record('memory_scoring', 12.34, '450 memories');
         record('llm_events', 5200);

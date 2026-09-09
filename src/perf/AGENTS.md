@@ -1,16 +1,16 @@
 # Performance Monitoring
 
 ## WHAT
-In-memory singleton store for tracking operation timings. Persists to `chatMetadata.openvault.perf`. Renders in Settings → Perf tab.
+In-memory singleton store for tracking operation timings. Values are mirrored to `chatMetadata.openvault.perf` and become durable during the normal chat-save cycle. Renders in Settings → Perf tab.
 
 ## ARCHITECTURE
 - **Store**: `{ [metricId]: { ms, size, ts } }` — last-value-wins per metric
-- **Persistence**: Auto-saves to `chatMetadata.openvault.perf` on every `record()`
+- **Metadata update**: `record()` updates the in-memory store and the live `chatMetadata.openvault.perf` object. It does not call the durable chat-save API; the next normal save cycle persists the mutation.
 - **Hydration**: `loadFromChat()` restores in-memory store on chat switch
-- **12 Metrics**: Defined in `PERF_METRICS` (src/constants.js) — 2 sync (critical path), 10 async
+- **Metrics**: The registry in `PERF_METRICS` (src/constants.js) is the source of truth for the current count and metadata. Keep thresholds in `PERF_THRESHOLDS` synchronized with that registry. Sync metrics block generation; async metrics run outside the critical path.
 
 ## EXPORTS
-- `record(metricId, durationMs, size)` — store metric + persist
+- `record(metricId, durationMs, size)` — store metric + mirror to live chat metadata
 - `getAll()` — get in-memory snapshot
 - `loadFromChat()` — hydrate from chat metadata
 - `formatForClipboard()` — plain text report for copy-paste

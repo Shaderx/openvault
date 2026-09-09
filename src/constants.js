@@ -154,6 +154,8 @@ export const defaultSettings = {
     maxReflectionLevel: 3, // Maximum reflection tree depth
     reflectionLevelMultiplier: 2.0, // Decay slows by 2x per level
     // Reflection control toggles
+    reflectionRetryCooldownMs: 60000, // Per-character backoff after failed synthesis
+    reflectionRetryMaxFailures: 3, // Stop automatic attempts for this session after repeated failure
     reflectionGenerationEnabled: true, // Enable automatic reflection generation
     reflectionInjectionEnabled: true, // Enable reflection injection into context
     // Bucket balance settings (score-first budgeting with soft chronological balancing)
@@ -196,12 +198,15 @@ export const EMBEDDING_TASKS = Object.freeze({
  * Entity identity thresholds are model/task-specific because cosine distributions
  * are not comparable across embedding families. External models retain the
  * conservative legacy threshold until explicitly calibrated by their operator.
+ * Qwen/Gemma operating points were checked on synthetic production-shaped
+ * WebGPU pairs; see tests/fixtures/identity-webgpu.json. This is not a broad
+ * accuracy guarantee: deterministic aliases and PERSON name guards still apply.
  */
 export const ENTITY_MATCH_THRESHOLDS = Object.freeze({
     'multilingual-e5-small': 0.9,
     'bge-small-en-v1.5': 0.9,
-    'embeddinggemma-300m': 0.88,
-    'qwen3-embedding-0.6b': 0.86,
+    'embeddinggemma-300m': 0.94,
+    'qwen3-embedding-0.6b': 0.88,
     _default: 0.9,
 });
 
@@ -367,6 +372,7 @@ export const PERF_THRESHOLDS = {
     llm_graph: 30000,
     llm_reflection: 20000, // Reduced from 45000 (was 4-call, now 1-call)
     llm_communities: 30000,
+    global_synthesis: 30000, // Baseline for a single synthesis call; larger chunked runs may exceed it
     embedding_generation: 10000,
     louvain_detection: 1000,
     entity_merge: 1000,
@@ -384,6 +390,7 @@ export const PERF_METRICS = {
     llm_graph: { label: 'LLM: Graph', icon: 'fa-cloud', sync: false },
     llm_reflection: { label: 'LLM: Reflection', icon: 'fa-cloud', sync: false },
     llm_communities: { label: 'LLM: Communities', icon: 'fa-cloud', sync: false },
+    global_synthesis: { label: 'Global synthesis', icon: 'fa-globe', sync: false },
     embedding_generation: { label: 'Embeddings', icon: 'fa-vector-square', sync: false },
     louvain_detection: { label: 'Louvain', icon: 'fa-circle-nodes', sync: false },
     entity_merge: { label: 'Entity merge', icon: 'fa-code-merge', sync: false },

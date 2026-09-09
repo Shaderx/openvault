@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
     renderCommunityAccordion,
     renderEntityCard,
+    renderEntityMergePicker,
     renderMemoryItem,
     renderReflectionProgress,
 } from '../../src/ui/templates.js';
@@ -188,6 +189,24 @@ describe('ui/templates', () => {
             const entity = { name: 'Castle', type: 'PLACE', description: '' };
             const html = renderEntityCard(entity, 'castle');
             expect(html).toContain('0 mentions');
+        });
+    });
+
+    describe('renderEntityMergePicker', () => {
+        it('keeps datalist options text-only so target resolution uses names and aliases', () => {
+            const html = renderEntityMergePicker(
+                'alice',
+                { name: 'Alice', type: 'PERSON' },
+                {
+                    alice: { name: 'Alice', type: 'PERSON' },
+                    bob: { name: 'Bob', type: 'PERSON', aliases: ['Bobby'] },
+                }
+            );
+
+            expect(html).toContain('<option value="Bob [PERSON]">');
+            expect(html).toContain('<option value="Bobby [alias of Bob]">');
+            expect(html).not.toContain('<option value="Bob [PERSON]" data-key=');
+            expect(html).not.toContain('<option value="Bobby [alias of Bob]" data-key=');
         });
     });
 });

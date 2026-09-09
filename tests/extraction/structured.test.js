@@ -13,6 +13,7 @@ import {
     parseGraphExtractionResponse,
     parseStructuredResponse,
     parseUnifiedReflectionResponse,
+    RelationshipImpactSchema,
 } from '../../src/extraction/structured.js';
 
 // --- Lazy Exit Tests (Empty Output After Thinking Tags) ---
@@ -99,6 +100,22 @@ describe('parseEvent', () => {
         const result = parseEvent(content);
         expect(result.summary).toBe('Alice climbed the tower to watch the sunset over the kingdom');
         expect(result.importance).toBe(4);
+    });
+});
+
+describe('RelationshipImpactSchema', () => {
+    it('accepts non-empty string impacts keyed by relationship', () => {
+        const result = RelationshipImpactSchema.safeParse({ 'Alice → Bob': 'Trust deepened after the rescue.' });
+
+        expect(result.success).toBe(true);
+    });
+
+    it.each([
+        [{ 'Alice → Bob': 3 }, 'non-string impact'],
+        [{ 'Alice → Bob': '' }, 'empty impact'],
+        [{ '': 'Trust changed' }, 'empty relationship key'],
+    ])('rejects malformed %s', (value) => {
+        expect(RelationshipImpactSchema.safeParse(value).success).toBe(false);
     });
 });
 

@@ -36,7 +36,7 @@ OpenVault tracks witnesses. Every extracted event records who was present. Chara
 
 **Reflections.** After enough significant events pile up for a character, OpenVault pauses to reflect. It synthesizes raw memories into psychological insights-shifting motivations, subconscious drives, evolving relationship dynamics. These are *internal* truths, not things the character says out loud
 
-**GraphRAG Communities.** Every 50 messages, it analyzes the relationship web to detect social circles and factions. This produces a running "world state" summary so macro-level plots don't get lost
+**GraphRAG Communities.** At the configurable community interval (100 messages by default), it analyzes the relationship web to detect social circles and factions. This produces a running "world state" summary so macro-level plots don't get lost
 
 **Smart Retrieval.** The immutable archive is always available and does not use embedding recall. Before the AI generates a response, OpenVault scores volatile scene memories, reflections, and world context using a blend of:
 - Exponential forgetfulness (old trivial stuff fades, critical memories stick)
@@ -45,7 +45,9 @@ OpenVault tracks witnesses. Every extracted event records who was present. Chara
 
 The bounded archive projection preserves five-star events, balances old/middle/recent history, and removes low-priority coverage summaries first when its budget fills. Entities, communities, reflections, and scene recall remain dynamic and are injected later in the prompt
 
-Chats created with an older OpenVault schema are not served through legacy retrieval. OpenVault asks for a full rebuild from the beginning of the chat before retrieval or compaction is enabled
+Chats created before OpenVault schema v5 are not served through legacy retrieval. OpenVault asks for a full rebuild from the beginning of the chat before retrieval or compaction is enabled
+
+The world archive is narrator reference material: witness metadata describes provenance, while dynamic recall applies POV filtering. It does not provide a hard archive secrecy boundary between characters. Sealed archive bytes remain stable across POV changes. Rebuilds preserve an inactive recovery backup and a fixed source boundary; partial or failed rebuilds remain gated until activation succeeds.
 
 ## Setup
 

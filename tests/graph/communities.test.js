@@ -44,13 +44,42 @@ describe('toGraphology', () => {
 });
 
 describe('detectCommunities', () => {
-    it('returns null when fewer than 3 nodes', () => {
-        const graphData = {
-            nodes: { a: { name: 'A' }, b: { name: 'B' } },
-            edges: {},
-        };
+    it.each([0, 1, 2])('returns null for %s graph nodes', (nodeCount) => {
+        const nodes = {};
+        for (let i = 0; i < nodeCount; i++) nodes[String.fromCharCode(97 + i)] = { name: `Node ${i}` };
+
+        const graphData = { nodes, edges: {} };
         const result = detectCommunities(graphData);
         expect(result).toBeNull();
+    });
+
+    it('runs the normal Louvain path for a sparse three-node graph', () => {
+        const result = detectCommunities({
+            nodes: {
+                a: { name: 'A' },
+                b: { name: 'B' },
+                c: { name: 'C' },
+            },
+            edges: {},
+        });
+
+        expect(result).not.toBeNull();
+        expect(Object.keys(result.communities)).toHaveLength(3);
+    });
+
+    it('handles self-loop input without throwing', () => {
+        const graphData = {
+            nodes: {
+                a: { name: 'A' },
+                b: { name: 'B' },
+                c: { name: 'C' },
+            },
+            edges: {
+                aa: { source: 'a', target: 'a', weight: 10 },
+            },
+        };
+
+        expect(() => detectCommunities(graphData)).not.toThrow();
     });
 
     it('finds multiple communities when main character edges are pruned', () => {

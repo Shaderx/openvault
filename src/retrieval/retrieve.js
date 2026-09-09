@@ -51,7 +51,7 @@ import { countTokens } from '../utils/tokens.js';
 import { cacheRetrievalDebug } from './debug-cache.js';
 import { buildEntityContextFromRetrieval } from './entity-context.js';
 import { formatContextForInjection } from './formatting.js';
-import { selectRelevantMemories } from './scoring.js';
+import { prefetchSTResults, selectRelevantMemories } from './scoring.js';
 import { retrieveWorldContext } from './world-context.js';
 
 /**
@@ -194,6 +194,7 @@ export function buildRetrievalContext(opts = {}) {
         totalPool,
         graphNodes: data?.graph?.nodes || {},
         graphEdges: data?.graph?.edges || {},
+        communities: data?.communities || {},
         allAvailableMemories: data?.[MEMORIES_KEY] || [], // Full memory list for IDF
         idfCache: data?.idf_cache || null, // Pre-computed IDF cache
         queryConfig,
@@ -509,7 +510,19 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
     const worldCap = Math.floor(totalPool * MAX_RATIO_WORLD);
 
     const entity = _buildEntityText(entityCap);
-    const world = await _buildWorldText(data, userMessages, ctx.recentContext, worldCap);
+
+    // ST Vector stores memories and communities in one collection. Prefetch
+    // once so the selected community IDs are available while allocating the
+    // world budget, then pass the same results into memory scoring below.
+    const stLookup = await prefetchSTResults(ctx, 1000);
+    const selectionContext = stLookup ? { ...ctx, stResults: stLookup.stResults } : ctx;
+    const world = await _buildWorldText(
+        data,
+        userMessages,
+        ctx.recentContext,
+        worldCap,
+        stLookup?.communityIds || null
+    );
 
     // --- Phase 2: Compute dynamic scene budget ---
     const settings = getDeps().getExtensionSettings()?.[extensionName] || {};
@@ -542,7 +555,7 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
     // --- Phase 3: Score & select memories with the full remaining budget ---
     // Pass sceneBudget as finalTokens so scoring.js respects the dynamic budget
     const selectionResult = await selectRelevantMemories(memoriesToUse, {
-        ...ctx,
+        ...selectionContext,
         finalTokens: sceneBudget,
     });
     const relevantMemories = selectionResult.memories;
@@ -586,11 +599,13 @@ async function selectFormatAndInject(memoriesToUse, data, ctx) {
 async function injectWorldWithoutRecall(data, pendingUserMessage = '') {
     const ctx = buildRetrievalContext({ pendingUserMessage });
     const entity = _buildEntityText(Math.floor(ctx.totalPool * MAX_RATIO_ENTITY));
+    const stLookup = await prefetchSTResults(ctx, 1000);
     const world = await _buildWorldText(
         data,
         ctx.userMessages,
         ctx.recentContext,
-        Math.floor(ctx.totalPool * MAX_RATIO_WORLD)
+        Math.floor(ctx.totalPool * MAX_RATIO_WORLD),
+        stLookup?.communityIds || null
     );
     injectContext('', world.text, entity.text);
 }

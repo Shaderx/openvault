@@ -13,7 +13,10 @@ import { safeParseJSON, stripMarkdownFences, stripThinkingTags } from '../utils/
 /**
  * Schema for relationship impact between characters
  */
-export const RelationshipImpactSchema = z.record(z.string(), z.any());
+export const RelationshipImpactSchema = z.record(
+    z.string().trim().min(1, 'Relationship key must not be empty'),
+    z.string().trim().min(1, 'Relationship impact must not be empty')
+);
 
 /**
  * Schema for a single memory event

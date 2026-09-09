@@ -89,6 +89,18 @@ describe('Emergency Cut Modal Helpers', () => {
 
             expect($('#openvault_emergency_cut_modal').hasClass('hidden')).toBe(true);
         });
+
+        it('restores focus to the control that opened the modal', async () => {
+            const { showEmergencyCutModal, hideEmergencyCutModal } = await import('../../src/ui/settings.js');
+            const trigger = document.createElement('button');
+            document.body.appendChild(trigger);
+            trigger.focus();
+
+            showEmergencyCutModal();
+            hideEmergencyCutModal();
+
+            expect(document.activeElement).toBe(trigger);
+        });
     });
 });
 

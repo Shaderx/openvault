@@ -1,45 +1,22 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Use `gh` with `--repo Shaderx/openvault` explicitly: this checkout also has upstream configured, and automatic selection can target upstream.
 
-## Conventions
+Read issues using `gh issue view NUMBER --repo Shaderx/openvault --comments`. List current state using `gh issue list --repo Shaderx/openvault --state open --limit 100 --json number,title,body,labels,comments`.
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
-- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
-- **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
-- **Comment on an issue**: `gh issue comment <number> --body "..."`
-- **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+For multiline PowerShell text, write a UTF-8 file and pass it as data:
 
-Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
+```powershell
+@'
+Implementation details and validation results.
+'@ | Set-Content -Encoding utf8 issue-comment.md
+gh issue comment NUMBER --repo Shaderx/openvault --body-file issue-comment.md
+```
 
-## Pull requests as a triage surface
+Use `--body-file` with `gh issue create` or `gh issue edit` too. Apply labels using `gh issue edit NUMBER --repo Shaderx/openvault --add-label ready-for-agent`. Post completion evidence before `gh issue close NUMBER --repo Shaderx/openvault`.
 
-**PRs as a request surface: no.**
+Publishing issues/comments or changing tracker state requires authorization from the user's task. A skill's publishing instruction does not independently provide authorization. Close completed issues with evidence and leave unresolved acceptance criteria explicit.
 
-When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
+PRs are not a request/triage surface here. GitHub shares their number space with issues; resolve ambiguous references before acting.
 
-- **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>`.
-- **List external PRs for triage**: use `gh pr list`, retaining external contributors.
-- **Comment / label / close**: use `gh pr comment`, `gh pr edit`, and `gh pr close`.
-
-GitHub shares one number space across issues and PRs. Resolve an ambiguous number using `gh pr view`, falling back to `gh issue view`.
-
-## When a skill says “publish to the issue tracker”
-
-Create a GitHub issue.
-
-## When a skill says “fetch the relevant ticket”
-
-Run `gh issue view <number> --comments`.
-
-## Wayfinding operations
-
-Used by `/wayfinder`. The map is a single issue with child issues as tickets.
-
-- **Map**: an issue labelled `wayfinder:map`, holding Notes, Decisions-so-far, and Fog.
-- **Child ticket**: a GitHub sub-issue, falling back to a task-list link when sub-issues are unavailable.
-- **Blocking**: GitHub's native issue dependencies, falling back to a `Blocked by:` line.
-- **Frontier query**: select the first open, unblocked, unassigned child in map order.
-- **Claim**: assign the issue to the current user.
-- **Resolve**: comment with the answer, close the ticket, and add its context pointer to the map.
+For wayfinding, the map is labelled `wayfinder:map`; use native sub-issues or task-list links for children, and native dependencies or a `Blocked by:` line for blockers. Claim only open, unblocked work within the authorized task. Resolve with evidence and update the map's context pointer.
